@@ -10,7 +10,7 @@ interface StatCardProps {
 
 export function StatCard({ title, value, icon, trend, alert }: StatCardProps) {
   return (
-    <div className={`glass p-6 rounded-lg ${alert ? "pulse-alert border-destructive" : ""}`}>
+    <div className={`glass card-hover p-6 rounded-lg ${alert ? "pulse-alert border-destructive" : ""}`}>
       <div className="flex items-start justify-between">
         <div>
           <p className="text-muted-foreground text-sm mb-2">{title}</p>

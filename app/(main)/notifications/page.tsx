@@ -8,8 +8,6 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 import NotificationItem, { Notification } from "@/components/notifications/NotificationItem";
-import { Sidebar } from "@/components/sidebar";
-import { Header } from "@/components/header";
 
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([
@@ -58,9 +56,7 @@ export default function NotificationsPage() {
 
   return (
     <>
-    <Sidebar />
     <div className=" ml-16 pt-16">
-    <Header title="Notifications" />
     <main className="p-8 bg-background min-h-screen">
       <div className="  mx-auto">
 

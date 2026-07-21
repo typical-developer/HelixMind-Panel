@@ -9,8 +9,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { Sidebar } from "@/components/sidebar";
-import { Header } from "@/components/header";
 import { Info, DownloadIcon } from "lucide-react";
 
 import { Checkbox } from "@/components/ui/checkbox";

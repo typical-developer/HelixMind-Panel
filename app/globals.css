@@ -81,15 +81,16 @@
   --sidebar-ring: oklch(0.439 0 0);
 }
 
-html{
-  scroll-behavior: smooth;
-  
-  
+/* Smooth scrolling only for users who haven't asked for reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
 }
 
 @theme inline {
-  --font-sans: "Geist", "Geist Fallback";
-  --font-mono: "Geist Mono", "Geist Mono Fallback";
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "Geist Mono Fallback", monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -174,6 +175,75 @@ html{
       opacity: 0.9;
       box-shadow: 0 0 0 8px rgba(255, 68, 68, 0);
     }
+  }
+
+  /* ===== Route transition — applied by app/(main)/template.tsx =====
+     Compositor-only (opacity + transform), replays on every navigation. */
+  .animate-page-in {
+    animation: page-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  @keyframes page-in {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Subtle lift on interactive cards. Transform/opacity only, so it stays on
+     the GPU compositor and never triggers layout. */
+  .card-hover {
+    transition:
+      transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 0.2s ease;
+    will-change: transform;
+  }
+  .card-hover:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.55);
+  }
+
+  /* Sheen used by loading skeletons. */
+  .skeleton-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+  .skeleton-shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.06),
+      transparent
+    );
+    animation: skeleton-sheen 1.6s ease-in-out infinite;
+  }
+
+  @keyframes skeleton-sheen {
+    100% {
+      transform: translateX(100%);
+    }
+  }
+}
+
+/* Honour the OS "reduce motion" setting: neutralise animations, transitions
+   and smooth scrolling everywhere without having to touch each component. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 

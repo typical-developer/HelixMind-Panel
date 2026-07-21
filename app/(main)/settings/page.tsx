@@ -1,7 +1,5 @@
 "use client";
 
-import { Sidebar } from "@/components/sidebar";
-import { Header } from "@/components/header";
 import { Save } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -39,10 +37,7 @@ export default function Settings() {
 
   return (
     <div>
-      <Sidebar />
       <div className="ml-16 pt-16">
-        <Header title="Settings" />
-
         <main className="mx-auto max-w-7xl container pt-8 bg-background min-w-full min-h-screen space-y-8">
           {/* Profile Card */}
           <Card className="px-0">

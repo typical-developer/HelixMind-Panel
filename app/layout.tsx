@@ -5,8 +5,18 @@ import { Analytics } from "@vercel/analytics/next"
 import "./globals.css"
 import { AuthProvider } from "@/contexts/AuthContext"
 
-const _geist = Geist({ subsets: ["latin"] })
-const _geistMono = Geist_Mono({ subsets: ["latin"] })
+// Self-hosted via next/font: automatic preload, size-adjusted fallback (no CLS
+// on font swap) and `display: swap` so text paints immediately.
+const geistSans = Geist({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-geist-sans",
+})
+const geistMono = Geist_Mono({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-geist-mono",
+})
 
 export const metadata: Metadata = {
   title: "HelixMInd - Accelerating Biological Advancements",
@@ -37,8 +47,8 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className="dark">
-      <body className={`font-sans antialiased transition-all duration-100 ease-linear`}>
+    <html lang="en" className={`dark ${geistSans.variable} ${geistMono.variable}`}>
+      <body className="font-sans antialiased">
         <AuthProvider>
           {children}
           <Analytics />

@@ -44,7 +44,6 @@ export function AuthProvider({ children }: { children: ReactNode}) {
     setIsLoading(true);
 
     try {
-      console.log({email, password});
       const response = await login({email, password});
 
       if (response.token.trim().length <= 0) {
