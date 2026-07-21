@@ -1,6 +1,6 @@
 "use client";
 
-import { Play, Pause, RotateCcw, Upload, Download } from "lucide-react";
+import { Play, Pause, RotateCcw, Upload, Download, FileText } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import {
   LineChart,
@@ -465,42 +465,35 @@ export default function MutationSimulator() {
       <div className="ml-16 pt-16">
         <main className="mx-auto max-w-7xl container pt-8 bg-background min-w-full min-h-screen space-y-8">
           {/* Upload */}
-          <div className="glass p-12 rounded-lg border-2 border-dashed border-primary/50 text-center mb-10">
-            <Upload className="w-12 h-12 mx-auto mb-4 text-primary" />
-            <h3 className="text-xl font-semibold mb-2">
-              Upload Query Sequence
-            </h3>
-            <p className="text-sm text-muted-foreground mb-6">
+          <label
+            htmlFor="query_fasta"
+            className="group glass card-hover flex cursor-pointer flex-col items-center justify-center border-2 border-dashed !border-border/80 p-10 text-center transition-colors hover:!border-white/25"
+          >
+            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/5 transition-transform group-hover:scale-105">
+              <Upload className="h-6 w-6" />
+            </div>
+            <h3 className="text-lg font-semibold">Upload Query Sequence</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
               Drop your FASTA file here, or click to browse
             </p>
-
-            <label
-              htmlFor="query_fasta"
-              className={cn(
-                "cursor-pointer inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-sm text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive bg-primary text-primary-foreground hover:bg-primary/90, h-9 px-4 py-2 has-[>svg]:px-3"
-              )}
-            >
-              Browse Files
-              <input
-                type="file"
-                accept=".fasta,.fa,.fna,.ffn,.faa,.frn"
-                id="query_fasta"
-                className="hidden"
-                onChange={handleFileChange}
-              />
-            </label>
-
+            <span className="mt-5 inline-flex items-center gap-2 rounded-lg border border-border bg-card/60 px-4 py-2 text-sm font-medium transition-colors group-hover:border-white/20">
+              Browse files
+            </span>
+            <input
+              type="file"
+              accept=".fasta,.fa,.fna,.ffn,.faa,.frn"
+              id="query_fasta"
+              className="hidden"
+              onChange={handleFileChange}
+            />
             {queryFastaFile && (
-              <div className="mt-4">
-                <p className="text-sm text-primary font-medium">
-                  {queryFastaFile.name}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Sequence length: {sequence.length} bp
-                </p>
+              <div className="mt-5 flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs">
+                <FileText className="h-4 w-4 shrink-0" />
+                <span className="max-w-[240px] truncate font-medium">{queryFastaFile.name}</span>
+                <span className="text-muted-foreground">· {sequence.length} bp</span>
               </div>
             )}
-          </div>
+          </label>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* LEFT */}
@@ -757,7 +750,7 @@ export default function MutationSimulator() {
                         </select>
                       </div>
                       {errors.temperature && (
-                        <p className="text-xs text-red-400 mt-1">
+                        <p className="text-xs text-destructive mt-1">
                           {errors.temperature}
                         </p>
                       )}
@@ -799,7 +792,7 @@ export default function MutationSimulator() {
                             }
                           }}
                           disabled={isRunning}
-                          className="w-full bg-neutral-900 border border-neutral-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                          className="h-10 w-full rounded-lg border border-border bg-card/60 px-3 text-sm transition-colors focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40 disabled:opacity-50"
                         />
                       </div>
                       <div className="flex justify-between text-xs text-muted-foreground mb-1">
@@ -808,7 +801,7 @@ export default function MutationSimulator() {
                         <span>Alkaline</span>
                       </div>
                       {errors.pH && (
-                        <p className="text-xs text-red-400 mt-1">{errors.pH}</p>
+                        <p className="text-xs text-destructive mt-1">{errors.pH}</p>
                       )}
                     </div>
 
@@ -826,7 +819,7 @@ export default function MutationSimulator() {
                           }))
                         }
                         disabled={isRunning}
-                        className="w-full bg-neutral-900 border border-neutral-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                        className="h-10 w-full rounded-lg border border-border bg-card/60 px-3 text-sm transition-colors focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40 disabled:opacity-50"
                       >
                         <option>Low</option>
                         <option>Medium</option>
@@ -849,7 +842,7 @@ export default function MutationSimulator() {
                           }))
                         }
                         disabled={isRunning}
-                        className="w-full bg-neutral-900 border border-neutral-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                        className="h-10 w-full rounded-lg border border-border bg-card/60 px-3 text-sm transition-colors focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40 disabled:opacity-50"
                       >
                         <option>Anaerobic (None)</option>
                         <option>Low</option>
@@ -883,10 +876,10 @@ export default function MutationSimulator() {
                         max={10}
                         min={1}
                         disabled={isRunning}
-                        className="w-full bg-neutral-900 border border-neutral-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                        className="h-10 w-full rounded-lg border border-border bg-card/60 px-3 text-sm transition-colors focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40 disabled:opacity-50"
                       />
                       {errors.numGenerations && (
-                        <p className="text-xs text-red-400 mt-1">
+                        <p className="text-xs text-destructive mt-1">
                           {errors.numGenerations}
                         </p>
                       )}
@@ -937,11 +930,11 @@ export default function MutationSimulator() {
                             }
                           }}
                           disabled={isRunning}
-                          className="w-full bg-neutral-900 border border-neutral-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                          className="h-10 w-full rounded-lg border border-border bg-card/60 px-3 text-sm transition-colors focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40 disabled:opacity-50"
                         />
                       </div>
                       {errors.substitutionRate && (
-                        <p className="text-xs text-red-400 mt-1">
+                        <p className="text-xs text-destructive mt-1">
                           {errors.substitutionRate}
                         </p>
                       )}

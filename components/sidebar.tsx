@@ -10,7 +10,7 @@ import {
   Microscope,
   Settings,
   Beaker,
-  PanelRightClose,
+  ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -68,26 +68,39 @@ export function Sidebar() {
           expanded ? "w-64" : "w-16"
         )}
       >
-        {/* Brand / toggle */}
-        <div className="flex h-16 shrink-0 items-center border-b border-sidebar-border/70 px-3">
-          <button
-            onClick={() => setExpanded(!expanded)}
-            aria-label={expanded ? "Collapse sidebar" : "Expand sidebar"}
+        {/* Floating expand / collapse toggle — always visible on the edge */}
+        <button
+          onClick={() => setExpanded(!expanded)}
+          aria-label={expanded ? "Collapse sidebar" : "Expand sidebar"}
+          className={cn(
+            "absolute -right-3 top-[68px] z-50 flex h-6 w-6 items-center justify-center rounded-full",
+            "border border-border bg-card text-muted-foreground shadow-md",
+            "transition-all duration-200 hover:scale-110 hover:bg-accent hover:text-foreground",
+            "focus:outline-none focus:ring-2 focus:ring-ring/50"
+          )}
+        >
+          <ChevronRight
             className={cn(
-              "group flex h-10 w-full items-center rounded-lg text-sidebar-foreground transition-colors",
-              "hover:bg-white/5",
-              expanded ? "justify-between px-3" : "justify-center"
+              "h-3.5 w-3.5 transition-transform duration-300",
+              expanded && "rotate-180"
             )}
-          >
-            {showLabels ? (
+          />
+        </button>
+
+        {/* Brand */}
+        <div
+          className={cn(
+            "flex h-16 shrink-0 items-center border-b border-sidebar-border/70",
+            expanded ? "px-4" : "justify-center px-3"
+          )}
+        >
+          {showLabels ? (
+            <div className="animate-in fade-in slide-in-from-left-2 duration-200 text-sm font-semibold">
               <Logo />
-            ) : (
-              <img src="/logo_white.png" alt="HelixMind" className="h-6 w-6" />
-            )}
-            {expanded ? (
-              <PanelRightClose className="h-4 w-4 shrink-0 text-muted-foreground group-hover:text-foreground" />
-            ) : null}
-          </button>
+            </div>
+          ) : (
+            <img src="/logo_white.png" alt="HelixMind" className="h-7 w-7" />
+          )}
         </div>
 
         {/* Nav */}

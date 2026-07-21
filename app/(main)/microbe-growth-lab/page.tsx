@@ -617,7 +617,7 @@ export default function MicrobeGrowthLab() {
         <main className="mx-auto max-w-7xl container pt-8 bg-background min-w-full min-h-screen space-y-8">
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
             {/* Strain Selection */}
-            <div className="bg-neutral-950 border border-neutral-800 rounded-lg p-6">
+            <div className="glass p-6">
               <h2 className="text-lg font-semibold mb-5 flex items-center gap-2">
                 <DnaIcon className="h-5 w-5" />
                 Strain
@@ -628,10 +628,10 @@ export default function MicrobeGrowthLab() {
                   <button
                     key={key}
                     onClick={() => handleStrainChange(key)}
-                    className={`w-full p-3 rounded-md text-left text-sm border transition-colors ${
+                    className={`w-full rounded-lg border p-3 text-left text-sm transition-colors ${
                       selectedStrain === key && !showCustomStrain
-                        ? "bg-neutral-800 border-neutral-200"
-                        : "bg-neutral-900 border-neutral-00 hover:border-neutral-200"
+                        ? "border-white/25 bg-white/[0.08] text-foreground"
+                        : "border-border bg-card/40 text-muted-foreground hover:bg-white/[0.04] hover:text-foreground"
                     }`}
                   >
                     <div className="font-medium">{strain.name}</div>
@@ -646,7 +646,7 @@ export default function MicrobeGrowthLab() {
                 ))}
               </div>
 
-              <div className="mt-5 pt-4 border-t border-neutral-800">
+              <div className="mt-5 pt-4 border-t border-border">
                 <label className="text-xs font-medium text-neutral-500 block mb-2 flex items-center gap-2">
                   <FileText className="h-4 w-4" />
                   Upload FASTA
@@ -665,14 +665,14 @@ export default function MicrobeGrowthLab() {
 
             {/* ───────────── Custom Strain ───────────── */}
             {showCustomStrain && (
-              <div className="bg-neutral-950 border border-neutral-800 rounded-lg p-6">
+              <div className="glass p-6">
                 <h2 className="text-lg font-semibold mb-5 flex items-center gap-2">
                   <Plus className="h-5 w-5" />
                   Custom Strain
                 </h2>
 
                 {genomeInfo && (
-                  <div className="bg-neutral-900 border border-neutral-800 rounded p-4 mb-6 text-sm">
+                  <div className="mb-6 rounded-lg border border-border bg-card/40 p-4 text-sm">
                     <p className="text-neutral-400 mb-3 flex items-center gap-2">
                       <Activity className="h-4 w-4" />
                       Genome Analysis
@@ -701,7 +701,7 @@ export default function MicrobeGrowthLab() {
                           name: e.target.value,
                         })
                       }
-                      className="w-full bg-neutral-900 border border-neutral-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                      className="h-10 w-full rounded-lg border border-border bg-card/60 px-3 text-sm transition-colors focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
                     />
                   </div>
 
@@ -718,7 +718,7 @@ export default function MicrobeGrowthLab() {
                           description: e.target.value,
                         })
                       }
-                      className="w-full bg-neutral-900 border border-neutral-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                      className="h-10 w-full rounded-lg border border-border bg-card/60 px-3 text-sm transition-colors focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
                     />
                   </div>
 
@@ -788,7 +788,7 @@ export default function MicrobeGrowthLab() {
             )}
 
             {/* ───────────── Environment ───────────── */}
-            <div className="bg-neutral-950 border border-neutral-800 rounded-lg p-6">
+            <div className="glass p-6">
               <h2 className="text-lg font-semibold mb-5 flex items-center gap-2">
                 <Thermometer className="h-5 w-5" />
                 Environment
@@ -813,11 +813,11 @@ export default function MicrobeGrowthLab() {
                       type="number"
                       value={temperature}
                       onChange={(e) => handleTemperatureChange(Number(e.target.value))}
-                      className="w-full bg-neutral-900 border border-neutral-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                      className="h-10 w-full rounded-lg border border-border bg-card/60 px-3 text-sm transition-colors focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
                     />
                   </div>
                   {tempWarning && (
-                    <p className="text-xs text-red-400 mt-1 flex items-center gap-1">
+                    <p className="text-xs text-destructive mt-1 flex items-center gap-1">
                       <AlertTriangle className="h-3 w-3" />
                       {tempWarning}
                     </p>
@@ -844,11 +844,11 @@ export default function MicrobeGrowthLab() {
                       step="0.1"
                       value={pH}
                       onChange={(e) => handlePHChange(Number(e.target.value))}
-                      className="w-full bg-neutral-900 border border-neutral-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                      className="h-10 w-full rounded-lg border border-border bg-card/60 px-3 text-sm transition-colors focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
                     />
                   </div>
                   {phWarning && (
-                    <p className="text-xs text-red-400 mt-1 flex items-center gap-1">
+                    <p className="text-xs text-destructive mt-1 flex items-center gap-1">
                       <AlertTriangle className="h-3 w-3" />
                       {phWarning}
                     </p>
@@ -873,7 +873,7 @@ export default function MicrobeGrowthLab() {
                       type="number"
                       value={Math.round(nutrients)}
                       onChange={(e) => setNutrients(Number(e.target.value))}
-                      className="w-full bg-neutral-900 border border-neutral-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                      className="h-10 w-full rounded-lg border border-border bg-card/60 px-3 text-sm transition-colors focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
                     />
                   </div>
                 </div>
@@ -896,17 +896,17 @@ export default function MicrobeGrowthLab() {
                       type="number"
                       value={oxygen}
                       onChange={(e) => setOxygen(Number(e.target.value))}
-                      className="w-full bg-neutral-900 border border-neutral-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                      className="h-10 w-full rounded-lg border border-border bg-card/60 px-3 text-sm transition-colors focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
                     />
                   </div>
                 </div>
 
-                <label className="flex items-center gap-3 cursor-pointer pt-2 border-t border-neutral-800">
+                <label className="flex items-center gap-3 cursor-pointer pt-2 border-t border-border">
                   <input
                     type="checkbox"
                     checked={antibioticOn}
                     onChange={(e) => setAntibioticOn(e.target.checked)}
-                    className="h-4 w-4 rounded border-neutral-700 bg-neutral-900 accent-neutral-500"
+                    className="h-4 w-4 rounded border-border accent-white"
                   />
                   <div className="flex items-center gap-2 text-sm">
                     <Pill className="h-4 w-4" />
@@ -917,7 +917,7 @@ export default function MicrobeGrowthLab() {
             </div>
 
             {/* ───────────── Stress Monitor ───────────── */}
-            <div className="bg-neutral-950 border border-neutral-800 rounded-lg p-6">
+            <div className="glass p-6">
               <h2 className="text-lg font-semibold mb-5 flex items-center gap-2">
                 <AlertTriangle className="h-5 w-5" />
                 Stress Monitor
@@ -942,7 +942,7 @@ export default function MicrobeGrowthLab() {
                 ))}
               </div>
 
-              <div className="mt-8 pt-6 border-t border-neutral-800">
+              <div className="mt-8 pt-6 border-t border-border">
                 <p className="text-sm text-neutral-500 mb-1">
                   Resistance Level
                 </p>
@@ -951,7 +951,7 @@ export default function MicrobeGrowthLab() {
             </div>
 
             {/* ───────────── Controls ───────────── */}
-            <div className="bg-neutral-950 border border-neutral-800 rounded-lg p-6">
+            <div className="glass p-6">
               <h2 className="text-lg font-semibold mb-5 flex items-center gap-2">
                 <Activity className="h-5 w-5" />
                 Simulation
@@ -970,7 +970,7 @@ export default function MicrobeGrowthLab() {
                   </p>
                 </div>
 
-                <div className="pt-4 space-y-3 border-t border-neutral-800">
+                <div className="pt-4 space-y-3 border-t border-border">
                   <Button onClick={handleStartPause} className="w-full">
                     {isRunning ? (
                       <Pause className="h-5 w-5" />
@@ -1003,7 +1003,7 @@ export default function MicrobeGrowthLab() {
           </div>
 
           {/* Chart */}
-          <div className="bg-neutral-950 border border-neutral-800 rounded-lg p-6 mb-8">
+          <div className="glass p-6 mb-8">
             {/* Header row with title and Export PNG button */}
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold flex items-center gap-2">
@@ -1062,12 +1062,12 @@ export default function MicrobeGrowthLab() {
           </div>
 
           {/* Log */}
-          <div className="bg-neutral-950 border border-neutral-800 rounded-lg p-6">
+          <div className="glass p-6">
             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
               <Clock className="h-5 w-5" />
               Adaptation Log
             </h2>
-            <ScrollArea className="bg-black rounded p-4 h-48 text-sm font-mono text-neutral-400 space-y-1 border border-neutral-900">
+            <ScrollArea className="h-48 space-y-1 rounded-lg border border-border bg-black/50 p-4 font-mono text-sm text-muted-foreground">
               {state.adaptationLog.length === 0 ? (
                 <p className="text-neutral-600">Simulation not started yet.</p>
               ) : (

@@ -1,5 +1,6 @@
 "use client"
 
+import { Activity } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 
 export interface Mutation {
@@ -32,35 +33,49 @@ const getImpactVariant = (impact: Mutation["impact"]) => {
 
 export function MutationTable() {
   return (
-    <div className="glass p-6 rounded-lg">
-      <h3 className="text-lg font-semibold mb-4">Mutation Log</h3>
+    <div className="glass p-6">
+      <div className="mb-5 flex items-center gap-3">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5">
+          <Activity className="h-5 w-5" />
+        </div>
+        <div>
+          <h3 className="font-semibold leading-tight">Mutation Log</h3>
+          <p className="text-xs text-muted-foreground">
+            {SAMPLE_MUTATIONS.length} detected variants across generations
+          </p>
+        </div>
+      </div>
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border">
-              <th className="text-left py-3 px-4 text-muted-foreground font-medium">Generation</th>
-              <th className="text-left py-3 px-4 text-muted-foreground font-medium">Position</th>
-              <th className="text-left py-3 px-4 text-muted-foreground font-medium">Change</th>
-              <th className="text-left py-3 px-4 text-muted-foreground font-medium">Impact</th>
+              {["Generation", "Position", "Change", "Impact"].map((h) => (
+                <th
+                  key={h}
+                  className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground"
+                >
+                  {h}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {SAMPLE_MUTATIONS.map((mutation, idx) => (
               <tr
                 key={idx}
-                className="border-b border-border/30 hover:bg-card/50 transition-colors"
+                className="border-b border-border/40 transition-colors last:border-0 hover:bg-white/[0.03]"
               >
-                <td className="py-3 px-4 font-mono text-primary">
-                  {mutation.generation}
+                <td className="px-4 py-3 font-mono text-muted-foreground">
+                  #{mutation.generation}
                 </td>
-                <td className="py-3 px-4 font-mono text-foreground">
+                <td className="px-4 py-3 font-mono tabular-nums text-foreground">
                   {mutation.position}
                 </td>
-                <td className="py-3 px-4 font-mono text-foreground/80">
+                <td className="px-4 py-3 font-mono font-medium text-foreground">
                   {mutation.change}
                 </td>
-                <td className="py-3 px-4">
+                <td className="px-4 py-3">
                   <Badge variant={getImpactVariant(mutation.impact)}>
                     {mutation.impact}
                   </Badge>
