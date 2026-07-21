@@ -32,8 +32,6 @@ import {
 } from "recharts";
 
 // components
-import { Sidebar } from "@/components/sidebar";
-import { Header } from "@/components/header";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -615,9 +613,7 @@ export default function MicrobeGrowthLab() {
 
   return (
     <div className="space-x-8">
-      <Sidebar />
       <div className="ml-16 pt-16">
-        <Header title="Microbe Growth Lab" />
         <main className="mx-auto max-w-7xl container pt-8 bg-background min-w-full min-h-screen space-y-8">
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
             {/* Strain Selection */}

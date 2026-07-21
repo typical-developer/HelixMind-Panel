@@ -1,18 +1,14 @@
 "use client"
 import type React from "react"
-import type { Metadata } from "next"
-import { Geist, Geist_Mono } from "next/font/google"
-import { Analytics } from "@vercel/analytics/next"
-import { AuthProvider, useAuth } from "@/contexts/AuthContext"
+import { useAuth } from "@/contexts/AuthContext"
 import { Toaster } from "@/components/ui/toaster"
+import { Sidebar } from "@/components/sidebar"
+import { Header } from "@/components/header"
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 
 // icons
-import { SettingsIcon, FlaskConical, Beaker, Microscope, Atom } from "lucide-react"
-
-const _geist = Geist({ subsets: ["latin"] })
-const _geistMono = Geist_Mono({ subsets: ["latin"] })
+import { FlaskConical, Beaker, Microscope, Atom } from "lucide-react"
 
 const LAB_STEPS = [
   { icon: FlaskConical, label: "Mixing reagents..." },
@@ -20,6 +16,25 @@ const LAB_STEPS = [
   { icon: Microscope,   label: "Analyzing samples..." },
   { icon: Atom,         label: "Building Digital Laboratory..." },
 ]
+
+// Route → header title. Derived here so the header lives in the shell instead
+// of being re-declared (and re-mounted) inside every page.
+const PAGE_TITLES: Array<[string, string]> = [
+  ["/dashboard", "Dashboard"],
+  ["/dna-scanner", "DNA Scanner"],
+  ["/mutation-simulator", "Mutation Simulator"],
+  ["/microbe-growth-lab", "Microbe Growth Lab"],
+  ["/amr-analysis-engine", "AMR Analysis Engine"],
+  ["/notifications", "Notifications"],
+  ["/settings", "Settings"],
+]
+
+function titleForPath(pathname: string): string {
+  const match = PAGE_TITLES.find(
+    ([href]) => pathname === href || pathname.startsWith(href + "/"),
+  )
+  return match ? match[1] : "HelixMind"
+}
 
 function LabLoader() {
   const [step, setStep] = useState(0)
@@ -106,23 +121,31 @@ function LabLoader() {
 }
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
-  const { user, isLoading } = useAuth();
-  const navigate = useRouter();
+  const { user, isLoading } = useAuth()
+  const navigate = useRouter()
+  const pathname = usePathname()
 
   useEffect(() => {
     if (!isLoading && !user) {
-      navigate.push("/signin");
+      navigate.push("/signin")
     }
-  }, [isLoading]);
+  }, [isLoading, user, navigate])
 
   if (!isLoading && user) {
     return (
-      <div className="mx-auto container min-h-svh max-w-8xl w-full mb-4">
-        {children}
-        <Toaster />
+      <div className="min-h-svh bg-background">
+        {/* Persistent app shell — mounted once, survives every navigation so
+            sidebar/header state and focus are preserved between routes. */}
+        <Sidebar />
+        <Header title={titleForPath(pathname)} />
+
+        <div className="mx-auto container min-h-svh max-w-8xl w-full mb-4">
+          {children}
+          <Toaster />
+        </div>
       </div>
-    );
-  } else if (isLoading || !user) {
-    return <LabLoader />
+    )
   }
+
+  return <LabLoader />
 }

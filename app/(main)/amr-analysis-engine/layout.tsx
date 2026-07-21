@@ -1,7 +1,5 @@
 "use client";
 
-import { Sidebar } from "@/components/sidebar";
-import { Header } from "@/components/header";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import clsx from "clsx";
@@ -9,13 +7,6 @@ import { cn } from "@/lib/utils";
 
 export default function AMRLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-
-  const getTitle = () => {
-    if (pathname.includes("gene-database")) return "Gene Database";
-    if (pathname.includes("resistance-predictor"))
-      return "Resistance Predictor";
-    return "AMR Analytics";
-  };
 
   const navItems = [
     {
@@ -26,12 +17,10 @@ export default function AMRLayout({ children }: { children: React.ReactNode }) {
   ];
 
   return (
-    <div className="">
-      <Sidebar />
-
-      <div className="pt-16">
-        <Header title="AMR Analysis Engine" />
-
+    <div className="pt-16">
+      {/* Secondary tab navigation — the sidebar + page header are provided by
+          the persistent shell in app/(main)/layout.tsx. */}
+      <div className="relative">
         {/* Top Navigation / Tabs */}
         <div className="fixed top-10 left-16 right-0 bg-background/80 backdrop-blur-lg border-b border-border flex items-center gap-6 px-8 pt-6 z-39">
           {navItems.map((item) => {
