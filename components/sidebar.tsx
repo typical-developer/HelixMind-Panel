@@ -10,8 +10,7 @@ import {
   Microscope,
   Settings,
   Beaker,
-  PanelLeftOpen,
-  PanelRightOpen,
+  PanelRightClose,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -22,139 +21,152 @@ import {
 import Logo from "./ui/Logo";
 import { useAuth } from "@/contexts/AuthContext";
 
+const NAV_ITEMS = [
+  { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+  { href: "/dna-scanner", icon: Zap, label: "DNA Scanner" },
+  { href: "/mutation-simulator", icon: Shuffle, label: "Mutation Simulator" },
+  { href: "/microbe-growth-lab", icon: Beaker, label: "Microbe Lab" },
+  { href: "/amr-analysis-engine", icon: Microscope, label: "AMR Analysis Engine" },
+  { href: "/settings", icon: Settings, label: "Settings" },
+];
+
 export function Sidebar() {
   const pathname = usePathname();
   const [expanded, setExpanded] = useState(false);
   const [showLabels, setShowLabels] = useState(false);
   const { user } = useAuth();
 
+  // Reveal labels a beat after the panel starts widening so text doesn't
+  // squash during the transition.
   useEffect(() => {
-    let timer: NodeJS.Timeout;
-
-    if (expanded) {
-      timer = setTimeout(() => {
-        setShowLabels(true);
-      }, 0);
-    } else {
+    if (!expanded) {
       setShowLabels(false);
+      return;
     }
-
+    const timer = setTimeout(() => setShowLabels(true), 120);
     return () => clearTimeout(timer);
   }, [expanded]);
 
-  const navItems = [
-    { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-    { href: "/dna-scanner", icon: Zap, label: "DNA Scanner" },
-    { href: "/mutation-simulator", icon: Shuffle, label: "Mutation Simulator" },
-    { href: "/microbe-growth-lab", icon: Beaker, label: "Microbe Lab" },
-    { href: "/amr-analysis-engine", icon: Microscope, label: "AMR Analysis Engine" },
-    { href: "/settings", icon: Settings, label: "Settings" },
-  ];
+  const initial = user?.name?.charAt(0).toUpperCase() ?? "G";
 
   return (
     <>
-      {expanded && (
-        <div
-          className="fixed inset-0 bg-black/40 z-40 backdrop-blur-xs"
-          onClick={() => setExpanded(false)}
-        />
-      )}
+      {/* Dim + blur the app when the drawer is open */}
+      <div
+        className={cn(
+          "fixed inset-0 z-40 bg-black/50 backdrop-blur-sm transition-opacity duration-300",
+          expanded ? "opacity-100" : "pointer-events-none opacity-0"
+        )}
+        onClick={() => setExpanded(false)}
+      />
 
       <aside
         className={cn(
-          "fixed left-0 top-0 h-screen bg-sidebar border-r border-sidebar-border flex flex-col py-8 z-50 transition-all duration-300",
-          expanded ? "w-64" : "w-16",
-          "items-center gap-8"
+          "fixed left-0 top-0 z-50 flex h-screen flex-col bg-sidebar",
+          "border-r border-sidebar-border shadow-[0_0_40px_-10px_rgba(0,0,0,0.6)]",
+          "transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+          expanded ? "w-64" : "w-16"
         )}
       >
-        <div
-          className={cn(
-            "h-8 px-5 flex items-center justify-center font-bold text-primary-foreground transition-all duration-300",
-            expanded ? "w-full justify-start gap-2" : ""
-          )}
-        >
+        {/* Brand / toggle */}
+        <div className="flex h-16 shrink-0 items-center border-b border-sidebar-border/70 px-3">
           <button
             onClick={() => setExpanded(!expanded)}
-            className="w-full rounded-full flex items-center justify-between gap-6 text-primary"
-          >
-            {showLabels && <Logo />}
-
-            {expanded ? (
-              <PanelRightOpen className="cursor-pointer" />
-            ) : (
-              <PanelLeftOpen className="cursor-pointer" />
+            aria-label={expanded ? "Collapse sidebar" : "Expand sidebar"}
+            className={cn(
+              "group flex h-10 w-full items-center rounded-lg text-sidebar-foreground transition-colors",
+              "hover:bg-white/5",
+              expanded ? "justify-between px-3" : "justify-center"
             )}
+          >
+            {showLabels ? (
+              <Logo />
+            ) : (
+              <img src="/logo_white.png" alt="HelixMind" className="h-6 w-6" />
+            )}
+            {expanded ? (
+              <PanelRightClose className="h-4 w-4 shrink-0 text-muted-foreground group-hover:text-foreground" />
+            ) : null}
           </button>
         </div>
 
-        <div className={cn("h-full flex flex-col justify-between", expanded ? "w-64" : "w-16")}>
-          <nav
+        {/* Nav */}
+        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+          {showLabels && (
+            <p className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">
+              Menu
+            </p>
+          )}
+
+          {NAV_ITEMS.map((item) => {
+            const Icon = item.icon;
+            const isActive =
+              pathname === item.href || pathname.startsWith(item.href + "/");
+
+            const link = (
+              <Link
+                href={item.href}
+                title={!expanded ? item.label : undefined}
+                className={cn(
+                  "group relative flex h-10 items-center rounded-lg text-sm font-medium transition-colors",
+                  expanded ? "gap-3 px-3" : "justify-center",
+                  isActive
+                    ? "bg-white/[0.08] text-foreground"
+                    : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground"
+                )}
+              >
+                {/* Active indicator bar */}
+                <span
+                  className={cn(
+                    "absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-primary transition-all duration-300",
+                    isActive ? "opacity-100" : "opacity-0"
+                  )}
+                />
+                <Icon
+                  className={cn(
+                    "h-[18px] w-[18px] shrink-0 transition-transform duration-200 group-hover:scale-110",
+                    isActive ? "text-foreground" : ""
+                  )}
+                />
+                {showLabels && <span className="truncate">{item.label}</span>}
+              </Link>
+            );
+
+            return expanded ? (
+              <div key={item.href}>{link}</div>
+            ) : (
+              <Tooltip key={item.href} delayDuration={0}>
+                <TooltipTrigger asChild>{link}</TooltipTrigger>
+                <TooltipContent side="right" sideOffset={8}>
+                  {item.label}
+                </TooltipContent>
+              </Tooltip>
+            );
+          })}
+        </nav>
+
+        {/* Profile */}
+        <div className="shrink-0 border-t border-sidebar-border/70 p-3">
+          <Link
+            href="/settings"
             className={cn(
-              "border-t border-t-accent flex flex-col items-center justify-center gap-6 w-full px-4 pt-6 duration-150 ease-out transition-all",
-              expanded && "pl-4 items-start justify-center",
-              expanded ? "w-64" : "w-16",
+              "flex items-center rounded-lg transition-colors hover:bg-white/5",
+              expanded ? "gap-3 p-2" : "justify-center p-1"
             )}
           >
-            {navItems.map((item) => {
-              const Icon = item.icon;
-
-              // ✅ FIX HERE
-              const isActive =
-                pathname === item.href || pathname.startsWith(item.href + "/");
-
-              return expanded ? (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    "truncate! w-full flex items-center gap-4 rounded-lg px-4 py-2 transition-all duration-200",
-                    isActive
-                      ? "bg-primary text-primary-foreground"
-                      : "text-sidebar-foreground hover:bg-sidebar-accent/40"
-                  )}
-                >
-                  <Icon className="w-5 h-5" />
-                  {showLabels && <span className="truncate duration-200 transition-all ease-out">{item.label}</span>}
-                </Link>
-              ) : (
-                <Tooltip key={item.href}>
-                  <TooltipTrigger>
-                    <Link
-                      href={item.href}
-                      title={item.label}
-                      className={cn(
-                        "w-10 h-10 rounded-lg flex items-center justify-center truncate transition-all duration-200",
-                        isActive
-                          ? "bg-primary text-primary-foreground"
-                          : "text-sidebar-foreground hover:bg-sidebar-accent/40"
-                      )}
-                    >
-                      <Icon className="w-5 h-5" />
-                    </Link>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">
-                    <p className="truncate">{item.label}</p>
-                  </TooltipContent>
-                </Tooltip>
-              );
-            })}
-          </nav>
-
-          <Link
-            href={"/settings"}
-            className={cn("w-full flex justify-center items-center gap-4", expanded && "px-4 justify-start")}
-          >
-            <div className="shrink-0 w-10 h-10 rounded-full bg-secondary flex items-center justify-center text-base font-display font-bold">
-              {user?.name.charAt(0).toUpperCase()}
+            <div className="relative shrink-0">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-secondary text-sm font-semibold text-secondary-foreground ring-1 ring-white/10">
+                {initial}
+              </div>
+              <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-sidebar bg-emerald-400" />
             </div>
-
             {showLabels && (
-              <div className="truncate animate-in slide-in-from-left transition-all duration-200 ease-linear">
-                <h3 className="flex items-center gap-2 text-lg font-semibold truncate transition-all ease-out duration-150">
-                  <span className="text-sm truncate">{user?.name ?? "Guest"}</span>
-                </h3>
-                <p className="text-muted-foreground flex items-center gap-2 truncate">
-                  <span className="text-xs truncate">{user?.email ?? ""}</span>
+              <div className="min-w-0 flex-1 animate-in fade-in slide-in-from-left-2 duration-200">
+                <p className="truncate text-sm font-medium text-foreground">
+                  {user?.name ?? "Guest"}
+                </p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {user?.email ?? "Not signed in"}
                 </p>
               </div>
             )}

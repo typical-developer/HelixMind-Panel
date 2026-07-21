@@ -2,21 +2,19 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Eye, EyeOff, AlertCircle } from "lucide-react";
+import { Eye, EyeOff, AlertCircle, Dna, Activity, ShieldCheck } from "lucide-react";
 
 import Logo from "@/components/ui/Logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
+
+const HIGHLIGHTS = [
+  { icon: Dna, text: "Genomic sequence analysis & mutation scanning" },
+  { icon: Activity, text: "Real-time microbial growth simulations" },
+  { icon: ShieldCheck, text: "AI-powered antimicrobial resistance prediction" },
+];
 
 export default function SignInPage() {
   const [email, setEmail] = useState("");
@@ -41,7 +39,6 @@ export default function SignInPage() {
     const result = await signIn(email, password);
 
     if (result.success) {
-      // toast.success(result.message);
       navigate.push("/dashboard");
     } else {
       setError(result.error || "Something went wrong");
@@ -49,99 +46,125 @@ export default function SignInPage() {
   };
 
   return (
-    <div className="  mx-auto container h-screen bg-background flex">
-      {/* Left Panel - Branding */}
-      <div className="hidden lg:flex lg:w-1/2 flex-col justify-between p-12 border-r border-border">
-        <div className="flex items-center gap-3">
+    <div className="flex min-h-screen bg-background">
+      {/* Left — branded hero */}
+      <div className="bg-grid relative hidden w-1/2 flex-col justify-between overflow-hidden border-r border-border p-12 lg:flex">
+        <div className="aurora pointer-events-none absolute inset-0" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
+
+        <div className="relative flex items-center gap-3 text-lg font-semibold">
           <Logo />
         </div>
-        <div className="space-y-6">
-          <h1 className="text-5xl font-display font-bold leading-tight">
-            Welcome Back
-            <br />
-            <span className="text-muted-foreground">to HelixMind.</span>
-          </h1>
-          <p className="text-muted-foreground text-lg max-w-md">
-            Sign in to access your genomic analysis tools and mutation simulations.
-          </p>
+
+        <div className="relative space-y-8">
+          <div className="space-y-4">
+            <h1 className="text-gradient text-5xl font-bold leading-[1.05] tracking-tight">
+              Accelerating
+              <br />
+              biological
+              <br />
+              advancements.
+            </h1>
+            <p className="max-w-md text-lg text-muted-foreground">
+              Sign in to access your genomic analysis tools and mutation
+              simulations.
+            </p>
+          </div>
+
+          <ul className="space-y-3">
+            {HIGHLIGHTS.map(({ icon: Icon, text }) => (
+              <li key={text} className="flex items-center gap-3 text-sm text-foreground/90">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5">
+                  <Icon className="h-4 w-4" />
+                </span>
+                {text}
+              </li>
+            ))}
+          </ul>
         </div>
-        <p className="text-sm text-muted-foreground">© 2025 HelixMind. All rights reserved.</p>
+
+        <p className="relative text-sm text-muted-foreground">
+          © 2025 HelixMind. All rights reserved.
+        </p>
       </div>
 
-      {/* Right Panel - Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8">
-        <Card className="w-full max-w-md border-0 bg-transparent">
-          <CardHeader className="space-y-2 text-center lg:text-left">
-            <div className="lg:hidden flex items-center justify-center gap-3 mb-6">
-              <Logo />
+      {/* Right — form */}
+      <div className="flex w-full items-center justify-center p-6 lg:w-1/2">
+        <div className="w-full max-w-md">
+          <div className="mb-8 flex items-center gap-3 lg:hidden">
+            <Logo />
+          </div>
+
+          <div className="mb-8">
+            <h2 className="text-2xl font-semibold tracking-tight">Welcome back</h2>
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              Enter your credentials to continue
+            </p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {error && (
+              <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Email</label>
+              <Input
+                type="email"
+                name="email"
+                placeholder="name@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="username"
+                className="h-11"
+              />
             </div>
-            <CardTitle className="text-2xl font-display">Sign In</CardTitle>
-            <CardDescription>Enter your credentials to continue</CardDescription>
-          </CardHeader>
 
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {error && (
-                <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                  <span>{error}</span>
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Email</label>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-foreground">Password</label>
+                <Link
+                  href="/reset-password"
+                  className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+              <div className="relative">
                 <Input
-                  type="email"
-                  name="email"
-                  placeholder="name@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  autoComplete="username"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Enter your password"
+                  value={password}
+                  name="password"
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                  className="h-11 pr-10"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
               </div>
+            </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Password</label>
-                <div className="relative">
-                  <Input
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Enter your password"
-                    value={password}
-                    name="password"
-                    onChange={(e) => setPassword(e.target.value)}
-                    autoComplete="current-password"
-                    className="pr-10"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
+            <Button type="submit" className="h-11 w-full" size="lg" disabled={isLoading}>
+              {isLoading ? "Signing in..." : "Sign In"}
+            </Button>
 
-              <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
-                {isLoading ? "Signing in..." : "Sign In"}
-              </Button>
-
-              <p className="text-center text-sm text-muted-foreground">
-                Don't have an account?{" "}
-                <Link href="/signup" className="text-foreground hover:underline font-medium">
-                  Create one
-                </Link>
-              </p>
-
-              <p className="-mt-2 text-center text-sm text-muted-foreground">
-                Forgot password?{" "}
-                <Link href="/reset-password" className="text-foreground hover:underline font-medium">
-                  reset-password
-                </Link>
-              </p>
-            </form>
-          </CardContent>
-        </Card>
+            <p className="text-center text-sm text-muted-foreground">
+              Don&apos;t have an account?{" "}
+              <Link href="/signup" className="font-medium text-foreground hover:underline">
+                Create one
+              </Link>
+            </p>
+          </form>
+        </div>
       </div>
     </div>
   );

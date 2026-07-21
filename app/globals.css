@@ -47,38 +47,40 @@
 }
 
 .dark {
+  /* Monochrome elevation scale — background is the darkest plane, surfaces step
+     lighter so cards/popovers actually read as raised instead of flat. */
   --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.145 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.145 0 0);
-  --popover-foreground: oklch(0.985 0 0);
+  --foreground: oklch(0.96 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.96 0 0);
+  --popover: oklch(0.225 0 0);
+  --popover-foreground: oklch(0.96 0 0);
   --primary: oklch(0.985 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
+  --primary-foreground: oklch(0.17 0 0);
+  --secondary: oklch(0.27 0 0);
   --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
+  --muted: oklch(0.27 0 0);
+  --muted-foreground: oklch(0.72 0 0);
+  --accent: oklch(0.27 0 0);
   --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.396 0.141 25.723);
-  --destructive-foreground: oklch(0.637 0.237 25.331);
-  --border: oklch(0.269 0 0);
-  --input: oklch(0.269 0 0);
-  --ring: oklch(0.439 0 0);
+  --destructive: oklch(0.58 0.2 25.5);
+  --destructive-foreground: oklch(0.98 0 0);
+  --border: oklch(0.275 0 0);
+  --input: oklch(0.255 0 0);
+  --ring: oklch(0.56 0 0);
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar: oklch(0.17 0 0);
+  --sidebar-foreground: oklch(0.96 0 0);
+  --sidebar-primary: oklch(0.985 0 0);
+  --sidebar-primary-foreground: oklch(0.17 0 0);
+  --sidebar-accent: oklch(0.27 0 0);
   --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.269 0 0);
-  --sidebar-ring: oklch(0.439 0 0);
+  --sidebar-border: oklch(0.24 0 0);
+  --sidebar-ring: oklch(0.56 0 0);
 }
 
 /* Smooth scrolling only for users who haven't asked for reduced motion. */
@@ -139,8 +141,69 @@
 }
 
 @layer components {
+  /* Raised glass surface: semi-opaque elevated fill, hairline top highlight and
+     a soft ambient shadow so cards feel lifted off the background. */
   .glass {
-    @apply bg-card/30 backdrop-blur-md border border-border rounded-lg;
+    background: color-mix(in oklab, var(--card) 72%, transparent);
+    backdrop-filter: blur(14px);
+    border: 1px solid color-mix(in oklab, white 8%, transparent);
+    border-radius: var(--radius-lg);
+    box-shadow:
+      inset 0 1px 0 0 color-mix(in oklab, white 6%, transparent),
+      0 12px 32px -20px rgba(0, 0, 0, 0.75);
+  }
+
+  /* Solid elevated surface (no blur) for dense panels. */
+  .surface {
+    background: var(--card);
+    border: 1px solid color-mix(in oklab, white 7%, transparent);
+    border-radius: var(--radius-lg);
+  }
+
+  .hairline {
+    border-color: color-mix(in oklab, white 8%, transparent);
+  }
+
+  /* Subtle blueprint grid — for hero panels and empty states. Monochrome. */
+  .bg-grid {
+    background-image:
+      linear-gradient(
+        color-mix(in oklab, white 3.5%, transparent) 1px,
+        transparent 1px
+      ),
+      linear-gradient(
+        90deg,
+        color-mix(in oklab, white 3.5%, transparent) 1px,
+        transparent 1px
+      );
+    background-size: 46px 46px;
+  }
+
+  /* Soft monochrome light bloom for hero backgrounds (no colour). */
+  .aurora {
+    background:
+      radial-gradient(
+        55% 45% at 18% 12%,
+        rgba(255, 255, 255, 0.07),
+        transparent 62%
+      ),
+      radial-gradient(
+        48% 38% at 88% 88%,
+        rgba(255, 255, 255, 0.045),
+        transparent 60%
+      );
+  }
+
+  /* Crisp-to-soft heading text; reads as depth without adding colour. */
+  .text-gradient {
+    background: linear-gradient(
+      180deg,
+      var(--foreground),
+      color-mix(in oklab, var(--foreground) 58%, transparent)
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
   }
 
   .glow-cyan {
