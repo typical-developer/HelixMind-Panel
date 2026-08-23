@@ -94,14 +94,14 @@ export default function signupPage() {
 
         <div className="relative space-y-8">
           <div className="space-y-4">
-            <h1 className="text-gradient text-5xl font-bold leading-[1.05] tracking-tight">
+            <h1 className="text-gradient text-4xl font-semibold leading-[1.05] tracking-tight">
               Accelerate
               <br />
               biological
               <br />
               discovery.
             </h1>
-            <p className="max-w-md text-lg text-muted-foreground">
+            <p className="max-w-md text-base text-muted-foreground">
               Use AI-powered genomic analysis to explore, simulate, and predict
               biological outcomes with confidence.
             </p>
@@ -110,8 +110,8 @@ export default function signupPage() {
           <ul className="space-y-3">
             {HIGHLIGHTS.map(({ icon: Icon, text }) => (
               <li key={text} className="flex items-center gap-3 text-sm text-foreground/90">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5">
-                  <Icon className="h-4 w-4" />
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border bg-raised">
+                  <Icon className="size-3.5" />
                 </span>
                 {text}
               </li>
@@ -132,7 +132,7 @@ export default function signupPage() {
           </div>
 
           <div className="mb-8">
-            <h2 className="text-2xl font-semibold tracking-tight">Create an account</h2>
+            <h2 className="text-xl font-semibold tracking-tight">Create an account</h2>
             <p className="mt-1.5 text-sm text-muted-foreground">
               Enter your details to get started
             </p>
@@ -155,7 +155,7 @@ export default function signupPage() {
                 placeholder="John Doe"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="h-11"
+                className="h-9"
               />
             </div>
 
@@ -168,7 +168,7 @@ export default function signupPage() {
                 autoComplete="username"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="h-11"
+                className="h-9"
               />
             </div>
 
@@ -182,7 +182,7 @@ export default function signupPage() {
                   autoComplete="new-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="h-11 pr-10"
+                  className="h-9 pr-9"
                 />
                 <button
                   type="button"
@@ -223,13 +223,13 @@ export default function signupPage() {
                 placeholder="Confirm your password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="h-11"
+                className="h-9"
               />
             </div>
 
             <Button
               type="submit"
-              className="h-11 w-full"
+              className="h-9 w-full"
               size="lg"
               disabled={isLoading || !allRequirementsMet}
             >

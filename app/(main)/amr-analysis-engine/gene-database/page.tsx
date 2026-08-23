@@ -1,92 +1,103 @@
-"use client";
+"use client"
 
-import { Search, Database, Dna, Bug, Layers, Clock } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react"
+import { Bug, Clock, Database, Dna, Layers, Search, X } from "lucide-react"
 
-interface AMRRecord {
-  id: string;
-  gene: string;
-  antibiotic: string;
-  drugClass: string;
-  mechanism: string;
-  organism: string;
-  impact: number;
-}
+import { cn } from "@/lib/utils"
+import { AMR_DATABASE_STATS, AMR_RECORDS } from "@/lib/amr-records"
+import {
+  Chip,
+  EditorLayout,
+  EditorScroll,
+  EmptyState,
+  Pane,
+  PaneHeader,
+  StatTile,
+  ToolbarButton,
+  WBInput,
+  useStatusItems,
+} from "@/components/workbench"
 
-const AMR_RECORDS: AMRRecord[] = [
-  { id: "AMR001", gene: "blaCTX-M", antibiotic: "Cephalosporins", drugClass: "Beta-lactams", mechanism: "Beta-lactamase", organism: "E. coli", impact: 12.5 },
-  { id: "AMR002", gene: "gyrA", antibiotic: "Fluoroquinolones", drugClass: "Quinolones", mechanism: "DNA gyrase mutation", organism: "Salmonella", impact: 8.4 },
-  { id: "AMR003", gene: "rpoB", antibiotic: "Rifamycins", drugClass: "RNA polymerase inhibitors", mechanism: "RNA polymerase mutation", organism: "M. tuberculosis", impact: 1.56 },
-  { id: "AMR004", gene: "mecA", antibiotic: "Oxacillin", drugClass: "Beta-lactams", mechanism: "Penicillin-binding protein", organism: "S. aureus", impact: 9.23 },
-  { id: "AMR005", gene: "erm(B)", antibiotic: "Macrolides", drugClass: "Protein synthesis inhibitors", mechanism: "rRNA methylation", organism: "S. pneumoniae", impact: 6.78 },
-];
+const STAT_ICONS = [Dna, Bug, Layers, Clock]
 
-const STATS = [
-  { icon: Dna, label: "Total Genes", value: "2,847" },
-  { icon: Bug, label: "Organisms", value: "456" },
-  { icon: Layers, label: "Drug Classes", value: "128" },
-  { icon: Clock, label: "Last Updated", value: "2024-01-12" },
-];
+const COLUMNS = [
+  "ID",
+  "Gene",
+  "Antibiotic",
+  "Drug Class",
+  "Mechanism",
+  "Organism",
+  "Impact",
+] as const
 
 export default function GeneDatabase() {
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState("")
 
   const filteredRecords = AMR_RECORDS.filter(
     (record) =>
       record.gene.toLowerCase().includes(searchTerm.toLowerCase()) ||
       record.antibiotic.toLowerCase().includes(searchTerm.toLowerCase()) ||
       record.organism.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  )
+
+  useStatusItems(
+    useMemo(
+      () => [
+        {
+          id: "records",
+          label: `${filteredRecords.length}/${AMR_RECORDS.length} records`,
+        },
+      ],
+      [filteredRecords.length],
+    ),
+  )
 
   return (
-    <div className="ml-16">
-      <main className="min-h-screen space-y-6 px-6">
-        {/* Stats */}
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          {STATS.map(({ icon: Icon, label, value }) => (
-            <div key={label} className="glass card-hover p-5">
-              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5">
-                <Icon className="h-5 w-5" />
-              </div>
-              <p className="text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
-              <p className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">{value}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* Search + Content */}
-        <div className="glass w-full p-5 sm:p-6">
-          <div className="mb-5 flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5">
-              <Database className="h-5 w-5" />
-            </div>
-            <div>
-              <h3 className="font-semibold leading-tight">Resistance Gene Database</h3>
-              <p className="text-xs text-muted-foreground">
-                {filteredRecords.length} of {AMR_RECORDS.length} records
-              </p>
-            </div>
-          </div>
-
-          {/* Search */}
-          <div className="relative mb-4">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input
+    <EditorLayout inspectorId="gene-database" inspector={<DatabaseInspector />}>
+      <div className="flex h-full min-h-0 flex-col">
+        {/* Filter bar sits above the grid, the way a find widget sits above an
+            editor buffer. */}
+        <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border px-2">
+          <div className="relative min-w-0 flex-1 sm:max-w-sm">
+            <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <WBInput
               type="text"
-              placeholder="Search genes, antibiotics, organisms..."
+              placeholder="Filter genes, antibiotics, organisms…"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="h-11 w-full rounded-lg border border-border bg-card/60 pl-9 pr-4 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-ring focus:bg-card focus:outline-none focus:ring-2 focus:ring-ring/40"
+              className="h-7 pl-7"
+              aria-label="Filter records"
             />
           </div>
+          {searchTerm && (
+            <ToolbarButton
+              icon={X}
+              label="Clear filter"
+              onClick={() => setSearchTerm("")}
+            />
+          )}
+          <span className="ml-auto shrink-0 font-mono text-xs text-muted-foreground tabular">
+            {filteredRecords.length} / {AMR_RECORDS.length}
+          </span>
+        </div>
 
-          {/* Desktop table */}
-          <div className="hidden overflow-x-auto lg:block">
-            <table className="w-full text-sm">
-              <thead>
+        {filteredRecords.length === 0 ? (
+          <EmptyState
+            icon={Search}
+            title="No records found"
+            description={`Nothing in the database matches “${searchTerm}”.`}
+          />
+        ) : (
+          <EditorScroll>
+            {/* Desktop grid */}
+            <table className="hidden w-full text-sm lg:table">
+              <thead className="sticky top-0 z-10 bg-surface">
                 <tr className="border-b border-border">
-                  {["ID", "Gene", "Antibiotic", "Drug Class", "Mechanism", "Organism", "Impact"].map((h) => (
-                    <th key={h} className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  {COLUMNS.map((h) => (
+                    <th
+                      key={h}
+                      className="px-3 py-1.5 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase"
+                    >
                       {h}
                     </th>
                   ))}
@@ -94,52 +105,134 @@ export default function GeneDatabase() {
               </thead>
               <tbody>
                 {filteredRecords.map((record) => (
-                  <tr key={record.id} className="border-b border-border/40 transition-colors last:border-0 hover:bg-white/[0.03]">
-                    <td className="px-4 py-3 font-mono text-muted-foreground">{record.id}</td>
-                    <td className="px-4 py-3 font-mono font-semibold text-foreground">{record.gene}</td>
-                    <td className="px-4 py-3">
-                      <span className="inline-block rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-xs">
-                        {record.antibiotic}
-                      </span>
+                  <tr
+                    key={record.id}
+                    className="row-hover border-b border-border/50 last:border-0"
+                  >
+                    <td className="px-3 py-1.5 font-mono text-muted-foreground">
+                      {record.id}
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">{record.drugClass}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{record.mechanism}</td>
-                    <td className="px-4 py-3 italic">{record.organism}</td>
-                    <td className="px-4 py-3 font-semibold tabular-nums">{record.impact}%</td>
+                    <td className="px-3 py-1.5 font-mono font-semibold text-foreground">
+                      {record.gene}
+                    </td>
+                    <td className="px-3 py-1.5">
+                      <Chip>{record.antibiotic}</Chip>
+                    </td>
+                    <td className="px-3 py-1.5 text-muted-foreground">
+                      {record.drugClass}
+                    </td>
+                    <td className="px-3 py-1.5 text-muted-foreground">
+                      {record.mechanism}
+                    </td>
+                    <td className="px-3 py-1.5 text-foreground/80 italic">
+                      {record.organism}
+                    </td>
+                    <td
+                      className={cn(
+                        "px-3 py-1.5 font-mono font-semibold",
+                        record.impact >= 10
+                          ? "text-destructive"
+                          : record.impact >= 5
+                            ? "text-warning"
+                            : "text-foreground/80",
+                      )}
+                    >
+                      {record.impact}%
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
 
-          {/* Mobile cards */}
-          <div className="grid gap-3 lg:hidden">
-            {filteredRecords.map((r) => (
-              <div key={r.id} className="rounded-lg border border-border bg-card/50 p-4">
-                <div className="flex items-center justify-between">
-                  <p className="font-mono text-xs text-muted-foreground">{r.id}</p>
-                  <p className="font-semibold tabular-nums">{r.impact}%</p>
+            {/* Compact cards below the grid breakpoint */}
+            <div className="grid gap-2 p-3 lg:hidden">
+              {filteredRecords.map((r) => (
+                <div
+                  key={r.id}
+                  className="card-hover rounded-md border border-border bg-surface p-3"
+                >
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="font-mono text-sm font-semibold text-foreground">
+                      {r.gene}
+                    </p>
+                    <p className="font-mono text-sm text-muted-foreground tabular">
+                      {r.impact}%
+                    </p>
+                  </div>
+                  <p className="mt-0.5 font-mono text-xs text-muted-foreground">
+                    {r.id}
+                  </p>
+                  <div className="mt-2">
+                    <Chip>{r.antibiotic}</Chip>
+                  </div>
+                  <dl className="mt-2 space-y-0.5 text-xs text-muted-foreground">
+                    <div className="flex gap-1.5">
+                      <dt className="text-foreground/70">Organism</dt>
+                      <dd className="italic">{r.organism}</dd>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <dt className="text-foreground/70">Drug class</dt>
+                      <dd>{r.drugClass}</dd>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <dt className="text-foreground/70">Mechanism</dt>
+                      <dd>{r.mechanism}</dd>
+                    </div>
+                  </dl>
                 </div>
-                <p className="mt-1 font-mono text-lg font-semibold">{r.gene}</p>
-                <span className="mt-2 inline-block rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-xs">
-                  {r.antibiotic}
-                </span>
-                <div className="mt-3 space-y-1 text-sm text-muted-foreground">
-                  <p><span className="text-foreground/70">Organism:</span> {r.organism}</p>
-                  <p><span className="text-foreground/70">Drug class:</span> {r.drugClass}</p>
-                  <p><span className="text-foreground/70">Mechanism:</span> {r.mechanism}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {filteredRecords.length === 0 && (
-            <div className="py-12 text-center text-sm text-muted-foreground">
-              No records found matching your search.
+              ))}
             </div>
-          )}
+          </EditorScroll>
+        )}
+      </div>
+    </EditorLayout>
+  )
+}
+
+function DatabaseInspector() {
+  const byOrganism = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const r of AMR_RECORDS) map.set(r.organism, (map.get(r.organism) ?? 0) + 1)
+    return [...map.entries()].sort((a, b) => b[1] - a[1])
+  }, [])
+
+  return (
+    <div className="seq-scroll flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+      <div className="grid grid-cols-2 gap-2">
+        {AMR_DATABASE_STATS.map((stat, i) => {
+          const Icon = STAT_ICONS[i]
+          return (
+            <StatTile
+              key={stat.label}
+              icon={Icon}
+              label={stat.label}
+              value={<span className="text-lg">{stat.value}</span>}
+            />
+          )
+        })}
+      </div>
+
+      <Pane>
+        <PaneHeader icon={Database} title="Coverage by organism" />
+        <div className="space-y-2 p-3">
+          {byOrganism.map(([organism, count]) => (
+            <div key={organism} className="space-y-1">
+              <div className="flex items-baseline justify-between text-xs">
+                <span className="truncate text-muted-foreground italic">
+                  {organism}
+                </span>
+                <span className="font-mono text-foreground/80 tabular">{count}</span>
+              </div>
+              <div className="h-1 overflow-hidden rounded-full bg-[var(--wb-active)]">
+                <div
+                  className="h-full rounded-full bg-brand/70"
+                  style={{ width: `${(count / AMR_RECORDS.length) * 100}%` }}
+                />
+              </div>
+            </div>
+          ))}
         </div>
-      </main>
+      </Pane>
     </div>
-  );
+  )
 }

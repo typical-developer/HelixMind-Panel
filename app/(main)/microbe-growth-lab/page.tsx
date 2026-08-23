@@ -6,14 +6,11 @@ import {
   Pause,
   RotateCcw,
   Download,
-  Microscope,
   DnaIcon,
   Plus,
   FileText,
   Thermometer,
-  Droplet,
-  Leaf,
-  Wind,
+  ImageDown,
   Pill,
   AlertTriangle,
   Activity,
@@ -27,13 +24,35 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
 } from "recharts";
 
 // components
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
+import {
+  CHART_AXIS,
+  CHART_GRID,
+  CHART_TOOLTIP,
+  SERIES,
+} from "@/lib/chart-theme";
+import {
+  Chip,
+  EditorLayout,
+  EditorScroll,
+  Field,
+  Pane,
+  PaneHeader,
+  StatTile,
+  ToolbarButton,
+  WBInput,
+  useLogStream,
+  useProblems,
+  useRunStatus,
+  useStatusItems,
+  type Problem,
+} from "@/components/workbench";
 
 // ────────────────────────────────────────────────
 //  TYPES
@@ -601,483 +620,629 @@ export default function MicrobeGrowthLab() {
     }
   };
 
+  // Stress escalates neutral → amber → red so a struggling culture is legible
+  // at a glance rather than only readable from the percentage.
   const getStressClass = (level: number): string => {
-    if (level < 0.3) return "bg-neutral-700 text-neutral-300";
-    if (level < 0.7) return "bg-neutral-600 text-neutral-200";
-    return "bg-neutral-500 text-white";
+    if (level < 0.3) return "bg-muted-foreground/50";
+    if (level < 0.7) return "bg-warning";
+    return "bg-destructive";
+  };
+
+  const getStressTextClass = (level: number): string => {
+    if (level < 0.3) return "text-muted-foreground";
+    if (level < 0.7) return "text-warning";
+    return "text-destructive";
   };
 
   const currentStrain = showCustomStrain
     ? customStrain
     : STRAINS[selectedStrain];
 
+  /* ---- Workbench integration -------------------------------------------
+     Environment warnings become Problems, the adaptation log streams to the
+     terminal, and the run drives the status bar. */
+
+  const problems = useMemo<Problem[]>(() => {
+    const list: Problem[] = [];
+    if (tempWarning)
+      list.push({
+        source: "microbe-growth-lab",
+        severity: "warning",
+        message: tempWarning,
+        at: "temperature",
+      });
+    if (phWarning)
+      list.push({
+        source: "microbe-growth-lab",
+        severity: "warning",
+        message: phWarning,
+        at: "pH",
+      });
+    if (state.population === 0 && state.timeStep > 0)
+      list.push({
+        source: "microbe-growth-lab",
+        severity: "error",
+        message: "Culture collapsed — population reached zero.",
+        at: `step ${state.timeStep}`,
+      });
+    return list;
+  }, [tempWarning, phWarning, state.population, state.timeStep]);
+
+  useProblems("microbe-growth-lab", problems);
+  useLogStream("microbe-lab", state.adaptationLog);
+
+  useRunStatus(
+    useMemo(
+      () =>
+        isRunning || state.timeStep > 0
+          ? {
+              label: "Growth experiment",
+              state: isRunning ? ("running" as const) : ("paused" as const),
+              detail: `step ${state.timeStep} · ${state.population.toLocaleString()} cells`,
+            }
+          : null,
+      [isRunning, state.timeStep, state.population],
+    ),
+  );
+
+  useStatusItems(
+    useMemo(
+      () => [
+        { id: "strain", label: currentStrain.name },
+        { id: "pop", label: `${state.population.toLocaleString()} cells` },
+        {
+          id: "res",
+          label: `Resistance ${state.resistanceLevel}%`,
+          tone:
+            state.resistanceLevel >= 50
+              ? ("danger" as const)
+              : state.resistanceLevel >= 20
+                ? ("warning" as const)
+                : ("default" as const),
+        },
+      ],
+      [currentStrain.name, state.population, state.resistanceLevel],
+    ),
+  );
+
+  const peakPopulation = useMemo(
+    () => chartData.reduce((max, d) => Math.max(max, d.population), 0),
+    [chartData],
+  );
+
   return (
-    <div className="space-x-8">
-      <div className="ml-16 pt-16">
-        <main className="mx-auto max-w-7xl container pt-8 bg-background min-w-full min-h-screen space-y-8">
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
-            {/* Strain Selection */}
-            <div className="glass p-6">
-              <h2 className="text-lg font-semibold mb-5 flex items-center gap-2">
-                <DnaIcon className="h-5 w-5" />
-                Strain
-              </h2>
+    <EditorLayout
+      inspectorId="microbe-growth-lab"
+      defaultInspectorSize={30}
+      inspector={
+        <LabInspector
+          selectedStrain={selectedStrain}
+          showCustomStrain={showCustomStrain}
+          customStrain={customStrain}
+          setCustomStrain={setCustomStrain}
+          genomeInfo={genomeInfo}
+          onStrainChange={handleStrainChange}
+          onFastaUpload={handleFastaUpload}
+          temperature={temperature}
+          onTemperatureChange={handleTemperatureChange}
+          tempWarning={tempWarning}
+          pH={pH}
+          onPHChange={handlePHChange}
+          phWarning={phWarning}
+          nutrients={nutrients}
+          setNutrients={setNutrients}
+          oxygen={oxygen}
+          setOxygen={setOxygen}
+          antibioticOn={antibioticOn}
+          setAntibioticOn={setAntibioticOn}
+          isRunning={isRunning}
+          onStartPause={handleStartPause}
+          onReset={handleReset}
+          onExport={handleExport}
+        />
+      }
+    >
+      <EditorScroll>
+        <div className="flex flex-col gap-3 p-3">
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+            <StatTile
+              icon={Clock}
+              label="Time steps"
+              value={state.timeStep}
+              hint={isRunning ? "running · 300ms/step" : "paused"}
+            />
+            <StatTile
+              icon={Activity}
+              label="Population"
+              value={state.population.toLocaleString()}
+              hint={`peak ${peakPopulation.toLocaleString()}`}
+            />
+            <StatTile
+              icon={Pill}
+              label="Resistance"
+              value={`${state.resistanceLevel}%`}
+              tone={
+                state.resistanceLevel >= 50
+                  ? "critical"
+                  : state.resistanceLevel >= 20
+                    ? "warning"
+                    : "default"
+              }
+              hint={antibioticOn ? "under selection (50 µg/mL)" : "no antibiotic"}
+            />
+            <StatTile
+              icon={DnaIcon}
+              label="Strain"
+              value={
+                <span className="text-base leading-tight">{currentStrain.name}</span>
+              }
+              hint={`growth ${(currentStrain.growthRate * 100).toFixed(0)}%`}
+            />
+          </div>
 
-              <div className="space-y-2 mb-6">
-                {Object.entries(STRAINS).map(([key, strain]) => (
-                  <button
-                    key={key}
-                    onClick={() => handleStrainChange(key)}
-                    className={`w-full rounded-lg border p-3 text-left text-sm transition-colors ${
-                      selectedStrain === key && !showCustomStrain
-                        ? "border-white/25 bg-white/[0.08] text-foreground"
-                        : "border-border bg-card/40 text-muted-foreground hover:bg-white/[0.04] hover:text-foreground"
-                    }`}
-                  >
-                    <div className="font-medium">{strain.name}</div>
-                    <div className="text-xs text-neutral-300 mt-0.5">
-                      {strain.description}
-                    </div>
-                    <div className="text-xs text-neutral-400 mt-1">
-                      Growth: {(strain.growthRate * 100).toFixed(0)}% • Resist:{" "}
-                      {(strain.resistance * 100).toFixed(0)}%
-                    </div>
-                  </button>
-                ))}
-              </div>
-
-              <div className="mt-5 pt-4 border-t border-border">
-                <label className="text-xs font-medium text-neutral-500 block mb-2 flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
-                  Upload FASTA
-                </label>
-                <input
-                  type="file"
-                  accept=".fasta,.fa,.fna,.txt"
-                  onChange={handleFastaUpload}
-                  className="w-full text-xs text-neutral-400 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-xs file:bg-neutral-800 file:text-neutral-300 hover:file:bg-neutral-700 cursor-pointer"
-                />
-                <p className="text-xs text-neutral-600 mt-2">
-                  Analyze genome from FASTA header
-                </p>
-              </div>
+          <Pane>
+            <PaneHeader
+              icon={LineChartIcon}
+              title="Population growth"
+              subtitle={`${chartData.length} data points`}
+              actions={
+                <>
+                  <ToolbarButton
+                    icon={ImageDown}
+                    label="Export chart as PNG"
+                    onClick={handleExportPNG}
+                  />
+                  <ToolbarButton
+                    icon={Download}
+                    label="Export data as CSV"
+                    onClick={handleExport}
+                  />
+                </>
+              }
+            />
+            <div className="p-3">
+              {chartData.length > 0 ? (
+                // chartRef lets handleExportPNG find the SVG inside this div
+                <div className="h-72" ref={chartRef}>
+                  <ResponsiveContainer width={chartSize} height="100%">
+                    <LineChart
+                      data={chartData}
+                      margin={{ top: 4, right: 8, left: -8, bottom: 0 }}
+                    >
+                      <CartesianGrid {...CHART_GRID} />
+                      <XAxis
+                        dataKey="time"
+                        {...CHART_AXIS}
+                        interval="preserveStartEnd"
+                        minTickGap={40}
+                      />
+                      <YAxis {...CHART_AXIS} width={56} />
+                      <Tooltip
+                        {...CHART_TOOLTIP}
+                        formatter={(v: number) => [v.toLocaleString(), "Population"]}
+                        labelFormatter={(l) => `Step ${l}`}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="population"
+                        stroke={SERIES.primary}
+                        strokeWidth={1.5}
+                        dot={false}
+                        isAnimationActive
+                        animationDuration={280}
+                        animationEasing="linear"
+                        animationBegin={0}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <div className="bg-grid flex h-72 flex-col items-center justify-center gap-2 text-center">
+                  <LineChartIcon className="size-5 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">
+                    Start the simulation to plot population growth
+                  </p>
+                </div>
+              )}
             </div>
+          </Pane>
 
-            {/* ───────────── Custom Strain ───────────── */}
-            {showCustomStrain && (
-              <div className="glass p-6">
-                <h2 className="text-lg font-semibold mb-5 flex items-center gap-2">
-                  <Plus className="h-5 w-5" />
-                  Custom Strain
-                </h2>
-
-                {genomeInfo && (
-                  <div className="mb-6 rounded-lg border border-border bg-card/40 p-4 text-sm">
-                    <p className="text-neutral-400 mb-3 flex items-center gap-2">
-                      <Activity className="h-4 w-4" />
-                      Genome Analysis
-                    </p>
-                    <div className="grid grid-cols-2 gap-3 text-neutral-300">
-                      <div>Size: {genomeInfo.length.toLocaleString()} bp</div>
-                      <div>GC: {genomeInfo.gcContent}%</div>
-                      <div>
-                        Resistance markers: {genomeInfo.resistanceGenes}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <div className="space-y-5">
-                  <div>
-                    <label className="block text-sm font-medium mb-1.5">
-                      Name
-                    </label>
-                    <input
-                      type="text"
-                      value={customStrain.name}
-                      onChange={(e) =>
-                        setCustomStrain({
-                          ...customStrain,
-                          name: e.target.value,
-                        })
-                      }
-                      className="h-10 w-full rounded-lg border border-border bg-card/60 px-3 text-sm transition-colors focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-1.5">
-                      Description
-                    </label>
-                    <input
-                      type="text"
-                      value={customStrain.description}
-                      onChange={(e) =>
-                        setCustomStrain({
-                          ...customStrain,
-                          description: e.target.value,
-                        })
-                      }
-                      className="h-10 w-full rounded-lg border border-border bg-card/60 px-3 text-sm transition-colors focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
-                    />
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between text-sm mb-1.5">
-                      <span>Growth Rate</span>
-                      <span>{(customStrain.growthRate * 100).toFixed(1)}%</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0.05"
-                      max="0.5"
-                      step="0.01"
-                      value={customStrain.growthRate}
-                      onChange={(e) =>
-                        setCustomStrain({
-                          ...customStrain,
-                          growthRate: Number(e.target.value),
-                        })
-                      }
-                      className="w-full h-1.5 bg-neutral-800 rounded-full appearance-none cursor-pointer accent-neutral-500"
-                    />
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between text-sm mb-1.5">
-                      <span>Optimal Temp</span>
-                      <span>{customStrain.tempOptimal}°C</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="10"
-                      max="80"
-                      value={customStrain.tempOptimal}
-                      onChange={(e) =>
-                        setCustomStrain({
-                          ...customStrain,
-                          tempOptimal: Number(e.target.value),
-                        })
-                      }
-                      className="w-full h-1.5 bg-neutral-800 rounded-full appearance-none cursor-pointer accent-neutral-500"
-                    />
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between text-sm mb-1.5">
-                      <span>Resistance</span>
-                      <span>{(customStrain.resistance * 100).toFixed(0)}%</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.01"
-                      value={customStrain.resistance}
-                      onChange={(e) =>
-                        setCustomStrain({
-                          ...customStrain,
-                          resistance: Number(e.target.value),
-                        })
-                      }
-                      className="w-full h-1.5 bg-neutral-800 rounded-full appearance-none cursor-pointer accent-neutral-500"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ───────────── Environment ───────────── */}
-            <div className="glass p-6">
-              <h2 className="text-lg font-semibold mb-5 flex items-center gap-2">
-                <Thermometer className="h-5 w-5" />
-                Environment
-              </h2>
-
-              <div className="space-y-6">
-                <div>
-                  <div className="flex justify-between text-sm mb-1.5">
-                    <span>Temperature</span>
-                    <span>{temperature}°C</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="10"
-                    max="46"
-                    value={temperature}
-                    onChange={(e) => handleTemperatureChange(Number(e.target.value))}
-                    className="w-full flex-1 accent-primary disabled:opacity-50 cursor-grab"
-                  />
-                  <div className="flex items-center gap-2 mt-2">
-                    <input
-                      type="number"
-                      value={temperature}
-                      onChange={(e) => handleTemperatureChange(Number(e.target.value))}
-                      className="h-10 w-full rounded-lg border border-border bg-card/60 px-3 text-sm transition-colors focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
-                    />
-                  </div>
-                  {tempWarning && (
-                    <p className="text-xs text-destructive mt-1 flex items-center gap-1">
-                      <AlertTriangle className="h-3 w-3" />
-                      {tempWarning}
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <div className="flex justify-between text-sm mb-1.5">
-                    <span>pH</span>
-                    <span>{pH.toFixed(1)}</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="5"
-                    max="9"
-                    step="0.1"
-                    value={pH}
-                    onChange={(e) => handlePHChange(Number(e.target.value))}
-                    className="w-full flex-1 accent-primary disabled:opacity-50 cursor-grab"
-                  />
-                  <div className="flex items-center gap-2 mt-2">
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={pH}
-                      onChange={(e) => handlePHChange(Number(e.target.value))}
-                      className="h-10 w-full rounded-lg border border-border bg-card/60 px-3 text-sm transition-colors focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
-                    />
-                  </div>
-                  {phWarning && (
-                    <p className="text-xs text-destructive mt-1 flex items-center gap-1">
-                      <AlertTriangle className="h-3 w-3" />
-                      {phWarning}
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <div className="flex justify-between text-sm mb-1.5">
-                    <span>Nutrients</span>
-                    <span>{Math.round(nutrients)}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={nutrients}
-                    onChange={(e) => setNutrients(Number(e.target.value))}
-                    className="w-full flex-1 accent-primary disabled:opacity-50 cursor-grab"
-                  />
-                  <div className="flex items-center gap-2 mt-2">
-                    <input
-                      type="number"
-                      value={Math.round(nutrients)}
-                      onChange={(e) => setNutrients(Number(e.target.value))}
-                      className="h-10 w-full rounded-lg border border-border bg-card/60 px-3 text-sm transition-colors focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex justify-between text-sm mb-1.5">
-                    <span>Oxygen</span>
-                    <span>{oxygen}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={oxygen}
-                    onChange={(e) => setOxygen(Number(e.target.value))}
-                    className="w-full flex-1 accent-primary disabled:opacity-50 cursor-grab"
-                  />
-                  <div className="flex items-center gap-2 mt-2">
-                    <input
-                      type="number"
-                      value={oxygen}
-                      onChange={(e) => setOxygen(Number(e.target.value))}
-                      className="h-10 w-full rounded-lg border border-border bg-card/60 px-3 text-sm transition-colors focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
-                    />
-                  </div>
-                </div>
-
-                <label className="flex items-center gap-3 cursor-pointer pt-2 border-t border-border">
-                  <input
-                    type="checkbox"
-                    checked={antibioticOn}
-                    onChange={(e) => setAntibioticOn(e.target.checked)}
-                    className="h-4 w-4 rounded border-border accent-white"
-                  />
-                  <div className="flex items-center gap-2 text-sm">
-                    <Pill className="h-4 w-4" />
-                    Antibiotic {antibioticOn ? "(50 µg/mL)" : ""}
-                  </div>
-                </label>
-              </div>
-            </div>
-
-            {/* ───────────── Stress Monitor ───────────── */}
-            <div className="glass p-6">
-              <h2 className="text-lg font-semibold mb-5 flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5" />
-                Stress Monitor
-              </h2>
-
-              <div className="space-y-4">
+          <div className="grid gap-3 xl:grid-cols-2">
+            <Pane>
+              <PaneHeader icon={AlertTriangle} title="Stress monitor" />
+              <div className="space-y-3 p-3">
                 {Object.entries(state.stressLevels).map(([key, level]) => (
-                  <div key={key}>
-                    <div className="flex justify-between text-sm mb-1.5 capitalize">
-                      <span>{key}</span>
-                      <span>{Math.round(level * 100)}%</span>
+                  <div key={key} className="space-y-1">
+                    <div className="flex items-baseline justify-between text-xs">
+                      <span className="capitalize text-muted-foreground">{key}</span>
+                      <span
+                        className={cn(
+                          "font-mono tabular",
+                          getStressTextClass(level),
+                        )}
+                      >
+                        {Math.round(level * 100)}%
+                      </span>
                     </div>
-                    <div className="h-2 bg-neutral-800 rounded-full overflow-hidden">
+                    <div className="h-1.5 overflow-hidden rounded-full bg-[var(--wb-active)]">
                       <div
-                        className={`h-full transition-all ${getStressClass(
-                          level
-                        )}`}
+                        className={cn(
+                          "h-full rounded-full transition-[width,background-color] duration-300 ease-[var(--ease-out-quint)]",
+                          getStressClass(level),
+                        )}
                         style={{ width: `${Math.min(100, level * 100)}%` }}
                       />
                     </div>
                   </div>
                 ))}
               </div>
+            </Pane>
 
-              <div className="mt-8 pt-6 border-t border-border">
-                <p className="text-sm text-neutral-500 mb-1">
-                  Resistance Level
-                </p>
-                <p className="text-4xl font-bold">{state.resistanceLevel}%</p>
+            <Pane className="min-h-0">
+              <PaneHeader
+                icon={Clock}
+                title="Adaptation log"
+                subtitle="also streamed to the terminal"
+                actions={
+                  <Chip tone={isRunning ? "success" : "neutral"}>
+                    {isRunning ? "live" : "idle"}
+                  </Chip>
+                }
+              />
+              <div className="seq-scroll max-h-56 min-h-40 overflow-auto bg-[hsl(0_0%_2%)] p-2 font-mono text-xs leading-5">
+                {state.adaptationLog.length === 0 ? (
+                  <p className="px-1 text-[var(--term-dim)]">
+                    Simulation not started yet.
+                  </p>
+                ) : (
+                  state.adaptationLog.map((entry, i) => (
+                    <div
+                      key={`${i}-${entry}`}
+                      className="animate-line-in flex gap-2 px-1 hover:bg-[var(--wb-hover)]"
+                    >
+                      <span className="shrink-0 text-[var(--term-dim)]">›</span>
+                      <span className="text-[var(--term-fg)]">{entry}</span>
+                    </div>
+                  ))
+                )}
               </div>
-            </div>
+            </Pane>
+          </div>
+        </div>
+      </EditorScroll>
+    </EditorLayout>
+  );
+}
 
-            {/* ───────────── Controls ───────────── */}
-            <div className="glass p-6">
-              <h2 className="text-lg font-semibold mb-5 flex items-center gap-2">
-                <Activity className="h-5 w-5" />
-                Simulation
-              </h2>
+/* ============================================================================
+   Inspector — strain, genome and environment controls
+   ========================================================================= */
 
-              <div className="space-y-4">
-                <div>
-                  <p className="text-sm text-neutral-500">Time Steps</p>
-                  <p className="text-2xl font-bold">{state.timeStep}</p>
-                </div>
+function LabInspector({
+  selectedStrain,
+  showCustomStrain,
+  customStrain,
+  setCustomStrain,
+  genomeInfo,
+  onStrainChange,
+  onFastaUpload,
+  temperature,
+  onTemperatureChange,
+  tempWarning,
+  pH,
+  onPHChange,
+  phWarning,
+  nutrients,
+  setNutrients,
+  oxygen,
+  setOxygen,
+  antibioticOn,
+  setAntibioticOn,
+  isRunning,
+  onStartPause,
+  onReset,
+  onExport,
+}: {
+  selectedStrain: string;
+  showCustomStrain: boolean;
+  customStrain: Strain;
+  setCustomStrain: React.Dispatch<React.SetStateAction<Strain>>;
+  genomeInfo: GenomeInfo | null;
+  onStrainChange: (key: string) => void;
+  onFastaUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  temperature: number;
+  onTemperatureChange: (v: number) => void;
+  tempWarning: string;
+  pH: number;
+  onPHChange: (v: number) => void;
+  phWarning: string;
+  nutrients: number;
+  setNutrients: (v: number) => void;
+  oxygen: number;
+  setOxygen: (v: number) => void;
+  antibioticOn: boolean;
+  setAntibioticOn: (v: boolean) => void;
+  isRunning: boolean;
+  onStartPause: () => void;
+  onReset: () => void;
+  onExport: () => void;
+}) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="seq-scroll min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+        <Pane>
+          <PaneHeader icon={DnaIcon} title="Strain" />
+          <div className="p-1.5">
+            {Object.entries(STRAINS).map(([key, strain]) => {
+              const active = selectedStrain === key && !showCustomStrain;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => onStrainChange(key)}
+                  className={cn(
+                    "row-hover flex w-full cursor-pointer flex-col gap-0.5 rounded-sm px-2 py-1.5 text-left",
+                    "focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none",
+                    active && "bg-[var(--wb-active)]",
+                  )}
+                >
+                  <span className="flex items-center gap-1.5">
+                    <span
+                      className={cn(
+                        "size-1.5 shrink-0 rounded-full",
+                        active ? "bg-brand" : "bg-muted-foreground/40",
+                      )}
+                    />
+                    <span
+                      className={cn(
+                        "truncate text-sm font-medium",
+                        active ? "text-foreground" : "text-foreground/80",
+                      )}
+                    >
+                      {strain.name}
+                    </span>
+                  </span>
+                  <span className="truncate pl-3 text-xs text-muted-foreground/80">
+                    {strain.description}
+                  </span>
+                  <span className="pl-3 font-mono text-xs text-muted-foreground/70 tabular">
+                    growth {(strain.growthRate * 100).toFixed(0)}% · resist{" "}
+                    {(strain.resistance * 100).toFixed(0)}%
+                  </span>
+                </button>
+              );
+            })}
+          </div>
 
-                <div>
-                  <p className="text-sm text-neutral-500">Population</p>
-                  <p className="text-2xl font-bold">
-                    {state.population.toLocaleString()}
+          <div className="border-t border-border p-3">
+            <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-foreground/80">
+              <FileText className="size-3.5" />
+              Upload FASTA
+            </label>
+            <input
+              type="file"
+              accept=".fasta,.fa,.fna,.txt"
+              onChange={onFastaUpload}
+              className={cn(
+                "w-full cursor-pointer text-xs text-muted-foreground",
+                "file:mr-2 file:cursor-pointer file:rounded-sm file:border file:border-border",
+                "file:bg-[var(--wb-raised)] file:px-2 file:py-1 file:text-xs file:text-foreground/85",
+                "hover:file:bg-[var(--wb-active)]",
+              )}
+            />
+            <p className="mt-1.5 text-xs text-muted-foreground/70">
+              Derives a custom strain from the genome header.
+            </p>
+          </div>
+        </Pane>
+
+        {showCustomStrain && (
+          <Pane>
+            <PaneHeader icon={Plus} title="Custom strain" />
+            <div className="space-y-3 p-3">
+              {genomeInfo && (
+                <div className="space-y-1 rounded-sm border border-border bg-[var(--wb-raised)] p-2 font-mono text-xs">
+                  <p className="flex items-center gap-1.5 font-sans text-muted-foreground">
+                    <Activity className="size-3" />
+                    Genome analysis
+                  </p>
+                  <p className="text-foreground/80">
+                    size {genomeInfo.length.toLocaleString()} bp
+                  </p>
+                  <p className="text-foreground/80">GC {genomeInfo.gcContent}%</p>
+                  <p className="text-foreground/80">
+                    resistance markers {genomeInfo.resistanceGenes}
                   </p>
                 </div>
-
-                <div className="pt-4 space-y-3 border-t border-border">
-                  <Button onClick={handleStartPause} className="w-full">
-                    {isRunning ? (
-                      <Pause className="h-5 w-5" />
-                    ) : (
-                      <Play className="h-5 w-5" />
-                    )}
-                    {isRunning ? "Pause" : "Start"}
-                  </Button>
-
-                  <Button
-                    onClick={handleReset}
-                    variant="secondary"
-                    className="w-full"
-                  >
-                    <RotateCcw className="h-5 w-5" />
-                    Reset
-                  </Button>
-
-                  <Button
-                    onClick={handleExport}
-                    variant="secondary"
-                    className="w-full"
-                  >
-                    <Download className="h-5 w-5" />
-                    Export CSV
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Chart */}
-          <div className="glass p-6 mb-8">
-            {/* Header row with title and Export PNG button */}
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold flex items-center gap-2">
-                <LineChartIcon className="h-5 w-5" />
-                Population Growth
-              </h2>
-              <Button onClick={handleExportPNG} variant="secondary" size="sm">
-                <Download className="h-4 w-4" />
-                Export PNG
-              </Button>
-            </div>
-
-            {chartData.length > 0 ? (
-              // chartRef lets handleExportPNG find the SVG inside this div
-              <div className="h-80" ref={chartRef}>
-                <ResponsiveContainer width={chartSize} height={chartSize}>
-                  <LineChart
-                    data={chartData}
-                    className="transition-all duration-1000 ease-in-out"
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#404040" />
-                    <XAxis
-                      dataKey="time"
-                      stroke="#FBFBFB"
-                      fontSize={"0.8rem"}
-                      interval="preserveStartEnd"
-                      minTickGap={50}
-                    />
-                    <YAxis stroke="#FBFBFB" fontSize={"0.8rem"} width={80} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "#0f172a",
-                        border: "1px solid #334155",
-                        color: "#e2e8f0",
-                      }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="population"
-                      stroke="#FBFBFB"
-                      strokeWidth={2}
-                      dot={false}
-                      isAnimationActive={true}
-                      animationDuration={280}
-                      animationEasing="linear"
-                      animationBegin={0}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <div className="h-80 flex items-center justify-center text-neutral-600">
-                Start the simulation to see population growth
-              </div>
-            )}
-          </div>
-
-          {/* Log */}
-          <div className="glass p-6">
-            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <Clock className="h-5 w-5" />
-              Adaptation Log
-            </h2>
-            <ScrollArea className="h-48 space-y-1 rounded-lg border border-border bg-black/50 p-4 font-mono text-sm text-muted-foreground">
-              {state.adaptationLog.length === 0 ? (
-                <p className="text-neutral-600">Simulation not started yet.</p>
-              ) : (
-                state.adaptationLog.map((entry, i) => (
-                  <div key={i}>{entry}</div>
-                ))
               )}
-            </ScrollArea>
+
+              <Field label="Name">
+                <WBInput
+                  type="text"
+                  value={customStrain.name}
+                  onChange={(e) =>
+                    setCustomStrain({ ...customStrain, name: e.target.value })
+                  }
+                />
+              </Field>
+
+              <Field label="Description">
+                <WBInput
+                  type="text"
+                  value={customStrain.description}
+                  onChange={(e) =>
+                    setCustomStrain({ ...customStrain, description: e.target.value })
+                  }
+                />
+              </Field>
+
+              <Field
+                label="Growth rate"
+                value={`${(customStrain.growthRate * 100).toFixed(1)}%`}
+              >
+                <input
+                  type="range"
+                  min="0.05"
+                  max="0.5"
+                  step="0.01"
+                  value={customStrain.growthRate}
+                  onChange={(e) =>
+                    setCustomStrain({
+                      ...customStrain,
+                      growthRate: Number(e.target.value),
+                    })
+                  }
+                  aria-label="Growth rate"
+                />
+              </Field>
+
+              <Field label="Optimal temp" value={`${customStrain.tempOptimal}°C`}>
+                <input
+                  type="range"
+                  min="10"
+                  max="80"
+                  value={customStrain.tempOptimal}
+                  onChange={(e) =>
+                    setCustomStrain({
+                      ...customStrain,
+                      tempOptimal: Number(e.target.value),
+                    })
+                  }
+                  aria-label="Optimal temperature"
+                />
+              </Field>
+
+              <Field
+                label="Resistance"
+                value={`${(customStrain.resistance * 100).toFixed(0)}%`}
+              >
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={customStrain.resistance}
+                  onChange={(e) =>
+                    setCustomStrain({
+                      ...customStrain,
+                      resistance: Number(e.target.value),
+                    })
+                  }
+                  aria-label="Resistance"
+                />
+              </Field>
+            </div>
+          </Pane>
+        )}
+
+        <Pane>
+          <PaneHeader icon={Thermometer} title="Environment" />
+          <div className="space-y-4 p-3">
+            <Field label="Temperature" value={`${temperature}°C`} error={tempWarning}>
+              <div className="space-y-2">
+                <input
+                  type="range"
+                  min="10"
+                  max="46"
+                  value={temperature}
+                  onChange={(e) => onTemperatureChange(Number(e.target.value))}
+                  aria-label="Temperature"
+                />
+                <WBInput
+                  type="number"
+                  value={temperature}
+                  onChange={(e) => onTemperatureChange(Number(e.target.value))}
+                />
+              </div>
+            </Field>
+
+            <Field label="pH" value={pH.toFixed(1)} error={phWarning}>
+              <div className="space-y-2">
+                <input
+                  type="range"
+                  min="5"
+                  max="9"
+                  step="0.1"
+                  value={pH}
+                  onChange={(e) => onPHChange(Number(e.target.value))}
+                  aria-label="pH"
+                />
+                <WBInput
+                  type="number"
+                  step="0.1"
+                  value={pH}
+                  onChange={(e) => onPHChange(Number(e.target.value))}
+                />
+              </div>
+            </Field>
+
+            <Field label="Nutrients" value={`${Math.round(nutrients)}%`}>
+              <div className="space-y-2">
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={nutrients}
+                  onChange={(e) => setNutrients(Number(e.target.value))}
+                  aria-label="Nutrients"
+                />
+                <WBInput
+                  type="number"
+                  value={Math.round(nutrients)}
+                  onChange={(e) => setNutrients(Number(e.target.value))}
+                />
+              </div>
+            </Field>
+
+            <Field label="Oxygen" value={`${oxygen}%`}>
+              <div className="space-y-2">
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={oxygen}
+                  onChange={(e) => setOxygen(Number(e.target.value))}
+                  aria-label="Oxygen"
+                />
+                <WBInput
+                  type="number"
+                  value={oxygen}
+                  onChange={(e) => setOxygen(Number(e.target.value))}
+                />
+              </div>
+            </Field>
+
+            <label className="flex cursor-pointer items-center gap-2 border-t border-border pt-3">
+              <Pill className="size-3.5 shrink-0 text-muted-foreground" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm text-foreground">Antibiotic</span>
+                <span className="block text-xs text-muted-foreground/70">
+                  {antibioticOn ? "50 µg/mL — selection active" : "none"}
+                </span>
+              </span>
+              <Switch
+                checked={antibioticOn}
+                onCheckedChange={setAntibioticOn}
+                aria-label="Antibiotic"
+              />
+            </label>
           </div>
-        </main>
+        </Pane>
+      </div>
+
+      <div className="flex shrink-0 gap-2 border-t border-border p-3">
+        <Button onClick={onStartPause} className="h-8 flex-1">
+          {isRunning ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
+          {isRunning ? "Pause" : "Start"}
+        </Button>
+        <Button onClick={onReset} variant="secondary" className="h-8">
+          <RotateCcw className="size-3.5" />
+          Reset
+        </Button>
+        <Button onClick={onExport} variant="secondary" className="h-8">
+          <Download className="size-3.5" />
+          CSV
+        </Button>
       </div>
     </div>
   );

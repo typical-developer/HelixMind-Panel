@@ -1,7 +1,18 @@
 "use client";
 
-import { Play, Pause, RotateCcw, Upload, Download, FileText } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import {
+  Activity,
+  Download,
+  FileText,
+  LineChart as LineChartIcon,
+  ListChecks,
+  Pause,
+  Play,
+  RotateCcw,
+  SlidersHorizontal,
+  Upload,
+} from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   LineChart,
   Line,
@@ -16,7 +27,29 @@ import {
 // ui
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  CHART_AXIS,
+  CHART_GRID,
+  CHART_LEGEND,
+  CHART_TOOLTIP,
+  SERIES,
+} from "@/lib/chart-theme";
+import {
+  EditorLayout,
+  EditorScroll,
+  Field,
+  Pane,
+  PaneHeader,
+  StatTile,
+  ToolbarButton,
+  WBInput,
+  WBSelect,
+  useLogStream,
+  useProblems,
+  useRunStatus,
+  useStatusItems,
+  type Problem,
+} from "@/components/workbench";
 
 // ==================== SIMULATION UTILITIES ====================
 
@@ -460,517 +493,499 @@ export default function MutationSimulator() {
     URL.revokeObjectURL(url);
   };
 
+  /* ---- Workbench integration -------------------------------------------
+     Validation errors become Problems, each completed generation becomes a
+     terminal line, and the run itself drives the status bar. */
+
+  const problems = useMemo<Problem[]>(() => {
+    const list: Problem[] = []
+    for (const [field, message] of Object.entries(errors)) {
+      if (message) {
+        list.push({ source: "mutation-simulator", severity: "error", message, at: field })
+      }
+    }
+    if (!queryFastaFile) {
+      list.push({
+        source: "mutation-simulator",
+        severity: "info",
+        message: "No query sequence loaded — upload a FASTA file to enable the run.",
+      })
+    }
+    return list
+  }, [errors, queryFastaFile])
+
+  useProblems("mutation-simulator", problems)
+
+  const logLines = useMemo(
+    () =>
+      generationStats.map(
+        (s) =>
+          `gen ${s.generation}/${params.numGenerations} · ${s.mutationCount} mutations · fitness ${s.fitness.toFixed(1)} · total ${s.cumulativeMutations}`,
+      ),
+    [generationStats, params.numGenerations],
+  )
+
+  useLogStream("mutation-simulator", logLines)
+
+  useRunStatus(
+    useMemo(
+      () =>
+        currentGeneration > 0 || isRunning
+          ? {
+              label: "Mutation simulation",
+              state: isRunning
+                ? ("running" as const)
+                : currentGeneration >= params.numGenerations
+                  ? ("done" as const)
+                  : ("paused" as const),
+              progress: (currentGeneration / params.numGenerations) * 100,
+              detail: `generation ${currentGeneration} of ${params.numGenerations}`,
+            }
+          : null,
+      [currentGeneration, isRunning, params.numGenerations],
+    ),
+  )
+
+  const currentFitness =
+    generationStats.length > 0
+      ? generationStats[generationStats.length - 1].fitness
+      : 100
+
+  useStatusItems(
+    useMemo(
+      () => [
+        { id: "gen", label: `Gen ${currentGeneration}/${params.numGenerations}` },
+        {
+          id: "fit",
+          label: `Fitness ${currentFitness.toFixed(1)}`,
+          tone: currentFitness < 80 ? ("warning" as const) : ("default" as const),
+        },
+        { id: "mut", label: `${totalMutations} mutations` },
+      ],
+      [currentGeneration, params.numGenerations, currentFitness, totalMutations],
+    ),
+  )
+
   return (
-    <div className="space-x-8">
-      <div className="ml-16 pt-16">
-        <main className="mx-auto max-w-7xl container pt-8 bg-background min-w-full min-h-screen space-y-8">
-          {/* Upload */}
-          <label
-            htmlFor="query_fasta"
-            className="group glass card-hover flex cursor-pointer flex-col items-center justify-center border-2 border-dashed !border-border/80 p-10 text-center transition-colors hover:!border-white/25"
-          >
-            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/5 transition-transform group-hover:scale-105">
-              <Upload className="h-6 w-6" />
-            </div>
-            <h3 className="text-lg font-semibold">Upload Query Sequence</h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Drop your FASTA file here, or click to browse
-            </p>
-            <span className="mt-5 inline-flex items-center gap-2 rounded-lg border border-border bg-card/60 px-4 py-2 text-sm font-medium transition-colors group-hover:border-white/20">
-              Browse files
-            </span>
-            <input
-              type="file"
-              accept=".fasta,.fa,.fna,.ffn,.faa,.frn"
-              id="query_fasta"
-              className="hidden"
-              onChange={handleFileChange}
+    <EditorLayout
+      inspectorId="mutation-simulator"
+      defaultInspectorSize={28}
+      inspector={
+        <SimulatorInspector
+          params={params}
+          setParams={setParams}
+          errors={errors}
+          isRunning={isRunning}
+          sequence={sequence}
+          queryFastaFile={queryFastaFile}
+          onFileChange={handleFileChange}
+          onStart={handleStart}
+          onReset={handleReset}
+          validateTemperature={validateTemperature}
+          validatePH={validatePH}
+          validateGenerations={validateGenerations}
+          validateMutationRate={validateMutationRate}
+        />
+      }
+    >
+      <EditorScroll>
+        <div className="flex flex-col gap-3 p-3">
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+            <StatTile icon={Activity} label="Total mutations" value={totalMutations} />
+            <StatTile label="Substitutions" value={substitutions} />
+            <StatTile label="Insertions" value={insertions} />
+            <StatTile
+              label="Current fitness"
+              value={currentFitness.toFixed(1)}
+              tone={currentFitness < 80 ? "warning" : "positive"}
             />
+          </div>
+
+          <Pane>
+            <PaneHeader
+              icon={LineChartIcon}
+              title="Mutation dynamics"
+              subtitle="fitness vs cumulative mutations"
+              actions={
+                currentGeneration > 0 ? (
+                  <ToolbarButton
+                    icon={Download}
+                    label="Export run as JSON"
+                    onClick={handleExport}
+                  />
+                ) : null
+              }
+            />
+            <div className="min-h-0 flex-1 p-3">
+              {generationStats.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart
+                    data={generationStats}
+                    margin={{ top: 4, right: 8, left: -16, bottom: 0 }}
+                  >
+                    <CartesianGrid {...CHART_GRID} />
+                    <XAxis dataKey="generation" {...CHART_AXIS} />
+                    <YAxis yAxisId="left" {...CHART_AXIS} width={40} />
+                    <YAxis yAxisId="right" orientation="right" {...CHART_AXIS} width={40} />
+                    <Tooltip {...CHART_TOOLTIP} />
+                    <Legend {...CHART_LEGEND} />
+                    <Line
+                      yAxisId="left"
+                      type="monotone"
+                      dataKey="fitness"
+                      stroke={SERIES.quaternary}
+                      strokeWidth={1.5}
+                      dot={{ fill: SERIES.quaternary, r: 2.5, strokeWidth: 0 }}
+                      activeDot={{ r: 4 }}
+                      name="Fitness score"
+                    />
+                    <Line
+                      yAxisId="right"
+                      type="monotone"
+                      dataKey="cumulativeMutations"
+                      stroke={SERIES.secondary}
+                      strokeWidth={1.5}
+                      dot={{ fill: SERIES.secondary, r: 2.5, strokeWidth: 0 }}
+                      activeDot={{ r: 4 }}
+                      name="Total mutations"
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-[300px] flex-col items-center justify-center gap-2 text-center">
+                  <div
+                    className={cn(
+                      "size-10 rounded-full border-2 border-dashed border-border",
+                      isRunning && "animate-spin border-brand/60",
+                    )}
+                  />
+                  <p className="text-sm font-medium text-foreground">
+                    {isRunning
+                      ? `Simulating generation ${currentGeneration + 1}/${params.numGenerations}…`
+                      : "Ready to simulate"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {sequence
+                      ? `Loaded ${sequence.length.toLocaleString()} bp sequence`
+                      : "Upload a sequence in the inspector, then press Start"}
+                  </p>
+                </div>
+              )}
+            </div>
+          </Pane>
+
+          <Pane>
+            <PaneHeader
+              icon={ListChecks}
+              title="Generation progress"
+              subtitle={`${currentGeneration} of ${params.numGenerations} complete`}
+            />
+            <div className="space-y-1.5 p-3">
+              {Array.from({ length: params.numGenerations }, (_, i) => i + 1).map(
+                (gen) => {
+                  const stat = generationStats.find((s) => s.generation === gen)
+                  const isActive = gen === currentGeneration
+                  return (
+                    <div key={gen} className="flex items-center gap-2.5">
+                      <span
+                        className={cn(
+                          "w-12 shrink-0 font-mono text-xs tabular",
+                          stat ? "text-foreground/85" : "text-muted-foreground/60",
+                        )}
+                      >
+                        gen {gen}
+                      </span>
+                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--wb-active)]">
+                        <div
+                          className={cn(
+                            "h-full rounded-full transition-[width] duration-500 ease-[var(--ease-out-quint)]",
+                            isActive && isRunning
+                              ? "animate-soft-pulse bg-brand"
+                              : "bg-brand/70",
+                          )}
+                          style={{ width: stat ? "100%" : "0%" }}
+                        />
+                      </div>
+                      <span className="w-24 shrink-0 text-right font-mono text-xs text-muted-foreground tabular">
+                        {stat ? `${stat.mutationCount} mut` : "—"}
+                      </span>
+                    </div>
+                  )
+                },
+              )}
+            </div>
+          </Pane>
+        </div>
+      </EditorScroll>
+    </EditorLayout>
+  )
+}
+
+/* ============================================================================
+   Inspector — every simulation parameter, in one dense column
+   ========================================================================= */
+
+type Params = {
+  tempUnit: "C" | "F"
+  temperature: number
+  substitutionRate: number
+  numGenerations: number
+  pH: number
+  nutrients: string
+  oxygen: string
+}
+
+function SimulatorInspector({
+  params,
+  setParams,
+  errors,
+  isRunning,
+  sequence,
+  queryFastaFile,
+  onFileChange,
+  onStart,
+  onReset,
+  validateTemperature,
+  validatePH,
+  validateGenerations,
+  validateMutationRate,
+}: {
+  params: Params
+  setParams: React.Dispatch<React.SetStateAction<Params>>
+  errors: Record<string, string>
+  isRunning: boolean
+  sequence: string
+  queryFastaFile: File | null
+  onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void
+  onStart: () => void
+  onReset: () => void
+  validateTemperature: (v: number) => boolean
+  validatePH: (v: number) => boolean
+  validateGenerations: (v: number) => boolean
+  validateMutationRate: (v: number) => boolean
+}) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="seq-scroll min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+        <Pane>
+          <PaneHeader icon={Upload} title="Query sequence" />
+          <div className="space-y-2 p-3">
+            <label
+              htmlFor="query_fasta"
+              className="group flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-border p-3 transition-colors duration-150 hover:border-[var(--wb-border-strong)] hover:bg-[var(--wb-hover)]"
+            >
+              <Upload className="size-3.5 shrink-0 text-muted-foreground transition-transform duration-150 group-hover:-translate-y-0.5" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium text-foreground">
+                  Upload FASTA
+                </span>
+                <span className="block truncate text-xs text-muted-foreground/80">
+                  .fasta .fa .fna .ffn .faa .frn
+                </span>
+              </span>
+              <input
+                type="file"
+                accept=".fasta,.fa,.fna,.ffn,.faa,.frn"
+                id="query_fasta"
+                className="hidden"
+                onChange={onFileChange}
+              />
+            </label>
+
             {queryFastaFile && (
-              <div className="mt-5 flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs">
-                <FileText className="h-4 w-4 shrink-0" />
-                <span className="max-w-[240px] truncate font-medium">{queryFastaFile.name}</span>
-                <span className="text-muted-foreground">· {sequence.length} bp</span>
+              <div className="flex items-center gap-1.5 rounded-sm border border-border bg-[var(--wb-raised)] px-2 py-1 text-xs">
+                <FileText className="size-3 shrink-0 text-brand-bright" />
+                <span className="min-w-0 flex-1 truncate font-mono text-foreground/85">
+                  {queryFastaFile.name}
+                </span>
+                <span className="shrink-0 text-muted-foreground tabular">
+                  {sequence.length} bp
+                </span>
               </div>
             )}
-          </label>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* LEFT */}
-            <div className="lg:col-span-2">
-              <div className="glass p-8 rounded-lg mb-8">
-                <h3 className="text-lg font-semibold mb-6">
-                  Real-Time Mutation Dynamics
-                </h3>
-
-                <div className="bg-black/40 rounded-lg p-6 min-h-96 border border-border">
-                  {generationStats.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={350}>
-                      <LineChart data={generationStats}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                        <XAxis
-                          dataKey="generation"
-                          stroke="#888"
-                          label={{
-                            value: "Generation",
-                            position: "insideBottom",
-                            offset: -5,
-                          }}
-                        />
-                        <YAxis
-                          yAxisId="left"
-                          stroke="#8b5cf6"
-                          label={{
-                            value: "Fitness",
-                            angle: -90,
-                            position: "insideLeft",
-                          }}
-                        />
-                        <YAxis
-                          yAxisId="right"
-                          orientation="right"
-                          stroke="#10b981"
-                          label={{
-                            value: "Mutations",
-                            angle: 90,
-                            position: "insideRight",
-                          }}
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: "rgba(0,0,0,0.8)",
-                            border: "1px solid #333",
-                            borderRadius: "8px",
-                          }}
-                        />
-                        <Legend />
-                        <Line
-                          yAxisId="left"
-                          type="monotone"
-                          dataKey="fitness"
-                          stroke="#8b5cf6"
-                          strokeWidth={2}
-                          dot={{ fill: "#8b5cf6", r: 4 }}
-                          name="Fitness Score"
-                        />
-                        <Line
-                          yAxisId="right"
-                          type="monotone"
-                          dataKey="cumulativeMutations"
-                          stroke="#10b981"
-                          strokeWidth={2}
-                          dot={{ fill: "#10b981", r: 4 }}
-                          name="Total Mutations"
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="flex items-center justify-center h-80">
-                      <div className="text-center">
-                        <div
-                          className={`w-32 h-32 mx-auto mb-4 border-2 border-primary/50 rounded-full ${
-                            isRunning ? "animate-spin" : ""
-                          }`}
-                        />
-                        <p className="text-primary font-semibold">
-                          {isRunning
-                            ? `Simulating Generation ${currentGeneration + 1}/${
-                                params.numGenerations
-                              }...`
-                            : "Ready to simulate"}
-                        </p>
-                        <p className="text-muted-foreground text-sm mt-2">
-                          {sequence
-                            ? `Loaded ${sequence.length} bp sequence`
-                            : "Upload a sequence and click start"}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="glass p-6 rounded-lg mb-8">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-semibold text-primary">
-                    Statistics
-                  </h3>
-                  {currentGeneration > 0 && (
-                    <button
-                      onClick={handleExport}
-                      className="text-xs bg-primary/20 hover:bg-primary/30 px-3 py-1 rounded flex items-center gap-1 transition-colors"
-                    >
-                      <Download className="w-3 h-3" />
-                      Export JSON
-                    </button>
-                  )}
-                </div>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div className="bg-card/50 p-4 rounded-lg">
-                    <span className="text-muted-foreground block mb-1">
-                      Total Mutations
-                    </span>
-                    <span className="text-2xl text-primary font-bold">
-                      {totalMutations}
-                    </span>
-                  </div>
-                  <div className="bg-card/50 p-4 rounded-lg">
-                    <span className="text-muted-foreground block mb-1">
-                      Substitutions
-                    </span>
-                    <span className="text-2xl text-primary font-bold">
-                      {substitutions}
-                    </span>
-                  </div>
-                  <div className="bg-card/50 p-4 rounded-lg">
-                    <span className="text-muted-foreground block mb-1">
-                      Insertions
-                    </span>
-                    <span className="text-2xl text-primary font-bold">
-                      {insertions}
-                    </span>
-                  </div>
-                  <div className="bg-card/50 p-4 rounded-lg">
-                    <span className="text-muted-foreground block mb-1">
-                      Current Fitness
-                    </span>
-                    <span className="text-2xl text-primary font-bold">
-                      {generationStats.length > 0
-                        ? generationStats[
-                            generationStats.length - 1
-                          ].fitness.toFixed(1)
-                        : "100.0"}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="glass p-6 rounded-lg">
-                <h3 className="text-lg font-semibold mb-4">
-                  Generation Progress
-                </h3>
-                <ScrollArea className="min-h-[100px]">
-                  <div className="space-y-3">
-                    {Array.from(
-                      { length: params.numGenerations },
-                      (_, i) => i + 1
-                    ).map((gen) => {
-                      const stat = generationStats.find(
-                        (s) => s.generation === gen
-                      );
-                      const isActive = gen === currentGeneration;
-                      return (
-                        <div
-                          key={gen}
-                          className={`flex items-center gap-3 transition-all ${
-                            isActive ? "scale-105" : ""
-                          }`}
-                        >
-                          <span
-                            className={`text-sm w-12 font-medium ${
-                              stat ? "text-primary" : "text-muted-foreground"
-                            }`}
-                          >
-                            Gen {gen}
-                          </span>
-                          <div className="flex-1 bg-card rounded-full h-3 overflow-hidden border border-border/50">
-                            <div
-                              className={`h-full rounded-full transition-all duration-500 ${
-                                isActive && isRunning
-                                  ? "bg-gradient-to-r from-primary via-secondary to-primary animate-pulse"
-                                  : "bg-gradient-to-r from-primary to-secondary"
-                              }`}
-                              style={{
-                                width: stat ? `100%` : "0%",
-                              }}
-                            />
-                          </div>
-                          {stat && (
-                            <span className="text-xs text-muted-foreground w-20 text-right">
-                              {stat.mutationCount} mutations
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </ScrollArea>
-              </div>
-            </div>
-
-            {/* RIGHT */}
-            <div>
-              <div className="glass p-6 rounded-lg mb-6">
-                <h3 className="text-lg font-semibold mb-4">
-                  Simulation Parameters
-                </h3>
-
-                <ScrollArea className="min-h-[600px]">
-                  <div className="space-y-6 mb-10">
-                    {/* temperatire */}
-                    <div>
-                      <label className="text-sm block mb-2">
-                        Temperature
-                      </label>
-                      <div className="flex gap-2">
-                        <input
-                          type="number"
-                          value={params.temperature}
-                          onChange={(e) => {
-                            const val = parseFloat(e.target.value);
-                            if (validateTemperature(val)) {
-                              setParams((prev) => ({
-                                ...prev,
-                                temperature: val,
-                              }));
-                            } else {
-                              setParams((prev) => ({
-                                ...prev,
-                                temperature: val,
-                              }));
-                            }
-                          }}
-                          disabled={isRunning}
-                          className="w-full bg-card border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary disabled:opacity-50"
-                        />
-                        <select
-                          value={params.tempUnit}
-                          onChange={(e) => {
-                            setParams((prev) => ({
-                              ...prev,
-                              tempUnit: e.target.value as "C" | "F",
-                            }));
-                            validateTemperature(params.temperature);
-                          }}
-                          disabled={isRunning}
-                          className="bg-card border border-border rounded-lg px-3 py-2 text-sm disabled:opacity-50"
-                        >
-                          <option value={"C"}>°C</option>
-                          <option value={"F"}>°F</option>
-                        </select>
-                      </div>
-                      {errors.temperature && (
-                        <p className="text-xs text-destructive mt-1">
-                          {errors.temperature}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* ph balance */}
-                    <div>
-                      <label className="text-sm block mb-2">
-                        pH Balance: {params.pH.toFixed(1)}
-                      </label>
-                      <div className="flex flex-col gap-2 mb-2">
-                        <input
-                          type="range"
-                          min="0"
-                          max="14"
-                          step="0.1"
-                          value={params.pH}
-                          onChange={(e) => {
-                            const val = parseFloat(e.target.value);
-                            if (validatePH(val)) {
-                              setParams((prev) => ({ ...prev, pH: val }));
-                            }
-                          }}
-                          disabled={isRunning}
-                          className="flex-1 accent-primary disabled:opacity-50"
-                        />
-                        <input
-                          type="number"
-                          min="0"
-                          max="14"
-                          step="0.1"
-                          value={params.pH}
-                          onChange={(e) => {
-                            const val = parseFloat(e.target.value);
-                            if (validatePH(val)) {
-                              setParams((prev) => ({ ...prev, pH: val }));
-                            } else {
-                              setParams((prev) => ({ ...prev, pH: val }));
-                            }
-                          }}
-                          disabled={isRunning}
-                          className="h-10 w-full rounded-lg border border-border bg-card/60 px-3 text-sm transition-colors focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40 disabled:opacity-50"
-                        />
-                      </div>
-                      <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                        <span>Acidic</span>
-                        <span>Neutral</span>
-                        <span>Alkaline</span>
-                      </div>
-                      {errors.pH && (
-                        <p className="text-xs text-destructive mt-1">{errors.pH}</p>
-                      )}
-                    </div>
-
-                    {/* nutrient availability */}
-                    <div>
-                      <label className="text-sm block mb-2">
-                        Nutrient Availability
-                      </label>
-                      <select
-                        value={params.nutrients}
-                        onChange={(e) =>
-                          setParams((prev) => ({
-                            ...prev,
-                            nutrients: e.target.value,
-                          }))
-                        }
-                        disabled={isRunning}
-                        className="h-10 w-full rounded-lg border border-border bg-card/60 px-3 text-sm transition-colors focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40 disabled:opacity-50"
-                      >
-                        <option>Low</option>
-                        <option>Medium</option>
-                        <option>High</option>
-                        <option>Excess</option>
-                      </select>
-                    </div>
-
-                    {/* oxygen level */}
-                    <div>
-                      <label className="text-sm block mb-2">
-                        Oxygen Level
-                      </label>
-                      <select
-                        value={params.oxygen}
-                        onChange={(e) =>
-                          setParams((prev) => ({
-                            ...prev,
-                            oxygen: e.target.value,
-                          }))
-                        }
-                        disabled={isRunning}
-                        className="h-10 w-full rounded-lg border border-border bg-card/60 px-3 text-sm transition-colors focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40 disabled:opacity-50"
-                      >
-                        <option>Anaerobic (None)</option>
-                        <option>Low</option>
-                        <option>Normal (21%)</option>
-                        <option>High</option>
-                      </select>
-                    </div>
-
-                    {/* number of generations */}
-                    <div>
-                      <label className="text-sm block mb-2">
-                        Number of Generations
-                      </label>
-                      <input
-                        type="number"
-                        value={params.numGenerations}
-                        onChange={(e) => {
-                          const nG = parseInt(e.target.value);
-                          if (validateGenerations(nG)) {
-                            setParams((prev) => ({
-                              ...prev,
-                              numGenerations: nG,
-                            }));
-                          } else {
-                            setParams((prev) => ({
-                              ...prev,
-                              numGenerations: nG,
-                            }));
-                          }
-                        }}
-                        max={10}
-                        min={1}
-                        disabled={isRunning}
-                        className="h-10 w-full rounded-lg border border-border bg-card/60 px-3 text-sm transition-colors focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40 disabled:opacity-50"
-                      />
-                      {errors.numGenerations && (
-                        <p className="text-xs text-destructive mt-1">
-                          {errors.numGenerations}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* base mutation */}
-                    <div>
-                      <label className="text-sm block mb-2">
-                        Base Mutation Rate: {params.substitutionRate.toFixed(5)}
-                      </label>
-                      <div className="flex flex-col gap-2 mb-2">
-                        <input
-                          type="range"
-                          min="0"
-                          max="0.001"
-                          step="0.00001"
-                          value={params.substitutionRate}
-                          className="flex-1 accent-primary disabled:opacity-50"
-                          disabled={isRunning}
-                          onChange={(e) => {
-                            const val = parseFloat(e.target.value);
-                            if (validateMutationRate(val)) {
-                              setParams((prev) => ({
-                                ...prev,
-                                substitutionRate: val,
-                              }));
-                            }
-                          }}
-                        />
-                        <input
-                          type="number"
-                          min="0"
-                          max="0.001"
-                          step="0.00001"
-                          value={params.substitutionRate}
-                          onChange={(e) => {
-                            const val = parseFloat(e.target.value);
-                            if (validateMutationRate(val)) {
-                              setParams((prev) => ({
-                                ...prev,
-                                substitutionRate: val,
-                              }));
-                            } else {
-                              setParams((prev) => ({
-                                ...prev,
-                                substitutionRate: val,
-                              }));
-                            }
-                          }}
-                          disabled={isRunning}
-                          className="h-10 w-full rounded-lg border border-border bg-card/60 px-3 text-sm transition-colors focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40 disabled:opacity-50"
-                        />
-                      </div>
-                      {errors.substitutionRate && (
-                        <p className="text-xs text-destructive mt-1">
-                          {errors.substitutionRate}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </ScrollArea>
-
-                {/* action buttons */}
-                <div className="flex items-center w-full gap-2 mt-0">
-                  <Button
-                    onClick={handleStart}
-                    disabled={!sequence}
-                    className="w-1/2"
-                  >
-                    {isRunning ? (
-                      <Pause className="w-4 h-4" />
-                    ) : (
-                      <Play className="w-4 h-4" />
-                    )}
-                    {isRunning ? "Pause" : "Start"}
-                  </Button>
-
-                  <Button
-                    onClick={handleReset}
-                    variant={"secondary"}
-                    className="w-1/2"
-                  >
-                    <RotateCcw className="w-4 h-4" />
-                    Reset
-                  </Button>
-                </div>
-              </div>
-            </div>
           </div>
-        </main>
+        </Pane>
+
+        <Pane>
+          <PaneHeader icon={SlidersHorizontal} title="Parameters" />
+          <div className="space-y-4 p-3">
+            <Field label="Temperature" error={errors.temperature}>
+              <div className="flex gap-1.5">
+                <WBInput
+                  type="number"
+                  value={params.temperature}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value)
+                    if (validateTemperature(val)) {
+                      setParams((prev) => ({ ...prev, temperature: val }))
+                    } else {
+                      setParams((prev) => ({ ...prev, temperature: val }))
+                    }
+                  }}
+                  disabled={isRunning}
+                />
+                <WBSelect
+                  value={params.tempUnit}
+                  onChange={(e) => {
+                    setParams((prev) => ({
+                      ...prev,
+                      tempUnit: e.target.value as "C" | "F",
+                    }))
+                    validateTemperature(params.temperature)
+                  }}
+                  disabled={isRunning}
+                  className="w-20"
+                  aria-label="Temperature unit"
+                >
+                  <option value={"C"}>&deg;C</option>
+                  <option value={"F"}>&deg;F</option>
+                </WBSelect>
+              </div>
+            </Field>
+
+            <Field
+              label="pH balance"
+              value={params.pH.toFixed(1)}
+              error={errors.pH}
+              hint="Acidic · Neutral · Alkaline"
+            >
+              <div className="space-y-2">
+                <input
+                  type="range"
+                  min="0"
+                  max="14"
+                  step="0.1"
+                  value={params.pH}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value)
+                    if (validatePH(val)) {
+                      setParams((prev) => ({ ...prev, pH: val }))
+                    }
+                  }}
+                  disabled={isRunning}
+                  aria-label="pH balance"
+                />
+                <WBInput
+                  type="number"
+                  min="0"
+                  max="14"
+                  step="0.1"
+                  value={params.pH}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value)
+                    if (validatePH(val)) {
+                      setParams((prev) => ({ ...prev, pH: val }))
+                    } else {
+                      setParams((prev) => ({ ...prev, pH: val }))
+                    }
+                  }}
+                  disabled={isRunning}
+                />
+              </div>
+            </Field>
+
+            <Field label="Nutrient availability">
+              <WBSelect
+                value={params.nutrients}
+                onChange={(e) =>
+                  setParams((prev) => ({ ...prev, nutrients: e.target.value }))
+                }
+                disabled={isRunning}
+              >
+                <option>Low</option>
+                <option>Medium</option>
+                <option>High</option>
+                <option>Excess</option>
+              </WBSelect>
+            </Field>
+
+            <Field label="Oxygen level">
+              <WBSelect
+                value={params.oxygen}
+                onChange={(e) =>
+                  setParams((prev) => ({ ...prev, oxygen: e.target.value }))
+                }
+                disabled={isRunning}
+              >
+                <option>Anaerobic (None)</option>
+                <option>Low</option>
+                <option>Normal (21%)</option>
+                <option>High</option>
+              </WBSelect>
+            </Field>
+
+            <Field label="Generations" error={errors.numGenerations} hint="1 – 10 per run">
+              <WBInput
+                type="number"
+                value={params.numGenerations}
+                onChange={(e) => {
+                  const nG = parseInt(e.target.value)
+                  if (validateGenerations(nG)) {
+                    setParams((prev) => ({ ...prev, numGenerations: nG }))
+                  } else {
+                    setParams((prev) => ({ ...prev, numGenerations: nG }))
+                  }
+                }}
+                max={10}
+                min={1}
+                disabled={isRunning}
+              />
+            </Field>
+
+            <Field
+              label="Base mutation rate"
+              value={params.substitutionRate.toFixed(5)}
+              error={errors.substitutionRate}
+            >
+              <div className="space-y-2">
+                <input
+                  type="range"
+                  min="0"
+                  max="0.001"
+                  step="0.00001"
+                  value={params.substitutionRate}
+                  disabled={isRunning}
+                  aria-label="Base mutation rate"
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value)
+                    if (validateMutationRate(val)) {
+                      setParams((prev) => ({ ...prev, substitutionRate: val }))
+                    }
+                  }}
+                />
+                <WBInput
+                  type="number"
+                  min="0"
+                  max="0.001"
+                  step="0.00001"
+                  value={params.substitutionRate}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value)
+                    if (validateMutationRate(val)) {
+                      setParams((prev) => ({ ...prev, substitutionRate: val }))
+                    } else {
+                      setParams((prev) => ({ ...prev, substitutionRate: val }))
+                    }
+                  }}
+                  disabled={isRunning}
+                />
+              </div>
+            </Field>
+          </div>
+        </Pane>
+      </div>
+
+      {/* Run controls stay pinned so they never scroll out of reach. */}
+      <div className="flex shrink-0 gap-2 border-t border-border p-3">
+        <Button onClick={onStart} disabled={!sequence} className="h-8 flex-1">
+          {isRunning ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
+          {isRunning ? "Pause" : "Start"}
+        </Button>
+        <Button onClick={onReset} variant="secondary" className="h-8 flex-1">
+          <RotateCcw className="size-3.5" />
+          Reset
+        </Button>
       </div>
     </div>
-  );
+  )
 }

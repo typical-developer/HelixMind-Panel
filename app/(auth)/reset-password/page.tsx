@@ -80,12 +80,12 @@ export default function ResetPasswordPage() {
           <Logo />
         </div>
         <div className="space-y-6">
-          <h1 className="text-5xl font-display font-bold leading-tight">
+          <h1 className="text-4xl font-semibold leading-tight">
             Reset Your Password
             <br />
             <span className="text-muted-foreground">Secure your account.</span>
           </h1>
-          <p className="text-muted-foreground text-lg max-w-md">
+          <p className="max-w-md text-base text-muted-foreground">
             Use your email to recover your account and set a new password.
           </p>
         </div>
@@ -99,7 +99,7 @@ export default function ResetPasswordPage() {
             <div className="lg:hidden flex items-center justify-center gap-3 mb-6">
               <Logo />
             </div>
-            <CardTitle className="text-2xl font-display">Reset Password</CardTitle>
+            <CardTitle className="text-xl">Reset Password</CardTitle>
             <CardDescription>Follow the steps to reset your password</CardDescription>
           </CardHeader>
 

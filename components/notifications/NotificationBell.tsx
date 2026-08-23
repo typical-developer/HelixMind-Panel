@@ -1,75 +1,62 @@
-"use client";
+"use client"
 
-import { Bell } from "lucide-react";
-import { useState } from "react";
-import Link from "next/link";
+import Link from "next/link"
+import { ArrowUpRight, Bell } from "lucide-react"
 
-import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils"
 import {
   Popover,
-  PopoverTrigger,
   PopoverContent,
-} from "@/components/ui/popover";
-import { ScrollArea } from "@/components/ui/scroll-area";
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { Chip } from "@/components/workbench"
 
-import NotificationItem, { Notification } from "./NotificationItem";
+import NotificationItem from "./NotificationItem"
+import { useNotifications } from "./notifications-provider"
 
+/**
+ * Title-bar bell. Opens a compact notification centre — the same rows the
+ * Notifications view uses, at popover density.
+ */
 export default function NotificationBell() {
-  const [notifications, setNotifications] = useState<Notification[]>([
-    {
-      id: 1,
-      title: "Upload Complete",
-      message: "FASTA file upload completed successfully.",
-      time: "2 mins ago",
-      read: false,
-    },
-    {
-      id: 2,
-      title: "Scan Finished",
-      message: "Mutation scan completed.",
-      time: "1 hour ago",
-      read: true,
-    },
-  ]);
-
-  const unreadCount = notifications.filter((n) => !n.read).length;
-
-  const markAsRead = (id: number) => {
-    setNotifications((prev) =>
-      prev.map((n) =>
-        n.id === id ? { ...n, read: true } : n
-      )
-    );
-  };
-
-  const deleteNotification = (id: number) => {
-    setNotifications((prev) =>
-      prev.filter((n) => n.id !== id)
-    );
-  };
+  const { notifications, unreadCount, markAsRead, deleteNotification } =
+    useNotifications()
 
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button className="relative p-2 hover:bg-card rounded-lg transition-colors cursor-pointer">
-          <Bell className="w-5 h-5 text-muted-foreground hover:text-foreground" />
+        <button
+          type="button"
+          aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ""}`}
+          className={cn(
+            "relative inline-flex size-6 cursor-pointer items-center justify-center rounded-sm",
+            "text-muted-foreground transition-colors duration-100",
+            "hover:bg-[var(--wb-hover)] hover:text-foreground",
+            "focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none",
+          )}
+        >
+          <Bell className="size-3.5" />
           {unreadCount > 0 && (
-            <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full" />
+            <span className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-brand ring-2 ring-chrome" />
           )}
         </button>
       </PopoverTrigger>
 
-      <PopoverContent align="end" className="w-96 p-0">
-        <div className="p-4 border-b border-border flex items-center justify-between">
-          <h3 className="font-semibold">Notifications</h3>
+      <PopoverContent align="end" sideOffset={6} className="w-88 overflow-hidden p-0">
+        <div className="flex h-8 items-center gap-2 border-b border-border px-3">
+          <h3 className="text-xs font-medium tracking-wide text-foreground/90 uppercase">
+            Notifications
+          </h3>
           {unreadCount > 0 && (
-            <Badge variant="secondary">{unreadCount} new</Badge>
+            <Chip tone="info" className="ml-auto">
+              {unreadCount} new
+            </Chip>
           )}
         </div>
 
-        <ScrollArea className="h-80">
+        <div className="seq-scroll max-h-72 overflow-y-auto">
           {notifications.length === 0 ? (
-            <p className="p-6 text-center text-sm text-muted-foreground">
+            <p className="px-3 py-8 text-center text-xs text-muted-foreground">
               No notifications yet
             </p>
           ) : (
@@ -79,20 +66,22 @@ export default function NotificationBell() {
                 data={n}
                 onRead={markAsRead}
                 onDelete={deleteNotification}
+                compact
               />
             ))
           )}
-        </ScrollArea>
+        </div>
 
-        <div className="p-3 border-t border-border text-center">
+        <div className="border-t border-border p-1">
           <Link
             href="/notifications"
-            className="text-sm text-primary hover:underline"
+            className="row-hover flex items-center gap-1.5 rounded-sm px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground"
           >
-            View all notifications →
+            View all notifications
+            <ArrowUpRight className="ml-auto size-3" />
           </Link>
         </div>
       </PopoverContent>
     </Popover>
-  );
+  )
 }

@@ -1,16 +1,41 @@
 "use client"
 
-import { useState } from "react"
-import { Copy, Check, Dna } from "lucide-react"
+import { useMemo, useState } from "react"
+import { Check, Copy, Dna } from "lucide-react"
+
 import { cn } from "@/lib/utils"
+import { Pane, PaneHeader, ToolbarButton, Chip } from "@/components/workbench"
 
 const DNA_SEQUENCE =
   "ATGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGC"
 
+const HIGHLIGHT_START = 15
+const HIGHLIGHT_END = 25
+const BASES_PER_ROW = 60
+
+/** Per-base tint, kept low-chroma so a wall of sequence stays readable. */
+const BASE_CLASS: Record<string, string> = {
+  A: "text-[var(--term-green)]",
+  T: "text-[var(--term-red)]",
+  G: "text-[var(--term-blue)]",
+  C: "text-[var(--term-yellow)]",
+  N: "text-muted-foreground",
+}
+
+/**
+ * Sequence readout rendered like an editor buffer: a line-number gutter on the
+ * left, fixed-width rows of bases, and a highlighted variant hotspot.
+ */
 export function DNAViewer() {
   const [copied, setCopied] = useState(false)
-  const highlightStart = 15
-  const highlightEnd = 25
+
+  const rows = useMemo(() => {
+    const out: Array<{ start: number; bases: string[] }> = []
+    for (let i = 0; i < DNA_SEQUENCE.length; i += BASES_PER_ROW) {
+      out.push({ start: i, bases: DNA_SEQUENCE.slice(i, i + BASES_PER_ROW).split("") })
+    }
+    return out
+  }, [])
 
   const copyToClipboard = async () => {
     try {
@@ -23,64 +48,72 @@ export function DNAViewer() {
   }
 
   return (
-    <div className="glass p-6">
-      <div className="mb-5 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5">
-            <Dna className="h-5 w-5" />
+    <Pane className="min-h-0">
+      <PaneHeader
+        icon={Dna}
+        title="Sequence viewer"
+        subtitle={`${DNA_SEQUENCE.length} bp · reference strand`}
+        actions={
+          <>
+            <Chip tone="info">hotspot {HIGHLIGHT_START}–{HIGHLIGHT_END}</Chip>
+            <ToolbarButton
+              icon={copied ? Check : Copy}
+              label={copied ? "Copied" : "Copy sequence"}
+              onClick={copyToClipboard}
+              className={cn(copied && "text-success")}
+            />
+          </>
+        }
+      />
+
+      <div className="seq-scroll min-h-0 flex-1 overflow-auto bg-[hsl(0_0%_2%)] py-2 font-mono text-xs leading-5">
+        {rows.map((row) => (
+          <div key={row.start} className="flex hover:bg-[var(--wb-hover)]">
+            <span className="gutter-num sticky left-0 w-16 shrink-0 bg-[hsl(0_0%_2%)] pr-3">
+              {row.start + 1}
+            </span>
+            <span className="flex gap-px pr-4 tracking-wider whitespace-nowrap">
+              {row.bases.map((base, i) => {
+                const index = row.start + i
+                const highlighted = index >= HIGHLIGHT_START && index < HIGHLIGHT_END
+                return (
+                  <span
+                    key={index}
+                    className={cn(
+                      "transition-colors duration-100",
+                      BASE_CLASS[base] ?? "text-foreground/70",
+                      highlighted &&
+                        "bg-brand/25 font-semibold text-foreground ring-1 ring-brand/40 ring-inset",
+                    )}
+                  >
+                    {base}
+                  </span>
+                )
+              })}
+            </span>
           </div>
-          <div>
-            <h3 className="font-semibold leading-tight">DNA Sequence Viewer</h3>
-            <p className="text-xs text-muted-foreground">
-              {DNA_SEQUENCE.length} base pairs · reference strand
-            </p>
-          </div>
-        </div>
-        <button
-          onClick={copyToClipboard}
-          className="flex items-center gap-2 rounded-lg border border-border bg-card/60 px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:border-white/20 hover:text-foreground"
-        >
-          {copied ? (
-            <>
-              <Check className="h-4 w-4 text-emerald-400" />
-              <span>Copied</span>
-            </>
-          ) : (
-            <>
-              <Copy className="h-4 w-4" />
-              <span>Copy</span>
-            </>
-          )}
-        </button>
+        ))}
       </div>
 
-      <div className="rounded-lg border border-border bg-black/40 p-5 font-mono text-sm">
-        <div className="seq-scroll max-h-[280px] overflow-y-auto">
-          <div className="flex flex-wrap gap-x-1 gap-y-1.5 leading-none">
-            {DNA_SEQUENCE.split("").map((base, idx) => {
-              const highlighted = idx >= highlightStart && idx < highlightEnd
-              return (
-                <span
-                  key={idx}
-                  className={cn(
-                    "transition-colors",
-                    highlighted
-                      ? "rounded bg-white/10 px-0.5 font-bold text-foreground"
-                      : "text-muted-foreground"
-                  )}
-                >
-                  {base}
-                </span>
-              )
-            })}
-          </div>
-        </div>
-
-        <div className="mt-4 flex items-center gap-2 border-t border-border pt-3 text-xs text-muted-foreground">
-          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-white/40" />
-          Highlighted region — bases {highlightStart}–{highlightEnd} (variant hotspot)
-        </div>
-      </div>
-    </div>
+      <footer className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-t border-border px-3 py-1.5 text-xs text-muted-foreground">
+        {(["A", "T", "G", "C"] as const).map((base) => (
+          <span key={base} className="flex items-center gap-1.5">
+            <span className={cn("font-mono font-semibold", BASE_CLASS[base])}>
+              {base}
+            </span>
+            <span className="text-muted-foreground/70">
+              {(
+                ((DNA_SEQUENCE.split(base).length - 1) / DNA_SEQUENCE.length) *
+                100
+              ).toFixed(1)}
+              %
+            </span>
+          </span>
+        ))}
+        <span className="ml-auto">
+          Bases {HIGHLIGHT_START}–{HIGHLIGHT_END} flagged as a variant hotspot
+        </span>
+      </footer>
+    </Pane>
   )
 }

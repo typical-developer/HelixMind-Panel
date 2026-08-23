@@ -1,7 +1,9 @@
 "use client"
 
 import { Activity } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
+
+import { cn } from "@/lib/utils"
+import { Chip, Pane, PaneHeader } from "@/components/workbench"
 
 export interface Mutation {
   generation: number
@@ -18,42 +20,37 @@ const SAMPLE_MUTATIONS: Mutation[] = [
   { generation: 5, position: 127, change: "A→G", impact: "Neutral" },
 ]
 
-const getImpactVariant = (impact: Mutation["impact"]) => {
-  switch (impact) {
-    case "High Risk":
-      return "failure"
-    case "Neutral":
-      return "neutral"
-    case "Low Risk":
-      return "success"
-    default:
-      return "default"
-  }
-}
+const IMPACT_TONE = {
+  "High Risk": "danger",
+  Neutral: "neutral",
+  "Low Risk": "success",
+} as const
 
+const HEADERS = ["Gen", "Position", "Change", "Impact"] as const
+
+/** Detected variants, rendered as a dense data grid rather than a card table. */
 export function MutationTable() {
-  return (
-    <div className="glass p-6">
-      <div className="mb-5 flex items-center gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5">
-          <Activity className="h-5 w-5" />
-        </div>
-        <div>
-          <h3 className="font-semibold leading-tight">Mutation Log</h3>
-          <p className="text-xs text-muted-foreground">
-            {SAMPLE_MUTATIONS.length} detected variants across generations
-          </p>
-        </div>
-      </div>
+  const highRisk = SAMPLE_MUTATIONS.filter((m) => m.impact === "High Risk").length
 
-      <div className="overflow-x-auto">
+  return (
+    <Pane className="min-h-0">
+      <PaneHeader
+        icon={Activity}
+        title="Mutation log"
+        subtitle={`${SAMPLE_MUTATIONS.length} variants`}
+        actions={
+          highRisk > 0 ? <Chip tone="danger">{highRisk} high risk</Chip> : null
+        }
+      />
+
+      <div className="seq-scroll min-h-0 flex-1 overflow-auto">
         <table className="w-full text-sm">
-          <thead>
+          <thead className="sticky top-0 z-10 bg-surface">
             <tr className="border-b border-border">
-              {["Generation", "Position", "Change", "Impact"].map((h) => (
+              {HEADERS.map((h) => (
                 <th
                   key={h}
-                  className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground"
+                  className="px-3 py-1.5 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase"
                 >
                   {h}
                 </th>
@@ -64,27 +61,32 @@ export function MutationTable() {
             {SAMPLE_MUTATIONS.map((mutation, idx) => (
               <tr
                 key={idx}
-                className="border-b border-border/40 transition-colors last:border-0 hover:bg-white/[0.03]"
+                className="row-hover border-b border-border/50 last:border-0"
               >
-                <td className="px-4 py-3 font-mono text-muted-foreground">
+                <td className="px-3 py-1.5 font-mono text-muted-foreground">
                   #{mutation.generation}
                 </td>
-                <td className="px-4 py-3 font-mono tabular-nums text-foreground">
+                <td className="px-3 py-1.5 font-mono text-foreground">
                   {mutation.position}
                 </td>
-                <td className="px-4 py-3 font-mono font-medium text-foreground">
+                <td
+                  className={cn(
+                    "px-3 py-1.5 font-mono font-medium",
+                    mutation.impact === "High Risk"
+                      ? "text-destructive"
+                      : "text-foreground",
+                  )}
+                >
                   {mutation.change}
                 </td>
-                <td className="px-4 py-3">
-                  <Badge variant={getImpactVariant(mutation.impact)}>
-                    {mutation.impact}
-                  </Badge>
+                <td className="px-3 py-1.5">
+                  <Chip tone={IMPACT_TONE[mutation.impact]}>{mutation.impact}</Chip>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-    </div>
+    </Pane>
   )
 }

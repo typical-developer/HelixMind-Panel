@@ -1,7 +1,19 @@
 "use client"
 
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts"
+import {
+  Bar,
+  BarChart,
+  Cell,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts"
 import { ShieldAlert } from "lucide-react"
+
+import { CHART_AXIS, CHART_GRID, CHART_TOOLTIP } from "@/lib/chart-theme"
+import { Chip, Pane, PaneHeader } from "@/components/workbench"
 
 const AMR_DATA = [
   { antibiotic: "Fluoroquinolones", resistance: 65 },
@@ -12,61 +24,42 @@ const AMR_DATA = [
   { antibiotic: "Tetracyclines", resistance: 52 },
 ]
 
-// Higher resistance reads as brighter (monochrome emphasis, no colour coding).
+/** Bars escalate from neutral to red as predicted resistance climbs. */
 const fillForValue = (v: number) => {
-  const opacity = 0.35 + (Math.min(v, 100) / 100) * 0.65
-  return `rgba(244,244,244,${opacity.toFixed(2)})`
+  if (v >= 70) return "var(--red-700)"
+  if (v >= 55) return "var(--amber-700)"
+  return "var(--gray-500)"
 }
 
 export function AMRChart() {
-  return (
-    <div className="glass p-6">
-      <div className="mb-5 flex items-center gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5">
-          <ShieldAlert className="h-5 w-5" />
-        </div>
-        <div>
-          <h3 className="font-semibold leading-tight">AMR Resistance Prediction</h3>
-          <p className="text-xs text-muted-foreground">
-            Predicted resistance level by antibiotic class (%)
-          </p>
-        </div>
-      </div>
+  const critical = AMR_DATA.filter((d) => d.resistance >= 70).length
 
-      <ResponsiveContainer width="100%" height={300}>
-        <BarChart data={AMR_DATA} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
-          <XAxis
-            dataKey="antibiotic"
-            stroke="#8b949e"
-            tickLine={false}
-            axisLine={false}
-            style={{ fontSize: "11px" }}
-          />
-          <YAxis
-            stroke="#8b949e"
-            tickLine={false}
-            axisLine={false}
-            style={{ fontSize: "11px" }}
-          />
-          <Tooltip
-            cursor={{ fill: "rgba(255,255,255,0.04)" }}
-            contentStyle={{
-              backgroundColor: "oklch(0.225 0 0)",
-              border: "1px solid rgba(255,255,255,0.1)",
-              borderRadius: "10px",
-              color: "#e6e6e6",
-              fontSize: "12px",
-              boxShadow: "0 12px 32px -16px rgba(0,0,0,0.8)",
-            }}
-          />
-          <Bar dataKey="resistance" radius={[6, 6, 0, 0]} maxBarSize={56}>
-            {AMR_DATA.map((entry, index) => (
-              <Cell key={`cell-${index}`} fill={fillForValue(entry.resistance)} />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
+  return (
+    <Pane className="min-h-0">
+      <PaneHeader
+        icon={ShieldAlert}
+        title="Resistance prediction"
+        subtitle="by antibiotic class (%)"
+        actions={
+          critical > 0 ? <Chip tone="danger">{critical} critical</Chip> : null
+        }
+      />
+
+      <div className="min-h-0 flex-1 p-3">
+        <ResponsiveContainer width="100%" height={260}>
+          <BarChart data={AMR_DATA} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+            <CartesianGrid {...CHART_GRID} />
+            <XAxis dataKey="antibiotic" {...CHART_AXIS} interval={0} height={44} angle={-18} textAnchor="end" />
+            <YAxis {...CHART_AXIS} unit="%" width={44} />
+            <Tooltip {...CHART_TOOLTIP} formatter={(v) => [`${v}%`, "Resistance"]} />
+            <Bar dataKey="resistance" radius={[3, 3, 0, 0]} maxBarSize={44}>
+              {AMR_DATA.map((entry) => (
+                <Cell key={entry.antibiotic} fill={fillForValue(entry.resistance)} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </Pane>
   )
 }

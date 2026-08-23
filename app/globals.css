@@ -3,96 +3,180 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ============================================================================
+   HelixMind Workbench — design tokens
+
+   Palette is derived from Vercel's Geist dark scale (near-black surfaces,
+   alpha-white hairlines, #ededed foreground, blue-700 focus). Structure tokens
+   (activity bar / side bar / tab / panel / status bar) follow VS Code's
+   "Dark Modern" workbench so the shell reads as a tool, not a dashboard.
+   ========================================================================= */
+
 :root {
-  color-scheme: light dark;
+  color-scheme: dark;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  
-  --background: #0d1117;
-  --foreground: #e0e0e0;
-  --card: #161b22;
-  --card-foreground: #e0e0e0;
-  --popover: #161b22;
-  --popover-foreground: #e0e0e0;
-  --primary: #00d9ff;
-  --primary-foreground: #0d1117;
-  --secondary: #c77dff;
-  --secondary-foreground: #0d1117;
-  --muted: #30363d;
-  --muted-foreground: #8b949e;
-  --accent: #ffa500;
-  --accent-foreground: #0d1117;
-  --destructive: #ff4444;
-  --destructive-foreground: #ffffff;
-  --border: #21262d;
-  --input: #0d1117;
-  --ring: #00d9ff;
-  --chart-1: #00d9ff;
-  --chart-2: #c77dff;
-  --chart-3: #ffa500;
-  --chart-4: #ff4444;
-  --chart-5: #00ff00;
-  --radius: 0.625rem;
-  --sidebar: #0d1117;
-  --sidebar-foreground: #e0e0e0;
-  --sidebar-primary: #00d9ff;
-  --sidebar-primary-foreground: #0d1117;
-  --sidebar-accent: #c77dff;
-  --sidebar-accent-foreground: #0d1117;
-  --sidebar-border: #21262d;
-  --sidebar-ring: #00d9ff;
-}
 
-.dark {
-  /* Monochrome elevation scale — background is the darkest plane, surfaces step
-     lighter so cards/popovers actually read as raised instead of flat. */
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.96 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.96 0 0);
-  --popover: oklch(0.225 0 0);
-  --popover-foreground: oklch(0.96 0 0);
-  --primary: oklch(0.985 0 0);
-  --primary-foreground: oklch(0.17 0 0);
-  --secondary: oklch(0.27 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.27 0 0);
-  --muted-foreground: oklch(0.72 0 0);
-  --accent: oklch(0.27 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.58 0.2 25.5);
-  --destructive-foreground: oklch(0.98 0 0);
-  --border: oklch(0.275 0 0);
-  --input: oklch(0.255 0 0);
-  --ring: oklch(0.56 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.17 0 0);
-  --sidebar-foreground: oklch(0.96 0 0);
-  --sidebar-primary: oklch(0.985 0 0);
-  --sidebar-primary-foreground: oklch(0.17 0 0);
-  --sidebar-accent: oklch(0.27 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.24 0 0);
-  --sidebar-ring: oklch(0.56 0 0);
-}
+  /* ---- Geist grayscale (dark) ------------------------------------------ */
+  --gray-100: hsl(0 0% 10%);
+  --gray-200: hsl(0 0% 12%);
+  --gray-300: hsl(0 0% 16%);
+  --gray-400: hsl(0 0% 18%);
+  --gray-500: hsl(0 0% 27%);
+  --gray-600: hsl(0 0% 53%);
+  --gray-700: hsl(0 0% 56%);
+  --gray-800: hsl(0 0% 49%);
+  --gray-900: hsl(0 0% 63%);
+  --gray-1000: hsl(0 0% 93%);
 
-/* Smooth scrolling only for users who haven't asked for reduced motion. */
-@media (prefers-reduced-motion: no-preference) {
-  html {
-    scroll-behavior: smooth;
-  }
+  /* Alpha hairlines — the Geist border language. */
+  --alpha-100: #ffffff0f;
+  --alpha-200: #ffffff17;
+  --alpha-300: #ffffff21;
+  --alpha-400: #ffffff24;
+  --alpha-500: #ffffff3d;
+  --alpha-600: #ffffff82;
+
+  /* ---- Accents --------------------------------------------------------- */
+  --blue-600: hsl(206 100% 50%);
+  --blue-700: hsl(212 100% 48%);
+  --blue-800: hsl(212 100% 41%);
+  --blue-900: hsl(210 100% 66%);
+  --red-700: hsl(358 75% 59%);
+  --red-900: hsl(358 100% 69%);
+  --amber-700: hsl(39 100% 57%);
+  --green-700: hsl(131 41% 46%);
+  --green-900: hsl(131 43% 57%);
+  --purple-700: hsl(272 51% 54%);
+  --teal-700: hsl(173 80% 36%);
+
+  /* ---- shadcn contract ------------------------------------------------- */
+  /* Elevation ladder: chrome (#000) → surface (#0a0a0a) → raised (#141414). */
+  --background: hsl(0 0% 4%);
+  --foreground: var(--gray-1000);
+
+  --card: hsl(0 0% 4%);
+  --card-foreground: var(--gray-1000);
+
+  --popover: hsl(0 0% 7%);
+  --popover-foreground: var(--gray-1000);
+
+  /* Vercel's primary action is white-on-black, not a brand hue. */
+  --primary: hsl(0 0% 93%);
+  --primary-foreground: hsl(0 0% 4%);
+
+  --secondary: hsl(0 0% 12%);
+  --secondary-foreground: var(--gray-1000);
+
+  --muted: hsl(0 0% 12%);
+  --muted-foreground: var(--gray-900);
+
+  /* `accent` in the shadcn contract is the hover surface, not a brand colour. */
+  --accent: hsl(0 0% 14%);
+  --accent-foreground: var(--gray-1000);
+
+  --destructive: var(--red-700);
+  --destructive-foreground: hsl(0 0% 100%);
+
+  --border: var(--alpha-200);
+  --input: hsl(0 0% 7%);
+  --ring: var(--blue-700);
+
+  --radius: 0.375rem;
+
+  /* ---- Workbench structure (VS Code "Dark Modern" mapping) -------------- */
+  --wb-chrome: hsl(0 0% 0%); /* title bar, activity bar, status bar */
+  --wb-surface: hsl(0 0% 4%); /* side bar, editor, panel body */
+  --wb-raised: hsl(0 0% 8%); /* menus, inputs, hovered rows */
+  --wb-overlay: hsl(0 0% 7%); /* command palette, popovers */
+
+  --wb-border: var(--alpha-200);
+  --wb-border-strong: var(--alpha-400);
+  --wb-focus: var(--blue-700);
+
+  --wb-activitybar-width: 3rem; /* 48px */
+  --wb-titlebar-height: 2.25rem; /* 36px */
+  --wb-tabbar-height: 2.25rem; /* 36px */
+  --wb-breadcrumb-height: 1.625rem; /* 26px */
+  --wb-statusbar-height: 1.5rem; /* 24px */
+
+  --wb-hover: #ffffff0d;
+  --wb-active: #ffffff17;
+  --wb-selected: #ffffff1f;
+
+  /* ---- Terminal / log stream (VS Code ANSI defaults) -------------------- */
+  --term-bg: hsl(0 0% 4%);
+  --term-fg: #cccccc;
+  --term-dim: #7d7d7d;
+  --term-red: #f14c4c;
+  --term-green: #23d18b;
+  --term-yellow: #e5c07b;
+  --term-blue: #3b8eea;
+  --term-magenta: #d670d6;
+  --term-cyan: #29b8db;
+  --term-white: #e5e5e5;
+
+  /* ---- Charts — restrained, Geist-hued -------------------------------- */
+  --chart-1: var(--blue-900);
+  --chart-2: var(--teal-700);
+  --chart-3: var(--amber-700);
+  --chart-4: var(--purple-700);
+  --chart-5: var(--red-900);
+
+  /* ---- Sidebar contract (used by components/ui/sidebar.tsx) ------------- */
+  --sidebar: hsl(0 0% 4%);
+  --sidebar-foreground: var(--gray-1000);
+  --sidebar-primary: hsl(0 0% 93%);
+  --sidebar-primary-foreground: hsl(0 0% 4%);
+  --sidebar-accent: hsl(0 0% 12%);
+  --sidebar-accent-foreground: var(--gray-1000);
+  --sidebar-border: var(--alpha-200);
+  --sidebar-ring: var(--blue-700);
+
+  /* ---- Motion ---------------------------------------------------------- */
+  /* Geist's "swift" curve — a touch of overshoot, used for overlays/menus. */
+  --ease-swift: cubic-bezier(0.175, 0.885, 0.32, 1.1);
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ---- Elevation ------------------------------------------------------- */
+  --shadow-border-small: 0 0 0 1px var(--alpha-400), 0 1px 2px #00000029;
+  --shadow-menu: 0 0 0 1px var(--alpha-400), 0 1px 1px #00000005,
+    0 4px 8px -4px #0000000a, 0 16px 24px -8px #0000000f;
+  --shadow-modal: 0 0 0 1px var(--alpha-400), 0 1px 1px #00000005,
+    0 8px 16px -4px #0000001f, 0 24px 32px -8px #00000029;
 }
 
 @theme inline {
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, "Geist Mono Fallback", monospace;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, Consolas,
+    monospace;
+
+  /* Tighter type ramp. Vercel and VS Code both run noticeably smaller than a
+     stock Tailwind app; shifting the scale itself keeps every shadcn component
+     dense without sprinkling one-off sizes through the markup. */
+  --text-2xs: 0.625rem; /* 10px */
+  --text-2xs--line-height: 0.875rem;
+  --text-xs: 0.6875rem; /* 11px */
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.8125rem; /* 13px */
+  --text-sm--line-height: 1.125rem;
+  --text-base: 0.875rem; /* 14px */
+  --text-base--line-height: 1.25rem;
+  --text-lg: 1rem; /* 16px */
+  --text-lg--line-height: 1.375rem;
+  --text-xl: 1.125rem; /* 18px */
+  --text-xl--line-height: 1.625rem;
+  --text-2xl: 1.375rem; /* 22px */
+  --text-2xl--line-height: 1.75rem;
+  --text-3xl: 1.75rem; /* 28px */
+  --text-3xl--line-height: 2.125rem;
+  --text-4xl: 2.125rem; /* 34px */
+  --text-4xl--line-height: 2.5rem;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -112,15 +196,13 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -129,146 +211,363 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Workbench-specific colours exposed as Tailwind utilities. */
+  --color-chrome: var(--wb-chrome);
+  --color-surface: var(--wb-surface);
+  --color-raised: var(--wb-raised);
+  --color-brand: var(--blue-700);
+  --color-brand-bright: var(--blue-900);
+  --color-success: var(--green-900);
+  --color-warning: var(--amber-700);
+  --color-term-fg: var(--term-fg);
+
+  /* Radii — Geist runs 4–8px, tighter than shadcn's default. */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+
+  --animate-accordion-down: accordion-down 0.2s var(--ease-standard);
+  --animate-accordion-up: accordion-up 0.2s var(--ease-standard);
+  /* Radix Collapsible exposes its own height variable, so side-bar sections
+     need a separate pair from the accordion's. */
+  --animate-collapsible-down: collapsible-down 0.16s var(--ease-standard);
+  --animate-collapsible-up: collapsible-up 0.16s var(--ease-standard);
+
+  @keyframes accordion-down {
+    from {
+      height: 0;
+    }
+    to {
+      height: var(--radix-accordion-content-height);
+    }
+  }
+  @keyframes accordion-up {
+    from {
+      height: var(--radix-accordion-content-height);
+    }
+    to {
+      height: 0;
+    }
+  }
+  @keyframes collapsible-down {
+    from {
+      height: 0;
+    }
+    to {
+      height: var(--radix-collapsible-content-height);
+    }
+  }
+  @keyframes collapsible-up {
+    from {
+      height: var(--radix-collapsible-content-height);
+    }
+    to {
+      height: 0;
+    }
+  }
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+
+  html,
   body {
-    @apply bg-background text-foreground;
+    height: 100%;
+  }
+
+  body {
+    @apply bg-chrome text-foreground;
+    font-size: 0.8125rem; /* 13px — workbench density */
+    line-height: 1.125rem;
+    overscroll-behavior: none;
+  }
+
+  /* Tabular numerals everywhere numbers are compared column-to-column. */
+  th,
+  td,
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--blue-700) 45%, transparent);
+    color: #fff;
+  }
+
+  /* VS Code-style overlay scrollbars: invisible track, translucent slider. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--alpha-300) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--alpha-300);
+    background-clip: padding-box;
+    border: 2px solid transparent;
+    border-radius: 8px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--alpha-500);
+    background-clip: padding-box;
+  }
+
+  /* Native range inputs, restyled to match the workbench. */
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--alpha-200);
+    outline: none;
+    cursor: pointer;
+  }
+  input[type="range"]:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 13px;
+    width: 13px;
+    border-radius: 999px;
+    background: var(--gray-1000);
+    border: 1px solid var(--alpha-400);
+    box-shadow: 0 1px 2px #00000052;
+    transition: transform 0.15s var(--ease-out-quint),
+      box-shadow 0.15s var(--ease-out-quint);
+  }
+  input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+  }
+  input[type="range"]:active::-webkit-slider-thumb {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 4px color-mix(in oklab, var(--blue-700) 30%, transparent);
+  }
+  input[type="range"]::-moz-range-thumb {
+    height: 13px;
+    width: 13px;
+    border-radius: 999px;
+    background: var(--gray-1000);
+    border: 1px solid var(--alpha-400);
+  }
+
+  /* Strip the spinner from numeric inputs — the workbench uses explicit
+     sliders and steppers instead. */
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
   }
 }
 
 @layer components {
-  /* Raised glass surface: semi-opaque elevated fill, hairline top highlight and
-     a soft ambient shadow so cards feel lifted off the background. */
-  .glass {
-    background: color-mix(in oklab, var(--card) 72%, transparent);
-    backdrop-filter: blur(14px);
-    border: 1px solid color-mix(in oklab, white 8%, transparent);
+  /* ---- Surfaces -------------------------------------------------------- */
+
+  /* A pane is the workbench's unit of content: flat fill, hairline border,
+     no blur and no lift. Replaces the old floating "glass" card. */
+  .pane {
+    background: var(--wb-surface);
+    border: 1px solid var(--wb-border);
     border-radius: var(--radius-lg);
-    box-shadow:
-      inset 0 1px 0 0 color-mix(in oklab, white 6%, transparent),
-      0 12px 32px -20px rgba(0, 0, 0, 0.75);
   }
 
-  /* Solid elevated surface (no blur) for dense panels. */
+  /* Legacy aliases — kept so any surface that still asks for the old classes
+     picks up the new flat language instead of the retired glass treatment. */
+  .glass,
   .surface {
-    background: var(--card);
-    border: 1px solid color-mix(in oklab, white 7%, transparent);
+    background: var(--wb-surface);
+    border: 1px solid var(--wb-border);
     border-radius: var(--radius-lg);
   }
 
   .hairline {
-    border-color: color-mix(in oklab, white 8%, transparent);
+    border-color: var(--wb-border);
   }
 
-  /* Subtle blueprint grid — for hero panels and empty states. Monochrome. */
+  /* Inset well — code blocks, terminals, sequence readouts. */
+  .well {
+    background: hsl(0 0% 2%);
+    border: 1px solid var(--wb-border);
+    border-radius: var(--radius-md);
+  }
+
+  /* ---- Interaction ----------------------------------------------------- */
+
+  .card-hover {
+    transition: background-color 0.15s var(--ease-standard),
+      border-color 0.15s var(--ease-standard);
+  }
+  .card-hover:hover {
+    border-color: var(--wb-border-strong);
+    background: var(--wb-raised);
+  }
+
+  /* Row hover used by lists, trees and data grids. */
+  .row-hover {
+    transition: background-color 0.12s var(--ease-standard),
+      color 0.12s var(--ease-standard);
+  }
+  .row-hover:hover {
+    background: var(--wb-hover);
+  }
+
+  /* The 2px leading bar VS Code puts on the active tree item / activity icon. */
+  .active-rail {
+    position: relative;
+  }
+  .active-rail::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 2px;
+    height: 0;
+    border-radius: 0 2px 2px 0;
+    background: var(--gray-1000);
+    transform: translateY(-50%);
+    transition: height 0.18s var(--ease-out-quint);
+  }
+  .active-rail[data-active="true"]::before {
+    height: 60%;
+  }
+
+  /* ---- Grid backdrop for empty states ---------------------------------- */
   .bg-grid {
-    background-image:
-      linear-gradient(
-        color-mix(in oklab, white 3.5%, transparent) 1px,
-        transparent 1px
-      ),
-      linear-gradient(
-        90deg,
-        color-mix(in oklab, white 3.5%, transparent) 1px,
-        transparent 1px
-      );
-    background-size: 46px 46px;
+    background-image: linear-gradient(var(--alpha-100) 1px, transparent 1px),
+      linear-gradient(90deg, var(--alpha-100) 1px, transparent 1px);
+    background-size: 32px 32px;
+    mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, #000, transparent);
   }
 
-  /* Soft monochrome light bloom for hero backgrounds (no colour). */
+  /* Soft light bloom behind the auth hero. Monochrome with a single cool
+     highlight, so it reads as depth rather than decoration. */
   .aurora {
     background:
-      radial-gradient(
-        55% 45% at 18% 12%,
-        rgba(255, 255, 255, 0.07),
-        transparent 62%
-      ),
+      radial-gradient(55% 45% at 18% 12%, rgba(255, 255, 255, 0.055), transparent 62%),
       radial-gradient(
         48% 38% at 88% 88%,
-        rgba(255, 255, 255, 0.045),
-        transparent 60%
+        color-mix(in oklab, var(--blue-700) 14%, transparent),
+        transparent 62%
       );
   }
 
-  /* Crisp-to-soft heading text; reads as depth without adding colour. */
   .text-gradient {
-    background: linear-gradient(
-      180deg,
-      var(--foreground),
-      color-mix(in oklab, var(--foreground) 58%, transparent)
-    );
+    background: linear-gradient(180deg, var(--foreground), #ffffffbf);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
   }
 
-  .glow-cyan {
-    @apply text-primary drop-shadow-[0_0_8px_rgba(0,217,255,0.6)];
-  }
+  /* ---- Motion ---------------------------------------------------------- */
 
-  .glow-purple {
-    @apply text-secondary drop-shadow-[0_0_8px_rgba(199,125,255,0.6)];
-  }
-
-  /* Added glow-green class for adaptation log heading */
-  .glow-green {
-    @apply text-green-400 drop-shadow-[0_0_8px_rgba(0,255,0,0.6)];
-  }
-
-  .pulse-alert {
-    animation: pulse-alert 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  }
-
-  /* Added animate-pulse-alert utility for mutation alerts */
-  .animate-pulse-alert {
-    animation: pulse-alert 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  }
-
-  @keyframes pulse-alert {
-    0%,
-    100% {
-      opacity: 1;
-      box-shadow: 0 0 0 0 rgba(255, 68, 68, 0.7);
-    }
-    50% {
-      opacity: 0.9;
-      box-shadow: 0 0 0 8px rgba(255, 68, 68, 0);
-    }
-  }
-
-  /* ===== Route transition — applied by app/(main)/template.tsx =====
-     Compositor-only (opacity + transform), replays on every navigation. */
+  /* Route transition, replayed by app/(main)/template.tsx on each navigation.
+     Compositor-only, and shorter than before so navigating feels instant. */
   .animate-page-in {
-    animation: page-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: page-in 0.22s var(--ease-out-quint) both;
   }
-
   @keyframes page-in {
     from {
       opacity: 0;
-      transform: translateY(10px);
+      transform: translateY(4px);
     }
     to {
       opacity: 1;
-      transform: translateY(0);
+      transform: none;
     }
   }
 
-  /* Subtle lift on interactive cards. Transform/opacity only, so it stays on
-     the GPU compositor and never triggers layout. */
-  .card-hover {
-    transition:
-      transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
-      box-shadow 0.2s cubic-bezier(0.22, 1, 0.36, 1),
-      border-color 0.2s ease;
-    will-change: transform;
+  /* Overlay entrance shared by the command palette and quick-input. */
+  .animate-overlay-in {
+    animation: overlay-in 0.2s var(--ease-swift) both;
   }
-  .card-hover:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.55);
+  @keyframes overlay-in {
+    from {
+      opacity: 0;
+      transform: translateY(-6px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* Each new terminal line eases in rather than snapping. */
+  .animate-line-in {
+    animation: line-in 0.16s var(--ease-standard) both;
+  }
+  @keyframes line-in {
+    from {
+      opacity: 0;
+      transform: translateY(2px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.18s var(--ease-standard) both;
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  /* Status-bar / activity-bar badge attention pulse. */
+  .animate-soft-pulse {
+    animation: soft-pulse 2s var(--ease-standard) infinite;
+  }
+  @keyframes soft-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.55;
+    }
+  }
+
+  /* Running-process indicator on the status bar. */
+  .animate-progress-sweep {
+    background-image: linear-gradient(
+      90deg,
+      transparent,
+      var(--blue-900),
+      transparent
+    );
+    background-size: 40% 100%;
+    background-repeat: no-repeat;
+    animation: progress-sweep 1.4s var(--ease-standard) infinite;
+  }
+  @keyframes progress-sweep {
+    from {
+      background-position: -40% 0;
+    }
+    to {
+      background-position: 140% 0;
+    }
   }
 
   /* Sheen used by loading skeletons. */
@@ -281,24 +580,58 @@
     position: absolute;
     inset: 0;
     transform: translateX(-100%);
-    background: linear-gradient(
-      90deg,
-      transparent,
-      rgba(255, 255, 255, 0.06),
-      transparent
-    );
-    animation: skeleton-sheen 1.6s ease-in-out infinite;
+    background: linear-gradient(90deg, transparent, #ffffff0a, transparent);
+    animation: skeleton-sheen 1.6s var(--ease-standard) infinite;
   }
-
   @keyframes skeleton-sheen {
     100% {
       transform: translateX(100%);
     }
   }
+
+  /* ---- Terminal / sequence readouts ------------------------------------ */
+
+  /* Slimmer scrollbar for dense monospace regions. */
+  .seq-scroll::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .seq-scroll::-webkit-scrollbar-thumb {
+    background: var(--alpha-300);
+    background-clip: padding-box;
+    border: 2px solid transparent;
+    border-radius: 8px;
+  }
+  .seq-scroll::-webkit-scrollbar-thumb:hover {
+    background: var(--alpha-500);
+    background-clip: padding-box;
+  }
+
+  /* Gutter used by the sequence viewer to mimic an editor's line numbers. */
+  .gutter-num {
+    color: var(--gray-500);
+    user-select: none;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
 }
 
-/* Honour the OS "reduce motion" setting: neutralise animations, transitions
-   and smooth scrolling everywhere without having to touch each component. */
+@layer utilities {
+  /* Resize handles: invisible until you approach them, then a VS Code focus
+     line. The wide hit area lives in ::after so the visual stays 1px. */
+  .wb-resize-handle {
+    position: relative;
+    background: var(--wb-border);
+    transition: background-color 0.12s var(--ease-standard) 0.1s;
+  }
+  .wb-resize-handle:hover,
+  .wb-resize-handle[data-resize-handle-state="drag"],
+  .wb-resize-handle[data-resize-handle-state="hover"] {
+    background: var(--wb-focus);
+  }
+}
+
+/* Honour the OS "reduce motion" setting everywhere at once. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -309,31 +642,3 @@
     scroll-behavior: auto !important;
   }
 }
-
-/* custom scroll */
-/* ===== DNA sequence custom scrollbar ===== */
-.seq-scroll::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-.seq-scroll::-webkit-scrollbar-track {
-  background: #000;
-  border-radius: 10px;
-}
-
-.seq-scroll::-webkit-scrollbar-thumb {
-  background: #b5b5b5;
-  border-radius: 10px;
-}
-
-.seq-scroll::-webkit-scrollbar-thumb:hover {
-  background: #ffffff;
-}
-
-/* Firefox */
-.seq-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: #b5b5b5 #000;
-}
-

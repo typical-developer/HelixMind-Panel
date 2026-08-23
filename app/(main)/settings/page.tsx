@@ -1,179 +1,526 @@
-"use client";
+"use client"
 
-import { useState } from "react";
-import { Mail, User, Bell, Palette, ShieldAlert, Check } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useMemo, useState } from "react"
+import {
+  Bell,
+  Check,
+  Keyboard,
+  Layout,
+  Mail,
+  Monitor,
+  PanelBottom,
+  PanelLeft,
+  PanelRight,
+  RotateCcw,
+  Search,
+  ShieldAlert,
+  Type,
+  User,
+} from "lucide-react"
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils"
+import { useAuth } from "@/contexts/AuthContext"
+import { Button } from "@/components/ui/button"
+import { Switch } from "@/components/ui/switch"
+import {
+  Chip,
+  EditorLayout,
+  EditorScroll,
+  EmptyState,
+  Pane,
+  PaneHeader,
+  WBInput,
+  useStatusItems,
+  useWorkbench,
+} from "@/components/workbench"
 
-function SettingsCard({
-  icon: Icon,
-  title,
-  description,
-  children,
-  danger = false,
-}: {
-  icon: React.ElementType;
-  title: string;
-  description?: string;
-  children: React.ReactNode;
-  danger?: boolean;
-}) {
-  return (
-    <section className="glass p-6">
-      <div className="mb-5 flex items-center gap-3">
-        <div
-          className={`flex h-10 w-10 items-center justify-center rounded-lg border ${
-            danger
-              ? "border-destructive/30 bg-destructive/10 text-destructive"
-              : "border-white/10 bg-white/5"
-          }`}
-        >
-          <Icon className="h-5 w-5" />
-        </div>
-        <div>
-          <h3 className="font-semibold leading-tight">{title}</h3>
-          {description && (
-            <p className="text-xs text-muted-foreground">{description}</p>
-          )}
-        </div>
-      </div>
-      {children}
-    </section>
-  );
-}
+/* ============================================================================
+   Settings rows — modelled on VS Code's settings editor: one row per setting,
+   label and description on the left, control on the right.
+   ========================================================================= */
 
-function ToggleRow({
+function SettingRow({
   label,
   description,
-  checked,
-  onChange,
+  children,
+  className,
 }: {
-  label: string;
-  description: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
+  label: string
+  description?: string
+  children?: React.ReactNode
+  className?: string
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-lg border border-border/60 bg-card/40 p-4">
-      <div>
-        <p className="text-sm font-medium">{label}</p>
-        <p className="text-xs text-muted-foreground">{description}</p>
+    <div
+      className={cn(
+        "flex items-start justify-between gap-4 border-b border-border/60 px-3 py-2.5 last:border-0",
+        className,
+      )}
+    >
+      <div className="min-w-0">
+        <p className="text-sm text-foreground">{label}</p>
+        {description && (
+          <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+            {description}
+          </p>
+        )}
       </div>
-      <Switch checked={checked} onCheckedChange={onChange} />
+      {children && <div className="shrink-0 pt-0.5">{children}</div>}
     </div>
-  );
+  )
 }
 
+interface Section {
+  id: string
+  title: string
+  icon: React.ComponentType<{ className?: string }>
+  /** Terms the filter matches against, beyond the visible row labels. */
+  keywords: string
+  danger?: boolean
+}
+
+const SECTIONS: Section[] = [
+  { id: "profile", title: "Profile", icon: User, keywords: "account name email user" },
+  {
+    id: "notifications",
+    title: "Notifications",
+    icon: Bell,
+    keywords: "alerts email inbox scans uploads",
+  },
+  {
+    id: "workbench",
+    title: "Workbench",
+    icon: Layout,
+    keywords: "layout side bar panel inspector status breadcrumbs tabs zen",
+  },
+  {
+    id: "appearance",
+    title: "Appearance",
+    icon: Monitor,
+    keywords: "theme dark zoom font size density",
+  },
+  {
+    id: "keyboard",
+    title: "Keyboard shortcuts",
+    icon: Keyboard,
+    keywords: "keybindings chords hotkeys palette",
+  },
+  {
+    id: "danger",
+    title: "Danger zone",
+    icon: ShieldAlert,
+    keywords: "delete data destroy irreversible",
+    danger: true,
+  },
+]
+
+const SHORTCUTS: Array<[string, string]> = [
+  ["Command palette", "Ctrl K  /  Ctrl P"],
+  ["Toggle side bar", "Ctrl B"],
+  ["Toggle inspector", "Ctrl Alt B"],
+  ["Toggle bottom panel", "Ctrl J"],
+  ["Focus terminal", "Ctrl `"],
+  ["Close current view", "Alt W"],
+  ["Zoom in / out", "Ctrl Alt +  /  Ctrl Alt -"],
+  ["Reset zoom", "Ctrl Alt 0"],
+  ["Exit zen mode", "Esc"],
+]
+
 export default function Settings() {
-  const { user } = useAuth();
-  const [notifications, setNotifications] = useState(true);
-  const [emailNotifications, setEmailNotifications] = useState(true);
-  const [saved, setSaved] = useState(false);
+  const { user } = useAuth()
+  const wb = useWorkbench()
+
+  const [notifications, setNotifications] = useState(true)
+  const [emailNotifications, setEmailNotifications] = useState(true)
+  const [saved, setSaved] = useState(false)
+  const [query, setQuery] = useState("")
 
   const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  };
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
+
+  const needle = query.trim().toLowerCase()
+  const visibleSections = useMemo(
+    () =>
+      needle
+        ? SECTIONS.filter((s) =>
+            `${s.title} ${s.keywords}`.toLowerCase().includes(needle),
+          )
+        : SECTIONS,
+    [needle],
+  )
+
+  useStatusItems(
+    useMemo(
+      () => [{ id: "zoom", label: wb.zoom === 0 ? "Zoom 100%" : `Zoom ${wb.zoom > 0 ? "+" : ""}${wb.zoom}` }],
+      [wb.zoom],
+    ),
+  )
+
+  const isVisible = (id: string) => visibleSections.some((s) => s.id === id)
 
   return (
-    <div className="ml-16 pt-16">
-      <main className="mx-auto min-h-screen max-w-3xl px-6 pt-8 pb-12 space-y-6">
-        {/* Profile */}
-        <SettingsCard icon={User} title="Profile Information" description="Your account details">
-          <div className="flex items-center gap-4">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-secondary text-2xl font-bold text-secondary-foreground ring-1 ring-white/10">
-              {user?.name?.charAt(0).toUpperCase() ?? "G"}
-            </div>
-            <div className="min-w-0">
-              <h4 className="truncate text-lg font-semibold">{user?.name ?? "Guest"}</h4>
-              <p className="flex items-center gap-1.5 truncate text-sm text-muted-foreground">
-                <Mail className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate">{user?.email ?? "Not signed in"}</span>
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-5 grid grid-cols-1 gap-4 border-t border-border pt-5 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-muted-foreground">Full Name</label>
-              <Input value={user?.name ?? "Guest"} readOnly className="h-11" />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-muted-foreground">Email Address</label>
-              <Input value={user?.email ?? ""} readOnly className="h-11" />
-            </div>
-          </div>
-        </SettingsCard>
-
-        {/* Preferences */}
-        <SettingsCard icon={Bell} title="Notifications" description="Control how you're notified">
-          <div className="space-y-3">
-            <ToggleRow
-              label="In-app notifications"
-              description="Show alerts for scans, uploads and simulations"
-              checked={notifications}
-              onChange={setNotifications}
-            />
-            <ToggleRow
-              label="Email notifications"
-              description="Send important updates to your inbox"
-              checked={emailNotifications}
-              onChange={setEmailNotifications}
+    <EditorLayout
+      inspectorId="settings"
+      defaultInspectorSize={22}
+      inspector={
+        <SettingsToc sections={visibleSections} onSave={handleSave} saved={saved} />
+      }
+    >
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border px-2">
+          <div className="relative min-w-0 flex-1 sm:max-w-md">
+            <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <WBInput
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search settings"
+              className="h-7 pl-7"
+              aria-label="Search settings"
             />
           </div>
-        </SettingsCard>
+          <span className="ml-auto shrink-0 font-mono text-xs text-muted-foreground tabular">
+            {visibleSections.length} / {SECTIONS.length}
+          </span>
+        </div>
 
-        {/* Appearance */}
-        <SettingsCard icon={Palette} title="Appearance" description="Interface theme">
-          <div className="flex gap-2">
-            {["Dark", "Light", "System"].map((t, i) => (
+        {visibleSections.length === 0 ? (
+          <EmptyState
+            icon={Search}
+            title="No settings match"
+            description={`Nothing matches “${query}”.`}
+          />
+        ) : (
+          <EditorScroll>
+            <div className="mx-auto flex max-w-3xl flex-col gap-3 p-3">
+              {isVisible("profile") && (
+                <Pane id="profile">
+                  <PaneHeader icon={User} title="Profile" subtitle="account details" />
+                  <div className="flex items-center gap-3 border-b border-border/60 px-3 py-3">
+                    <div className="flex size-11 shrink-0 items-center justify-center rounded-md border border-border bg-raised text-lg font-semibold text-foreground">
+                      {user?.name?.charAt(0).toUpperCase() ?? "G"}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {user?.name ?? "Guest"}
+                      </p>
+                      <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
+                        <Mail className="size-3 shrink-0" />
+                        <span className="truncate">
+                          {user?.email ?? "Not signed in"}
+                        </span>
+                      </p>
+                    </div>
+                    <Chip tone="success" className="ml-auto">
+                      active
+                    </Chip>
+                  </div>
+
+                  <div className="grid gap-3 p-3 sm:grid-cols-2">
+                    <label className="space-y-1.5">
+                      <span className="text-xs font-medium text-foreground/80">
+                        Full name
+                      </span>
+                      <WBInput value={user?.name ?? "Guest"} readOnly />
+                    </label>
+                    <label className="space-y-1.5">
+                      <span className="text-xs font-medium text-foreground/80">
+                        Email address
+                      </span>
+                      <WBInput value={user?.email ?? ""} readOnly />
+                    </label>
+                  </div>
+                </Pane>
+              )}
+
+              {isVisible("notifications") && (
+                <Pane id="notifications">
+                  <PaneHeader
+                    icon={Bell}
+                    title="Notifications"
+                    subtitle="how you're told about activity"
+                  />
+                  <SettingRow
+                    label="In-app notifications"
+                    description="Show alerts for scans, uploads and simulation runs."
+                  >
+                    <Switch
+                      checked={notifications}
+                      onCheckedChange={setNotifications}
+                      aria-label="In-app notifications"
+                    />
+                  </SettingRow>
+                  <SettingRow
+                    label="Email notifications"
+                    description="Send important updates to your inbox."
+                  >
+                    <Switch
+                      checked={emailNotifications}
+                      onCheckedChange={setEmailNotifications}
+                      aria-label="Email notifications"
+                    />
+                  </SettingRow>
+                </Pane>
+              )}
+
+              {isVisible("workbench") && (
+                <Pane id="workbench">
+                  <PaneHeader
+                    icon={Layout}
+                    title="Workbench"
+                    subtitle="which regions are visible"
+                  />
+                  <SettingRow
+                    label="Side bar"
+                    description="Explorer, search, run configurations and the gene database."
+                  >
+                    <Switch
+                      checked={wb.sidebarVisible}
+                      onCheckedChange={wb.toggleSidebar}
+                      aria-label="Side bar"
+                    />
+                  </SettingRow>
+                  <SettingRow
+                    label="Inspector"
+                    description="The right-hand column holding a view's inputs and parameters."
+                  >
+                    <Switch
+                      checked={wb.inspectorVisible}
+                      onCheckedChange={wb.toggleInspector}
+                      aria-label="Inspector"
+                    />
+                  </SettingRow>
+                  <SettingRow
+                    label="Bottom panel"
+                    description="Problems, output channels and the run terminal."
+                  >
+                    <Switch
+                      checked={wb.panelVisible}
+                      onCheckedChange={wb.togglePanel}
+                      aria-label="Bottom panel"
+                    />
+                  </SettingRow>
+                  <SettingRow
+                    label="Editor tabs"
+                    description="Keep opened views as closable tabs above the editor."
+                  >
+                    <Switch
+                      checked={wb.tabBarVisible}
+                      onCheckedChange={wb.toggleTabBar}
+                      aria-label="Editor tabs"
+                    />
+                  </SettingRow>
+                  <SettingRow
+                    label="Breadcrumbs"
+                    description="Show the workspace path above the editor."
+                  >
+                    <Switch
+                      checked={wb.breadcrumbsVisible}
+                      onCheckedChange={wb.toggleBreadcrumbs}
+                      aria-label="Breadcrumbs"
+                    />
+                  </SettingRow>
+                  <SettingRow
+                    label="Status bar"
+                    description="The summary strip along the bottom of the window."
+                  >
+                    <Switch
+                      checked={wb.statusBarVisible}
+                      onCheckedChange={wb.toggleStatusBar}
+                      aria-label="Status bar"
+                    />
+                  </SettingRow>
+                  <SettingRow
+                    label="Reset layout"
+                    description="Restore every region to its default size and visibility."
+                  >
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={wb.resetLayout}
+                      className="h-7"
+                    >
+                      <RotateCcw className="size-3.5" />
+                      Reset
+                    </Button>
+                  </SettingRow>
+                </Pane>
+              )}
+
+              {isVisible("appearance") && (
+                <Pane id="appearance">
+                  <PaneHeader
+                    icon={Monitor}
+                    title="Appearance"
+                    subtitle="theme and density"
+                  />
+                  <SettingRow
+                    label="Colour theme"
+                    description="HelixMind ships a single dark workbench theme."
+                  >
+                    <Chip tone="info">Dark</Chip>
+                  </SettingRow>
+                  <SettingRow
+                    label="Interface zoom"
+                    description="Scales every region of the workbench. Ctrl+Alt+= and Ctrl+Alt+- do the same (plain Ctrl+ is the browser's own zoom)."
+                  >
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={wb.zoomOut}
+                        className="h-7 w-7 p-0"
+                        aria-label="Zoom out"
+                      >
+                        <Type className="size-3" />
+                      </Button>
+                      <span className="w-12 text-center font-mono text-xs text-muted-foreground tabular">
+                        {wb.zoom === 0 ? "100%" : `${wb.zoom > 0 ? "+" : ""}${wb.zoom}`}
+                      </span>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={wb.zoomIn}
+                        className="h-7 w-7 p-0"
+                        aria-label="Zoom in"
+                      >
+                        <Type className="size-4" />
+                      </Button>
+                    </div>
+                  </SettingRow>
+                  <SettingRow
+                    label="Zen mode"
+                    description="Hide all chrome and keep only the editor. Esc exits."
+                  >
+                    <Switch
+                      checked={wb.zen}
+                      onCheckedChange={wb.toggleZen}
+                      aria-label="Zen mode"
+                    />
+                  </SettingRow>
+                </Pane>
+              )}
+
+              {isVisible("keyboard") && (
+                <Pane id="keyboard">
+                  <PaneHeader
+                    icon={Keyboard}
+                    title="Keyboard shortcuts"
+                    subtitle={`${SHORTCUTS.length} bindings`}
+                  />
+                  <div className="divide-y divide-border/60">
+                    {SHORTCUTS.map(([label, chord]) => (
+                      <div
+                        key={label}
+                        className="row-hover flex items-center justify-between gap-4 px-3 py-1.5"
+                      >
+                        <span className="truncate text-sm text-foreground/85">
+                          {label}
+                        </span>
+                        <kbd className="shrink-0 rounded-sm border border-border bg-[var(--wb-raised)] px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
+                          {chord}
+                        </kbd>
+                      </div>
+                    ))}
+                  </div>
+                </Pane>
+              )}
+
+              {isVisible("danger") && (
+                <Pane id="danger" className="border-destructive/30">
+                  <PaneHeader
+                    icon={ShieldAlert}
+                    title="Danger zone"
+                    subtitle="irreversible actions"
+                    className="text-destructive"
+                  />
+                  <SettingRow
+                    label="Delete all data"
+                    description="Permanently remove every sequence, run and analysis in this workspace."
+                  >
+                    <Button variant="destructive" size="sm" className="h-7">
+                      Delete all data
+                    </Button>
+                  </SettingRow>
+                </Pane>
+              )}
+            </div>
+          </EditorScroll>
+        )}
+      </div>
+    </EditorLayout>
+  )
+}
+
+function SettingsToc({
+  sections,
+  onSave,
+  saved,
+}: {
+  sections: Section[]
+  onSave: () => void
+  saved: boolean
+}) {
+  const scrollTo = (id: string) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="seq-scroll min-h-0 flex-1 overflow-y-auto p-3">
+        <Pane>
+          <PaneHeader title="Table of contents" />
+          <div className="p-1.5">
+            {sections.map((s) => (
               <button
-                key={t}
-                className={`flex-1 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
-                  i === 0
-                    ? "border-white/20 bg-white/[0.08] text-foreground"
-                    : "border-border text-muted-foreground hover:bg-white/[0.04]"
-                }`}
+                key={s.id}
+                type="button"
+                onClick={() => scrollTo(s.id)}
+                className={cn(
+                  "row-hover flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm",
+                  "focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none",
+                  s.danger ? "text-destructive/85" : "text-muted-foreground",
+                )}
               >
-                {t}
+                <s.icon className="size-3.5 shrink-0" />
+                <span className="truncate">{s.title}</span>
               </button>
             ))}
           </div>
-        </SettingsCard>
+        </Pane>
 
-        {/* Danger zone */}
-        <SettingsCard
-          icon={ShieldAlert}
-          title="Danger Zone"
-          description="Irreversible account actions"
-          danger
-        >
-          <div className="flex items-center justify-between gap-4">
-            <p className="text-sm text-muted-foreground">
-              Permanently delete all your data and analyses.
-            </p>
-            <Button variant="destructive" className="shrink-0">
-              Delete all data
-            </Button>
+        <Pane className="mt-3">
+          <PaneHeader title="Layout" />
+          <div className="grid grid-cols-3 gap-1.5 p-3">
+            {[
+              { icon: PanelLeft, label: "Side" },
+              { icon: PanelBottom, label: "Panel" },
+              { icon: PanelRight, label: "Inspect" },
+            ].map((r) => (
+              <div
+                key={r.label}
+                className="flex flex-col items-center gap-1 rounded-sm border border-border bg-[var(--wb-raised)] py-2 text-xs text-muted-foreground"
+              >
+                <r.icon className="size-3.5" />
+                {r.label}
+              </div>
+            ))}
           </div>
-        </SettingsCard>
+        </Pane>
+      </div>
 
-        {/* Save bar */}
-        <div className="flex justify-end">
-          <Button onClick={handleSave} className="min-w-32">
-            {saved ? (
-              <>
-                <Check className="h-4 w-4" /> Saved
-              </>
-            ) : (
-              "Save changes"
-            )}
-          </Button>
-        </div>
-      </main>
+      <div className="shrink-0 border-t border-border p-3">
+        <Button onClick={onSave} className="h-8 w-full">
+          {saved ? (
+            <>
+              <Check className="size-3.5" /> Saved
+            </>
+          ) : (
+            "Save changes"
+          )}
+        </Button>
+      </div>
     </div>
-  );
+  )
 }

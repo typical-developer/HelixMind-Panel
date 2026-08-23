@@ -1,95 +1,135 @@
-"use client";
+"use client"
 
-import { useState } from "react";
-import { Bell, CheckCheck, Trash2, BellOff } from "lucide-react";
+import { useMemo, useState } from "react"
+import { Bell, BellOff, CheckCheck, Trash2 } from "lucide-react"
 
-import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import NotificationItem from "@/components/notifications/NotificationItem"
+import { useNotifications } from "@/components/notifications/notifications-provider"
+import {
+  Chip,
+  EditorScroll,
+  EmptyState,
+  Pane,
+  PaneHeader,
+  useStatusItems,
+} from "@/components/workbench"
 
-import NotificationItem, { Notification } from "@/components/notifications/NotificationItem";
+type Filter = "all" | "unread"
 
 export default function NotificationsPage() {
-  const [notifications, setNotifications] = useState<Notification[]>([
-    {
-      id: 1,
-      title: "Upload Complete",
-      message: "FASTA file upload completed successfully.",
-      time: "2 mins ago",
-      read: false,
-    },
-    {
-      id: 2,
-      title: "Scan Finished",
-      message: "Mutation scan completed.",
-      time: "1 hour ago",
-      read: true,
-    },
-    {
-      id: 3,
-      title: "Mutation Simulation",
-      message: "Simulation run completed.",
-      time: "3 hours ago",
-      read: false,
-    },
-  ]);
+  const {
+    notifications,
+    unreadCount,
+    markAsRead,
+    markAllAsRead,
+    deleteNotification,
+    clearAll,
+  } = useNotifications()
+  const [filter, setFilter] = useState<Filter>("all")
 
-  const markAsRead = (id: number) =>
-    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
-  const deleteNotification = (id: number) =>
-    setNotifications((prev) => prev.filter((n) => n.id !== id));
-  const markAllAsRead = () =>
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-  const clearAll = () => setNotifications([]);
+  const visible = useMemo(
+    () => (filter === "unread" ? notifications.filter((n) => !n.read) : notifications),
+    [filter, notifications],
+  )
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  useStatusItems(
+    useMemo(
+      () => [
+        {
+          id: "unread",
+          label: `${unreadCount} unread`,
+          tone: unreadCount > 0 ? ("info" as const) : ("default" as const),
+        },
+      ],
+      [unreadCount],
+    ),
+  )
 
   return (
-    <div className="ml-16 pt-16">
-      <main className="mx-auto min-h-screen max-w-3xl px-6 pt-8">
-        {/* Header */}
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5">
-              <Bell className="h-5 w-5" />
-            </div>
-            <div>
-              <h2 className="text-xl font-semibold tracking-tight">Notifications</h2>
-              <p className="text-sm text-muted-foreground">
-                {unreadCount > 0 ? `${unreadCount} unread` : "You're all caught up"}
-              </p>
-            </div>
+    <EditorScroll>
+      <div className="mx-auto max-w-3xl p-3">
+        <Pane>
+          <PaneHeader
+            icon={Bell}
+            title="Notifications"
+            subtitle={
+              unreadCount > 0 ? `${unreadCount} unread` : "you're all caught up"
+            }
+            actions={
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={markAllAsRead}
+                  disabled={unreadCount === 0}
+                  className="h-6 px-2 text-xs"
+                >
+                  <CheckCheck className="size-3.5" />
+                  Mark all read
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearAll}
+                  disabled={notifications.length === 0}
+                  className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive"
+                >
+                  <Trash2 className="size-3.5" />
+                  Clear
+                </Button>
+              </>
+            }
+          />
+
+          {/* Filter strip, styled like the panel's tab headings. */}
+          <div className="flex h-8 shrink-0 items-center gap-4 border-b border-border px-3">
+            {(
+              [
+                ["all", "All", notifications.length],
+                ["unread", "Unread", unreadCount],
+              ] as const
+            ).map(([id, label, count]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setFilter(id)}
+                className={cn(
+                  "relative flex cursor-pointer items-center gap-1.5 text-xs font-medium tracking-wide uppercase transition-colors duration-100",
+                  "focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none",
+                  filter === id
+                    ? "text-foreground"
+                    : "text-muted-foreground hover:text-foreground/80",
+                )}
+              >
+                {label}
+                {count > 0 && <Chip>{count}</Chip>}
+                <span
+                  className={cn(
+                    "absolute inset-x-0 -bottom-[9px] h-px transition-colors duration-150",
+                    filter === id ? "bg-brand" : "bg-transparent",
+                  )}
+                />
+              </button>
+            ))}
           </div>
 
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={markAllAsRead} disabled={unreadCount === 0}>
-              <CheckCheck className="h-4 w-4" />
-              Mark all read
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={clearAll}
-              disabled={notifications.length === 0}
-              className="text-destructive hover:text-destructive"
-            >
-              <Trash2 className="h-4 w-4" />
-              Clear all
-            </Button>
-          </div>
-        </div>
-
-        {/* List */}
-        <div className="glass overflow-hidden p-0">
-          {notifications.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/5">
-                <BellOff className="h-5 w-5 text-muted-foreground" />
-              </div>
-              <p className="text-sm text-muted-foreground">No notifications to show</p>
-            </div>
+          {visible.length === 0 ? (
+            <EmptyState
+              icon={BellOff}
+              title={
+                filter === "unread" ? "Nothing unread" : "No notifications to show"
+              }
+              description={
+                filter === "unread"
+                  ? "Every notification in this workspace has been read."
+                  : "Activity from scans, uploads and simulation runs lands here."
+              }
+            />
           ) : (
-            <ScrollArea className="h-[68vh]">
-              {notifications.map((n) => (
+            <div>
+              {visible.map((n) => (
                 <NotificationItem
                   key={n.id}
                   data={n}
@@ -97,10 +137,10 @@ export default function NotificationsPage() {
                   onDelete={deleteNotification}
                 />
               ))}
-            </ScrollArea>
+            </div>
           )}
-        </div>
-      </main>
-    </div>
-  );
+        </Pane>
+      </div>
+    </EditorScroll>
+  )
 }

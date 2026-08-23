@@ -58,14 +58,14 @@ export default function SignInPage() {
 
         <div className="relative space-y-8">
           <div className="space-y-4">
-            <h1 className="text-gradient text-5xl font-bold leading-[1.05] tracking-tight">
+            <h1 className="text-gradient text-4xl font-semibold leading-[1.05] tracking-tight">
               Accelerating
               <br />
               biological
               <br />
               advancements.
             </h1>
-            <p className="max-w-md text-lg text-muted-foreground">
+            <p className="max-w-md text-base text-muted-foreground">
               Sign in to access your genomic analysis tools and mutation
               simulations.
             </p>
@@ -74,8 +74,8 @@ export default function SignInPage() {
           <ul className="space-y-3">
             {HIGHLIGHTS.map(({ icon: Icon, text }) => (
               <li key={text} className="flex items-center gap-3 text-sm text-foreground/90">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5">
-                  <Icon className="h-4 w-4" />
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border bg-raised">
+                  <Icon className="size-3.5" />
                 </span>
                 {text}
               </li>
@@ -96,7 +96,7 @@ export default function SignInPage() {
           </div>
 
           <div className="mb-8">
-            <h2 className="text-2xl font-semibold tracking-tight">Welcome back</h2>
+            <h2 className="text-xl font-semibold tracking-tight">Welcome back</h2>
             <p className="mt-1.5 text-sm text-muted-foreground">
               Enter your credentials to continue
             </p>
@@ -119,7 +119,7 @@ export default function SignInPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 autoComplete="username"
-                className="h-11"
+                className="h-9"
               />
             </div>
 
@@ -141,7 +141,7 @@ export default function SignInPage() {
                   name="password"
                   onChange={(e) => setPassword(e.target.value)}
                   autoComplete="current-password"
-                  className="h-11 pr-10"
+                  className="h-9 pr-9"
                 />
                 <button
                   type="button"
@@ -153,7 +153,7 @@ export default function SignInPage() {
               </div>
             </div>
 
-            <Button type="submit" className="h-11 w-full" size="lg" disabled={isLoading}>
+            <Button type="submit" className="h-9 w-full" size="lg" disabled={isLoading}>
               {isLoading ? "Signing in..." : "Sign In"}
             </Button>
 

@@ -1,0 +1,40 @@
+export { Workbench, EditorLayout, EditorScroll } from "./workbench"
+export {
+  WorkbenchProvider,
+  useWorkbench,
+  useLogStream,
+  useProblems,
+  useRunStatus,
+  useStatusItems,
+  type LogLevel,
+  type LogLine,
+  type Problem,
+  type RunStatus,
+  type StatusItem,
+} from "./workbench-provider"
+export {
+  Chip,
+  CodeSurface,
+  EmptyState,
+  Field,
+  Pane,
+  PaneBody,
+  PaneHeader,
+  Rule,
+  SideSection,
+  StatTile,
+  Toolbar,
+  ToolbarButton,
+  TreeRow,
+  WBInput,
+  WBSelect,
+  type IconComponent,
+} from "./primitives"
+export {
+  VIEWS,
+  WORKBENCH_GROUPS,
+  TONE_CLASS,
+  viewForPath,
+  breadcrumbsForView,
+  type WorkbenchView,
+} from "./registry"
