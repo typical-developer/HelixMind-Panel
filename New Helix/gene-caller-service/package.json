@@ -1,0 +1,14 @@
+{
+  "name": "gene-caller-service",
+  "version": "0.1.0",
+  "description": "Standalone gene-calling API — bacterial (Prodigal) and eukaryotic (AUGUSTUS) gene prediction, independent of the HelixMind frontend.",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "node src/server.js",
+    "test": "node src/test-client.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "cors": "^2.8.5"
+  }
+}

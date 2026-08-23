@@ -1,0 +1,68 @@
+version: "3.9"
+
+services:
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - RESFINDER_SERVICE_URL=http://resfinder-worker:8001
+      - DATABASE_URL=${DATABASE_URL}
+      - SECRET_KEY=${SECRET_KEY}
+    depends_on:
+      resfinder-worker:
+        condition: service_healthy
+    networks:
+      - helixmind-internal
+    restart: unless-stopped
+
+  resfinder-worker:
+    build:
+      context: ./backend
+      dockerfile: services/resfinder/Dockerfile
+    volumes:
+      # Mount raw cloned DB folders — indexing happens inside the container
+      - ./databases/resfinder_db:/databases/resfinder_db
+      - ./databases/pointfinder_db:/databases/pointfinder_db
+    environment:
+      - RESFINDER_DB_PATH=/databases/resfinder_db
+      - POINTFINDER_DB_PATH=/databases/pointfinder_db
+    expose:
+      - "8001"
+    ports:
+      - "8001:8001"   # TEMP — for direct testing; remove once api proxy is wired up
+    networks:
+      - helixmind-internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/api/annotation/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s   # extra time for first-run indexing
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: "2G"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_BASE_URL=http://api:8000
+    depends_on:
+      - api
+    networks:
+      - helixmind-internal
+    restart: unless-stopped
+
+networks:
+  helixmind-internal:
+    driver: bridge

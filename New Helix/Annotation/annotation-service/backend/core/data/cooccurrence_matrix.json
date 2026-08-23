@@ -1,0 +1,257 @@
+{
+  "metadata": {
+    "source": "BV-BRC (PATRIC) AMR phenotype database",
+    "source_url": "https://www.bv-brc.org/api/genome_amr/",
+    "method": "co_resistant / genomes_tested_for_both_classes",
+    "total_records": 50000,
+    "resistant": 25000,
+    "susceptible": 25000
+  },
+  "matrix": {
+    "beta-lactam|fluoroquinolone": {
+      "class_a": "beta-lactam",
+      "class_b": "fluoroquinolone",
+      "co_resistant": 277,
+      "tested": 452,
+      "prevalence": 0.612832
+    },
+    "beta-lactam|trimethoprim": {
+      "class_a": "beta-lactam",
+      "class_b": "trimethoprim",
+      "co_resistant": 142,
+      "tested": 249,
+      "prevalence": 0.570281
+    },
+    "fluoroquinolone|trimethoprim": {
+      "class_a": "fluoroquinolone",
+      "class_b": "trimethoprim",
+      "co_resistant": 96,
+      "tested": 154,
+      "prevalence": 0.623377
+    },
+    "beta-lactam|macrolide": {
+      "class_a": "beta-lactam",
+      "class_b": "macrolide",
+      "co_resistant": 11,
+      "tested": 48,
+      "prevalence": 0.229167
+    },
+    "macrolide|tetracycline": {
+      "class_a": "macrolide",
+      "class_b": "tetracycline",
+      "co_resistant": 27,
+      "tested": 90,
+      "prevalence": 0.3
+    },
+    "aminoglycoside|fluoroquinolone": {
+      "class_a": "aminoglycoside",
+      "class_b": "fluoroquinolone",
+      "co_resistant": 171,
+      "tested": 423,
+      "prevalence": 0.404255
+    },
+    "aminoglycoside|rifamycin": {
+      "class_a": "aminoglycoside",
+      "class_b": "rifamycin",
+      "co_resistant": 84,
+      "tested": 187,
+      "prevalence": 0.449198
+    },
+    "aminoglycoside|beta-lactam": {
+      "class_a": "aminoglycoside",
+      "class_b": "beta-lactam",
+      "co_resistant": 247,
+      "tested": 556,
+      "prevalence": 0.444245
+    },
+    "beta-lactam|carbapenem": {
+      "class_a": "beta-lactam",
+      "class_b": "carbapenem",
+      "co_resistant": 250,
+      "tested": 528,
+      "prevalence": 0.473485
+    },
+    "aminoglycoside|trimethoprim": {
+      "class_a": "aminoglycoside",
+      "class_b": "trimethoprim",
+      "co_resistant": 89,
+      "tested": 172,
+      "prevalence": 0.517442
+    },
+    "carbapenem|fluoroquinolone": {
+      "class_a": "carbapenem",
+      "class_b": "fluoroquinolone",
+      "co_resistant": 112,
+      "tested": 262,
+      "prevalence": 0.427481
+    },
+    "fluoroquinolone|phenicol": {
+      "class_a": "fluoroquinolone",
+      "class_b": "phenicol",
+      "co_resistant": 4,
+      "tested": 21,
+      "prevalence": 0.190476
+    },
+    "aminoglycoside|carbapenem": {
+      "class_a": "aminoglycoside",
+      "class_b": "carbapenem",
+      "co_resistant": 113,
+      "tested": 321,
+      "prevalence": 0.352025
+    },
+    "beta-lactam|tetracycline": {
+      "class_a": "beta-lactam",
+      "class_b": "tetracycline",
+      "co_resistant": 115,
+      "tested": 263,
+      "prevalence": 0.437262
+    },
+    "fluoroquinolone|tetracycline": {
+      "class_a": "fluoroquinolone",
+      "class_b": "tetracycline",
+      "co_resistant": 61,
+      "tested": 143,
+      "prevalence": 0.426573
+    },
+    "aminoglycoside|tetracycline": {
+      "class_a": "aminoglycoside",
+      "class_b": "tetracycline",
+      "co_resistant": 79,
+      "tested": 183,
+      "prevalence": 0.431694
+    },
+    "fluoroquinolone|rifamycin": {
+      "class_a": "fluoroquinolone",
+      "class_b": "rifamycin",
+      "co_resistant": 9,
+      "tested": 66,
+      "prevalence": 0.136364
+    },
+    "carbapenem|tetracycline": {
+      "class_a": "carbapenem",
+      "class_b": "tetracycline",
+      "co_resistant": 44,
+      "tested": 132,
+      "prevalence": 0.333333
+    },
+    "carbapenem|trimethoprim": {
+      "class_a": "carbapenem",
+      "class_b": "trimethoprim",
+      "co_resistant": 55,
+      "tested": 141,
+      "prevalence": 0.390071
+    },
+    "tetracycline|trimethoprim": {
+      "class_a": "tetracycline",
+      "class_b": "trimethoprim",
+      "co_resistant": 48,
+      "tested": 111,
+      "prevalence": 0.432432
+    },
+    "aminoglycoside|phenicol": {
+      "class_a": "aminoglycoside",
+      "class_b": "phenicol",
+      "co_resistant": 1,
+      "tested": 13,
+      "prevalence": 0.076923
+    },
+    "beta-lactam|phenicol": {
+      "class_a": "beta-lactam",
+      "class_b": "phenicol",
+      "co_resistant": 8,
+      "tested": 32,
+      "prevalence": 0.25
+    },
+    "macrolide|trimethoprim": {
+      "class_a": "macrolide",
+      "class_b": "trimethoprim",
+      "co_resistant": 16,
+      "tested": 65,
+      "prevalence": 0.246154
+    },
+    "macrolide|phenicol": {
+      "class_a": "macrolide",
+      "class_b": "phenicol",
+      "co_resistant": 6,
+      "tested": 47,
+      "prevalence": 0.12766
+    },
+    "aminoglycoside|oxazolidinone": {
+      "class_a": "aminoglycoside",
+      "class_b": "oxazolidinone",
+      "co_resistant": 1,
+      "tested": 17,
+      "prevalence": 0.058824
+    },
+    "phenicol|trimethoprim": {
+      "class_a": "phenicol",
+      "class_b": "trimethoprim",
+      "co_resistant": 8,
+      "tested": 47,
+      "prevalence": 0.170213
+    },
+    "aminoglycoside|macrolide": {
+      "class_a": "aminoglycoside",
+      "class_b": "macrolide",
+      "co_resistant": 9,
+      "tested": 36,
+      "prevalence": 0.25
+    },
+    "fluoroquinolone|macrolide": {
+      "class_a": "fluoroquinolone",
+      "class_b": "macrolide",
+      "co_resistant": 9,
+      "tested": 35,
+      "prevalence": 0.257143
+    },
+    "phenicol|tetracycline": {
+      "class_a": "phenicol",
+      "class_b": "tetracycline",
+      "co_resistant": 8,
+      "tested": 48,
+      "prevalence": 0.166667
+    },
+    "carbapenem|phenicol": {
+      "class_a": "carbapenem",
+      "class_b": "phenicol",
+      "co_resistant": 4,
+      "tested": 13,
+      "prevalence": 0.307692
+    },
+    "beta-lactam|sulfonamide": {
+      "class_a": "beta-lactam",
+      "class_b": "sulfonamide",
+      "co_resistant": 10,
+      "tested": 15,
+      "prevalence": 0.666667
+    },
+    "carbapenem|colistin": {
+      "class_a": "carbapenem",
+      "class_b": "colistin",
+      "co_resistant": 2,
+      "tested": 10,
+      "prevalence": 0.2
+    },
+    "beta-lactam|oxazolidinone": {
+      "class_a": "beta-lactam",
+      "class_b": "oxazolidinone",
+      "co_resistant": 0,
+      "tested": 10,
+      "prevalence": 0.0
+    },
+    "carbapenem|macrolide": {
+      "class_a": "carbapenem",
+      "class_b": "macrolide",
+      "co_resistant": 2,
+      "tested": 16,
+      "prevalence": 0.125
+    },
+    "fluoroquinolone|oxazolidinone": {
+      "class_a": "fluoroquinolone",
+      "class_b": "oxazolidinone",
+      "co_resistant": 1,
+      "tested": 14,
+      "prevalence": 0.071429
+    }
+  }
+}
