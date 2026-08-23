@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils"
 
 import { Chip, ToolbarButton, WBSelect } from "./primitives"
 import {
+  useConsole,
   useWorkbench,
   type LogLevel,
   type LogLine,
@@ -38,18 +39,9 @@ const PANEL_TABS: Array<{ id: PanelTabId; label: string }> = [
  * and history is what the bench has finished.
  */
 export function BottomPanel() {
-  const {
-    panelTab,
-    setPanelTab,
-    panelMaximized,
-    togglePanelMaximized,
-    togglePanel,
-    alerts,
-    logs,
-    runHistory,
-    clearLogs,
-    clearRunHistory,
-  } = useWorkbench()
+  const { panelTab, setPanelTab, panelMaximized, togglePanelMaximized, togglePanel } =
+    useWorkbench()
+  const { alerts, logs, runHistory, clearLogs, clearRunHistory } = useConsole()
 
   const errors = alerts.filter((a) => a.severity === "error").length
   const warnings = alerts.filter((a) => a.severity === "warning").length
@@ -169,7 +161,7 @@ const SEVERITY_CLASS = {
 } as const
 
 function AlertsView() {
-  const { alerts } = useWorkbench()
+  const { alerts } = useConsole()
 
   const grouped = React.useMemo(() => {
     const map = new Map<string, WorkbenchAlert[]>()
@@ -233,7 +225,7 @@ function AlertsView() {
    ========================================================================= */
 
 function RunLogView() {
-  const { logs } = useWorkbench()
+  const { logs } = useConsole()
   const [channel, setChannel] = React.useState("all")
 
   const channels = React.useMemo(
@@ -285,7 +277,8 @@ function RunLogView() {
    ========================================================================= */
 
 function HistoryView() {
-  const { runHistory, setPanelTab } = useWorkbench()
+  const { setPanelTab } = useWorkbench()
+  const { runHistory } = useConsole()
 
   if (runHistory.length === 0) {
     return (

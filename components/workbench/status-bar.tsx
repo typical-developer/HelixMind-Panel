@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils"
 
 import { useNotifications } from "@/components/notifications/notifications-provider"
 
-import { useWorkbench } from "./workbench-provider"
+import { useConsole, useWorkbench } from "./workbench-provider"
 
 /**
  * The 24px strip along the bottom. Left side is lab-wide — what needs
@@ -25,15 +25,8 @@ import { useWorkbench } from "./workbench-provider"
  * views publish their own readouts with `useStatusItems`.
  */
 export function StatusBar() {
-  const {
-    alerts,
-    setPanelTab,
-    panelVisible,
-    togglePanel,
-    runStatus,
-    statusItems,
-    openPalette,
-  } = useWorkbench()
+  const { setPanelTab, panelVisible, togglePanel, openPalette } = useWorkbench()
+  const { alerts, runStatus, statusItems } = useConsole()
   const { unreadCount } = useNotifications()
   const router = useRouter()
 

@@ -13,7 +13,7 @@ const HIGHLIGHT_START = 15
 const HIGHLIGHT_END = 25
 const BASES_PER_ROW = 60
 
-/** Per-base tint, kept low-chroma so a wall of sequence stays readable. */
+/** Per-base tint. Low-chroma by design — see the token notes in globals.css. */
 const BASE_CLASS: Record<string, string> = {
   A: "text-[var(--base-a)]",
   T: "text-[var(--base-t)]",
@@ -66,10 +66,10 @@ export function DNAViewer() {
         }
       />
 
-      <div className="seq-scroll min-h-0 flex-1 overflow-auto bg-[hsl(0_0%_2%)] py-2 font-mono text-xs leading-5">
+      <div className="seq-scroll min-h-0 flex-1 overflow-auto bg-[var(--wb-inset)] py-2.5 font-mono text-xs leading-[1.6] tracking-normal">
         {rows.map((row) => (
           <div key={row.start} className="flex hover:bg-[var(--wb-hover)]">
-            <span className="gutter-num sticky left-0 w-16 shrink-0 bg-[hsl(0_0%_2%)] pr-3">
+            <span className="gutter-num sticky left-0 w-16 shrink-0 bg-[var(--wb-inset)] pr-3.5">
               {row.start + 1}
             </span>
             <span className="flex gap-px pr-4 tracking-wider whitespace-nowrap">
@@ -82,8 +82,10 @@ export function DNAViewer() {
                     className={cn(
                       "transition-colors duration-100",
                       BASE_CLASS[base] ?? "text-foreground/70",
-                      highlighted &&
-                        "bg-brand/25 font-semibold text-foreground ring-1 ring-brand/40 ring-inset",
+                      // The hotspot marks a run of bases, so a light wash and a
+                      // brighter glyph is enough — a ring on every base in the
+                      // run turned it into a striped block.
+                      highlighted && "bg-brand/20 font-semibold text-foreground",
                     )}
                   >
                     {base}
@@ -95,7 +97,7 @@ export function DNAViewer() {
         ))}
       </div>
 
-      <footer className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-t border-border px-3 py-1.5 text-xs text-muted-foreground">
+      <footer className="flex shrink-0 flex-wrap items-center gap-x-5 gap-y-1.5 border-t border-border px-3 py-2.5 text-xs text-muted-foreground">
         {(["A", "T", "G", "C"] as const).map((base) => (
           <span key={base} className="flex items-center gap-1.5">
             <span className={cn("font-mono font-semibold", BASE_CLASS[base])}>

@@ -12,28 +12,20 @@ import {
   SlidersHorizontal,
   Upload,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from "recharts";
 
 // ui
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import {
-  CHART_AXIS,
-  CHART_GRID,
-  CHART_LEGEND,
-  CHART_TOOLTIP,
-  SERIES,
-} from "@/lib/chart-theme";
+import { ChartFallback } from "@/components/chart-fallback";
+
+// Recharts is the heaviest dependency on this route and nothing above the fold
+// needs it, so the plot loads as its own chunk once the controls are live.
+const RunChart = dynamic(
+  () => import("./run-chart").then((m) => m.RunChart),
+  { ssr: false, loading: () => <ChartFallback height={300} /> },
+);
 import {
   ViewLayout,
   ViewScroll,
@@ -625,39 +617,7 @@ export default function MutationSimulator() {
             />
             <div className="min-h-0 flex-1 p-3">
               {generationStats.length > 0 ? (
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart
-                    data={generationStats}
-                    margin={{ top: 4, right: 8, left: -16, bottom: 0 }}
-                  >
-                    <CartesianGrid {...CHART_GRID} />
-                    <XAxis dataKey="generation" {...CHART_AXIS} />
-                    <YAxis yAxisId="left" {...CHART_AXIS} width={40} />
-                    <YAxis yAxisId="right" orientation="right" {...CHART_AXIS} width={40} />
-                    <Tooltip {...CHART_TOOLTIP} />
-                    <Legend {...CHART_LEGEND} />
-                    <Line
-                      yAxisId="left"
-                      type="monotone"
-                      dataKey="fitness"
-                      stroke={SERIES.quaternary}
-                      strokeWidth={1.5}
-                      dot={{ fill: SERIES.quaternary, r: 2.5, strokeWidth: 0 }}
-                      activeDot={{ r: 4 }}
-                      name="Fitness score"
-                    />
-                    <Line
-                      yAxisId="right"
-                      type="monotone"
-                      dataKey="cumulativeMutations"
-                      stroke={SERIES.secondary}
-                      strokeWidth={1.5}
-                      dot={{ fill: SERIES.secondary, r: 2.5, strokeWidth: 0 }}
-                      activeDot={{ r: 4 }}
-                      name="Total mutations"
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
+                <RunChart data={generationStats} />
               ) : (
                 <div className="flex h-[300px] flex-col items-center justify-center gap-2 text-center">
                   <div

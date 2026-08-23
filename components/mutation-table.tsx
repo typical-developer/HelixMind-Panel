@@ -50,7 +50,7 @@ export function MutationTable() {
               {HEADERS.map((h) => (
                 <th
                   key={h}
-                  className="px-3 py-1.5 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase"
+                  className="px-3 py-2 text-left text-xs font-medium text-muted-foreground"
                 >
                   {h}
                 </th>
@@ -63,15 +63,15 @@ export function MutationTable() {
                 key={idx}
                 className="row-hover border-b border-border/50 last:border-0"
               >
-                <td className="px-3 py-1.5 font-mono text-muted-foreground">
+                <td className="px-3 py-2 font-mono text-muted-foreground">
                   #{mutation.generation}
                 </td>
-                <td className="px-3 py-1.5 font-mono text-foreground">
+                <td className="px-3 py-2 font-mono text-foreground">
                   {mutation.position}
                 </td>
                 <td
                   className={cn(
-                    "px-3 py-1.5 font-mono font-medium",
+                    "px-3 py-2 font-mono font-medium",
                     mutation.impact === "High Risk"
                       ? "text-destructive"
                       : "text-foreground",
@@ -79,7 +79,7 @@ export function MutationTable() {
                 >
                   {mutation.change}
                 </td>
-                <td className="px-3 py-1.5">
+                <td className="px-3 py-2">
                   <Chip tone={IMPACT_TONE[mutation.impact]}>{mutation.impact}</Chip>
                 </td>
               </tr>

@@ -158,35 +158,246 @@ interface WorkbenchContextValue extends LayoutState {
   /** Text the palette starts with — `>` puts it straight into command mode. */
   paletteSeed: string
   openPalette: (seed?: string) => void
+}
 
-  /* ---- Console ---- */
+/**
+ * What a run produces. Kept out of the layout context because it changes many
+ * times a second while a simulation is going, and almost nothing on screen
+ * cares — see the note on {@link WorkbenchProvider}.
+ */
+interface ConsoleState {
   logs: LogLine[]
-  pushLog: (line: Omit<LogLine, "id" | "ts"> & { ts?: number }) => void
-  clearLogs: () => void
-
   alerts: WorkbenchAlert[]
-  publishAlerts: (source: string, alerts: WorkbenchAlert[]) => void
-
   runStatus: RunStatus | null
-  publishRunStatus: (status: RunStatus | null) => void
   runHistory: RunRecord[]
-  clearRunHistory: () => void
-
   statusItems: StatusItem[]
-  publishStatusItems: (items: StatusItem[]) => void
-
   /** What the open view is working on, shown in the context bar. */
   viewContext: string | null
+}
+
+/** Every console writer. Stable for the lifetime of the provider. */
+interface ConsoleActions {
+  pushLog: (line: Omit<LogLine, "id" | "ts"> & { ts?: number }) => void
+  clearLogs: () => void
+  publishAlerts: (source: string, alerts: WorkbenchAlert[]) => void
+  publishRunStatus: (status: RunStatus | null) => void
+  clearRunHistory: () => void
+  publishStatusItems: (items: StatusItem[]) => void
   publishViewContext: (detail: string | null) => void
 }
 
 const WorkbenchContext = React.createContext<WorkbenchContextValue | null>(null)
+const ConsoleStateContext = React.createContext<ConsoleState | null>(null)
+const ConsoleActionsContext = React.createContext<ConsoleActions | null>(null)
 
 /* ============================================================================
    Provider
    ========================================================================= */
 
+/**
+ * Layout, open analyses and the palette — everything that changes only when
+ * the operator does something.
+ *
+ * Console output lives in its own pair of contexts underneath this one. A
+ * running simulation pushes log lines continuously, and when that data shared
+ * a context with the layout it re-rendered the title bar, rail, sidebar, tabs
+ * and the whole open view on every line. Splitting it means only the console,
+ * the status bar and the Runs sidebar react to output, and splitting the
+ * writers from the data again means a view that *publishes* logs is not itself
+ * re-rendered by them.
+ */
 export function WorkbenchProvider({ children }: { children: React.ReactNode }) {
+  return (
+    <ConsoleProvider>
+      <LayoutProvider>{children}</LayoutProvider>
+    </ConsoleProvider>
+  )
+}
+
+function ConsoleProvider({ children }: { children: React.ReactNode }) {
+  const [logs, setLogs] = React.useState<LogLine[]>([])
+  const logId = React.useRef(0)
+
+  // Alerts are stored per-source so one view publishing doesn't wipe another.
+  const [alertMap, setAlertMap] = React.useState<Record<string, WorkbenchAlert[]>>({})
+  const [runStatus, setRunStatus] = React.useState<RunStatus | null>(null)
+  const [runHistory, setRunHistory] = React.useState<RunRecord[]>([])
+  // Only the view currently on the bench contributes status-bar items and a
+  // context line, so these are single slots rather than per-source maps.
+  const [statusItems, setStatusItems] = React.useState<StatusItem[]>([])
+  const [viewContext, setViewContext] = React.useState<string | null>(null)
+
+  /* ---- Run log --------------------------------------------------------- */
+
+  const pushLog = React.useCallback(
+    (line: Omit<LogLine, "id" | "ts"> & { ts?: number }) => {
+      setLogs((prev) => {
+        const next = [
+          ...prev,
+          { id: logId.current++, ts: line.ts ?? Date.now(), ...line },
+        ]
+        // Cap the buffer so a long-running simulation can't grow without bound.
+        return next.length > 500 ? next.slice(next.length - 500) : next
+      })
+    },
+    [],
+  )
+
+  const clearLogs = React.useCallback(() => setLogs([]), [])
+
+  /* ---- Alerts ---------------------------------------------------------- */
+
+  const publishAlerts = React.useCallback((source: string, next: WorkbenchAlert[]) => {
+    setAlertMap((prev) => {
+      const current = prev[source]
+      // Bail when nothing changed so publishing from a render effect can't loop.
+      if (
+        current &&
+        current.length === next.length &&
+        current.every(
+          (a, i) =>
+            a.message === next[i].message &&
+            a.severity === next[i].severity &&
+            a.at === next[i].at,
+        )
+      ) {
+        return prev
+      }
+      if (next.length === 0 && !current) return prev
+      return { ...prev, [source]: next }
+    })
+  }, [])
+
+  const alerts = React.useMemo(() => Object.values(alertMap).flat(), [alertMap])
+
+  /* ---- Runs ------------------------------------------------------------ */
+
+  // The run in flight, tracked outside state so recording its completion never
+  // depends on a render having happened first.
+  const activeRun = React.useRef<{
+    label: string
+    startedAt: number
+    detail?: string
+  } | null>(null)
+  const runId = React.useRef(0)
+
+  const publishRunStatus = React.useCallback((status: RunStatus | null) => {
+    setRunStatus((prev) => {
+      if (
+        prev === status ||
+        (prev &&
+          status &&
+          prev.label === status.label &&
+          prev.state === status.state &&
+          prev.progress === status.progress &&
+          prev.detail === status.detail)
+      ) {
+        return prev
+      }
+      return status
+    })
+
+    // History is derived from the transition, not the value, so it is recorded
+    // here rather than inside the updater above (which React may replay).
+    const active = activeRun.current
+    const inFlight = status?.state === "running" || status?.state === "paused"
+
+    if (inFlight) {
+      if (!active || active.label !== status.label) {
+        activeRun.current = {
+          label: status.label,
+          startedAt: Date.now(),
+          detail: status.detail,
+        }
+      } else if (status.detail) {
+        active.detail = status.detail
+      }
+      return
+    }
+
+    // A run that leaves the in-flight states — or whose view unmounts — is
+    // finished, one way or the other.
+    if (!active) return
+    activeRun.current = null
+    setRunHistory((prev) =>
+      [
+        {
+          id: runId.current++,
+          label: active.label,
+          detail: status?.detail ?? active.detail,
+          startedAt: active.startedAt,
+          endedAt: Date.now(),
+          outcome:
+            status?.state === "done" ? ("completed" as const) : ("stopped" as const),
+        },
+        ...prev,
+      ].slice(0, 50),
+    )
+  }, [])
+
+  const clearRunHistory = React.useCallback(() => setRunHistory([]), [])
+
+  /* ---- Contextual chrome ----------------------------------------------- */
+
+  const publishStatusItems = React.useCallback((items: StatusItem[]) => {
+    setStatusItems((prev) => {
+      // Compare by identity fields so a view can republish every render without
+      // forcing the status bar to re-render.
+      if (
+        prev.length === items.length &&
+        prev.every((p, i) => p.id === items[i].id && p.label === items[i].label)
+      ) {
+        return prev
+      }
+      return items
+    })
+  }, [])
+
+  const publishViewContext = React.useCallback(
+    (detail: string | null) =>
+      setViewContext((prev) => (prev === detail ? prev : detail)),
+    [],
+  )
+
+  // Every dependency here is a `useCallback` with an empty dep list, so this
+  // object is created once. That is the whole point: publishers subscribe to it
+  // and never re-render because of the data they publish.
+  const actions = React.useMemo<ConsoleActions>(
+    () => ({
+      pushLog,
+      clearLogs,
+      publishAlerts,
+      publishRunStatus,
+      clearRunHistory,
+      publishStatusItems,
+      publishViewContext,
+    }),
+    [
+      pushLog,
+      clearLogs,
+      publishAlerts,
+      publishRunStatus,
+      clearRunHistory,
+      publishStatusItems,
+      publishViewContext,
+    ],
+  )
+
+  const state = React.useMemo<ConsoleState>(
+    () => ({ logs, alerts, runStatus, runHistory, statusItems, viewContext }),
+    [logs, alerts, runStatus, runHistory, statusItems, viewContext],
+  )
+
+  return (
+    <ConsoleActionsContext.Provider value={actions}>
+      <ConsoleStateContext.Provider value={state}>
+        {children}
+      </ConsoleStateContext.Provider>
+    </ConsoleActionsContext.Provider>
+  )
+}
+
+function LayoutProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
 
@@ -199,18 +410,6 @@ export function WorkbenchProvider({ children }: { children: React.ReactNode }) {
     setPaletteSeed(seed)
     setPaletteOpen(true)
   }, [])
-
-  const [logs, setLogs] = React.useState<LogLine[]>([])
-  const logId = React.useRef(0)
-
-  // Alerts are stored per-source so one view publishing doesn't wipe another.
-  const [alertMap, setAlertMap] = React.useState<Record<string, WorkbenchAlert[]>>({})
-  const [runStatus, setRunStatus] = React.useState<RunStatus | null>(null)
-  const [runHistory, setRunHistory] = React.useState<RunRecord[]>([])
-  // Only the view currently on the bench contributes status-bar items and a
-  // context line, so these are single slots rather than per-source maps.
-  const [statusItems, setStatusItems] = React.useState<StatusItem[]>([])
-  const [viewContext, setViewContext] = React.useState<string | null>(null)
 
   const view = React.useMemo(() => viewForPath(pathname), [pathname])
 
@@ -449,134 +648,6 @@ export function WorkbenchProvider({ children }: { children: React.ReactNode }) {
     [],
   )
 
-  /* ---- Run log --------------------------------------------------------- */
-
-  const pushLog = React.useCallback(
-    (line: Omit<LogLine, "id" | "ts"> & { ts?: number }) => {
-      setLogs((prev) => {
-        const next = [
-          ...prev,
-          { id: logId.current++, ts: line.ts ?? Date.now(), ...line },
-        ]
-        // Cap the buffer so a long-running simulation can't grow without bound.
-        return next.length > 500 ? next.slice(next.length - 500) : next
-      })
-    },
-    [],
-  )
-
-  const clearLogs = React.useCallback(() => setLogs([]), [])
-
-  const publishAlerts = React.useCallback((source: string, next: WorkbenchAlert[]) => {
-    setAlertMap((prev) => {
-      const current = prev[source]
-      // Bail when nothing changed so publishing from a render effect can't loop.
-      if (
-        current &&
-        current.length === next.length &&
-        current.every(
-          (a, i) =>
-            a.message === next[i].message &&
-            a.severity === next[i].severity &&
-            a.at === next[i].at,
-        )
-      ) {
-        return prev
-      }
-      if (next.length === 0 && !current) return prev
-      return { ...prev, [source]: next }
-    })
-  }, [])
-
-  const alerts = React.useMemo(() => Object.values(alertMap).flat(), [alertMap])
-
-  /* ---- Runs ------------------------------------------------------------ */
-
-  // The run in flight, tracked outside state so recording its completion never
-  // depends on a render having happened first.
-  const activeRun = React.useRef<{
-    label: string
-    startedAt: number
-    detail?: string
-  } | null>(null)
-  const runId = React.useRef(0)
-
-  const publishRunStatus = React.useCallback((status: RunStatus | null) => {
-    setRunStatus((prev) => {
-      if (
-        prev === status ||
-        (prev &&
-          status &&
-          prev.label === status.label &&
-          prev.state === status.state &&
-          prev.progress === status.progress &&
-          prev.detail === status.detail)
-      ) {
-        return prev
-      }
-      return status
-    })
-
-    // History is derived from the transition, not the value, so it is recorded
-    // here rather than inside the updater above (which React may replay).
-    const active = activeRun.current
-    const inFlight = status?.state === "running" || status?.state === "paused"
-
-    if (inFlight) {
-      if (!active || active.label !== status.label) {
-        activeRun.current = {
-          label: status.label,
-          startedAt: Date.now(),
-          detail: status.detail,
-        }
-      } else if (status.detail) {
-        active.detail = status.detail
-      }
-      return
-    }
-
-    // A run that leaves the in-flight states — or whose view unmounts — is
-    // finished, one way or the other.
-    if (!active) return
-    activeRun.current = null
-    setRunHistory((prev) =>
-      [
-        {
-          id: runId.current++,
-          label: active.label,
-          detail: status?.detail ?? active.detail,
-          startedAt: active.startedAt,
-          endedAt: Date.now(),
-          outcome: status?.state === "done" ? ("completed" as const) : ("stopped" as const),
-        },
-        ...prev,
-      ].slice(0, 50),
-    )
-  }, [])
-
-  const clearRunHistory = React.useCallback(() => setRunHistory([]), [])
-
-  /* ---- Contextual chrome ----------------------------------------------- */
-
-  const publishStatusItems = React.useCallback((items: StatusItem[]) => {
-    setStatusItems((prev) => {
-      // Compare by identity fields so a view can republish every render without
-      // forcing the status bar to re-render.
-      if (
-        prev.length === items.length &&
-        prev.every((p, i) => p.id === items[i].id && p.label === items[i].label)
-      ) {
-        return prev
-      }
-      return items
-    })
-  }, [])
-
-  const publishViewContext = React.useCallback(
-    (detail: string | null) => setViewContext((prev) => (prev === detail ? prev : detail)),
-    [],
-  )
-
   /* ---- Keybindings ----------------------------------------------------- */
 
   React.useEffect(() => {
@@ -724,19 +795,6 @@ export function WorkbenchProvider({ children }: { children: React.ReactNode }) {
       setPaletteOpen,
       paletteSeed,
       openPalette,
-      logs,
-      pushLog,
-      clearLogs,
-      alerts,
-      publishAlerts,
-      runStatus,
-      publishRunStatus,
-      runHistory,
-      clearRunHistory,
-      statusItems,
-      publishStatusItems,
-      viewContext,
-      publishViewContext,
     }),
     [
       layout,
@@ -767,19 +825,6 @@ export function WorkbenchProvider({ children }: { children: React.ReactNode }) {
       paletteOpen,
       paletteSeed,
       openPalette,
-      logs,
-      pushLog,
-      clearLogs,
-      alerts,
-      publishAlerts,
-      runStatus,
-      publishRunStatus,
-      runHistory,
-      clearRunHistory,
-      statusItems,
-      publishStatusItems,
-      viewContext,
-      publishViewContext,
     ],
   )
 
@@ -792,9 +837,36 @@ export function WorkbenchProvider({ children }: { children: React.ReactNode }) {
    Hooks
    ========================================================================= */
 
+/** Layout, open analyses and the palette. */
 export function useWorkbench() {
   const ctx = React.useContext(WorkbenchContext)
   if (!ctx) throw new Error("useWorkbench must be used inside <WorkbenchProvider>")
+  return ctx
+}
+
+/**
+ * Everything a run has produced, plus the writers.
+ *
+ * Reading this subscribes the component to log output, so it belongs only to
+ * things that actually display it: the console, the status bar, the Runs
+ * sidebar and the context bar. To *write* without subscribing, use
+ * {@link useConsoleActions} or one of the publishing hooks below.
+ */
+export function useConsole() {
+  const state = React.useContext(ConsoleStateContext)
+  const actions = React.useContext(ConsoleActionsContext)
+  if (!state || !actions) {
+    throw new Error("useConsole must be used inside <WorkbenchProvider>")
+  }
+  return React.useMemo(() => ({ ...state, ...actions }), [state, actions])
+}
+
+/** The console's writers alone. This value never changes identity. */
+export function useConsoleActions() {
+  const ctx = React.useContext(ConsoleActionsContext)
+  if (!ctx) {
+    throw new Error("useConsoleActions must be used inside <WorkbenchProvider>")
+  }
   return ctx
 }
 
@@ -810,7 +882,7 @@ export function useLogStream(
   lines: string[],
   level: LogLevel = "info",
 ) {
-  const { pushLog } = useWorkbench()
+  const { pushLog } = useConsoleActions()
   const lastSent = React.useRef<string | null>(null)
 
   React.useEffect(() => {
@@ -835,7 +907,7 @@ export function useLogStream(
 
 /** Publish a view's alerts to the console and the status bar. */
 export function useAlerts(source: string, alerts: WorkbenchAlert[]) {
-  const { publishAlerts } = useWorkbench()
+  const { publishAlerts } = useConsoleActions()
 
   React.useEffect(() => {
     publishAlerts(source, alerts)
@@ -852,7 +924,7 @@ export function useAlerts(source: string, alerts: WorkbenchAlert[]) {
  * and settings that describe what is currently loaded.
  */
 export function useStatusItems(items: StatusItem[]) {
-  const { publishStatusItems } = useWorkbench()
+  const { publishStatusItems } = useConsoleActions()
 
   React.useEffect(() => {
     publishStatusItems(items)
@@ -865,7 +937,7 @@ export function useStatusItems(items: StatusItem[]) {
 
 /** Publish the current long-running job to the status bar and Runs sidebar. */
 export function useRunStatus(status: RunStatus | null) {
-  const { publishRunStatus } = useWorkbench()
+  const { publishRunStatus } = useConsoleActions()
 
   React.useEffect(() => {
     publishRunStatus(status)
@@ -882,7 +954,7 @@ export function useRunStatus(status: RunStatus | null) {
  * which otherwise falls back to describing what the view is for.
  */
 export function useViewContext(detail: string | null) {
-  const { publishViewContext } = useWorkbench()
+  const { publishViewContext } = useConsoleActions()
 
   React.useEffect(() => {
     publishViewContext(detail)

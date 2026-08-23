@@ -44,7 +44,7 @@ export default function NotificationBell() {
 
       <PopoverContent align="end" sideOffset={6} className="w-88 overflow-hidden p-0">
         <div className="flex h-8 items-center gap-2 border-b border-border px-3">
-          <h3 className="text-xs font-medium tracking-wide text-foreground/90 uppercase">
+          <h3 className="text-sm font-medium text-foreground/90">
             Notifications
           </h3>
           {unreadCount > 0 && (

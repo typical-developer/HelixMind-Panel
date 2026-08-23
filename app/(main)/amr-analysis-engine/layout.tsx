@@ -40,7 +40,7 @@ export default function AMRLayout({ children }: { children: React.ReactNode }) {
               href={item.href}
               aria-current={isActive ? "page" : undefined}
               className={cn(
-                "relative flex items-center gap-1.5 text-xs font-medium tracking-wide uppercase",
+                "relative flex items-center gap-1.5 text-sm",
                 "transition-colors duration-100 focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none",
                 isActive
                   ? "text-foreground"

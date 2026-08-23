@@ -18,7 +18,7 @@ import { SideBar } from "./side-bar"
 import { StatusBar } from "./status-bar"
 import { ContextBar, TabBar } from "./tab-bar"
 import { TitleBar } from "./title-bar"
-import { useWorkbench } from "./workbench-provider"
+import { useConsoleActions, useWorkbench } from "./workbench-provider"
 
 /**
  * The bench shell.
@@ -190,7 +190,7 @@ function syncPanel(
  * time shows what the lab has been doing rather than an empty box.
  */
 function useBootLog() {
-  const { pushLog } = useWorkbench()
+  const { pushLog } = useConsoleActions()
   const seeded = React.useRef(false)
 
   React.useEffect(() => {

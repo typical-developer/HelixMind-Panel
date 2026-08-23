@@ -92,6 +92,9 @@
   --wb-surface: hsl(0 0% 4%); /* sidebar, bench, console body */
   --wb-raised: hsl(0 0% 8%); /* menus, inputs, hovered rows */
   --wb-overlay: hsl(0 0% 7%); /* command palette, popovers */
+  /* Inset wells sit just below the surface. Going much darker than this turns
+     the well into a hole and drives contrast against its own contents up. */
+  --wb-inset: hsl(0 0% 5.5%);
 
   --wb-border: var(--alpha-200);
   --wb-border-strong: var(--alpha-400);
@@ -107,20 +110,27 @@
   --wb-active: #ffffff17;
   --wb-selected: #ffffff1f;
 
-  /* ---- Run log — one colour per severity, not an ANSI palette ---------- */
-  --log-fg: #cccccc;
-  --log-dim: #7d7d7d;
-  --log-error: #f14c4c;
-  --log-success: #23d18b;
-  --log-warn: #e5c07b;
-  --log-command: #29b8db;
-  --log-source: #d670d6;
+  /* ---- Run log — one colour per severity, not an ANSI palette ----------
+     Pulled well back from terminal-default saturation: these sit on long runs
+     of monospace text, where hot hues read as noise rather than signal. The
+     source tag in particular appears on every single line, so it is a tinted
+     grey rather than a colour. */
+  --log-fg: #c2c2c2;
+  --log-dim: #7a7a7a;
+  --log-error: #df7373;
+  --log-success: #6cbb95;
+  --log-warn: #d0ab6f;
+  --log-command: #79a8bd;
+  --log-source: #8b8fa1;
 
-  /* ---- Nucleotide colours, used by every sequence readout -------------- */
-  --base-a: #23d18b;
-  --base-t: #f14c4c;
-  --base-g: #3b8eea;
-  --base-c: #e5c07b;
+  /* ---- Nucleotide colours, used by every sequence readout --------------
+     A sequence is a wall of thousands of glyphs. These stay close in
+     lightness and low in chroma so the wall reads as text first and the hue
+     only does its job when you look for it. */
+  --base-a: #7fbd9d;
+  --base-t: #cf8d89;
+  --base-g: #82a6c9;
+  --base-c: #c9ae83;
 
   /* ---- Charts — restrained, Geist-hued -------------------------------- */
   --chart-1: var(--blue-900);
@@ -416,9 +426,9 @@
     border-color: var(--wb-border);
   }
 
-  /* Inset well — code blocks, terminals, sequence readouts. */
+  /* Inset well — code blocks, log readouts, sequence readouts. */
   .well {
-    background: hsl(0 0% 2%);
+    background: var(--wb-inset);
     border: 1px solid var(--wb-border);
     border-radius: var(--radius-md);
   }
@@ -550,9 +560,10 @@
     }
   }
 
-  /* Status-bar / activity-bar badge attention pulse. */
+  /* "Something is live" pulse. Shallow on purpose — a running job should read
+     as a heartbeat in the corner of your eye, not a blinking warning light. */
   .animate-soft-pulse {
-    animation: soft-pulse 2s var(--ease-standard) infinite;
+    animation: soft-pulse 2.4s var(--ease-standard) infinite;
   }
   @keyframes soft-pulse {
     0%,
@@ -560,7 +571,7 @@
       opacity: 1;
     }
     50% {
-      opacity: 0.55;
+      opacity: 0.72;
     }
   }
 
@@ -585,7 +596,37 @@
     }
   }
 
-  /* Sheen used by loading skeletons. */
+  /* ---- Loading skeletons ------------------------------------------------
+
+     One treatment for every placeholder in the app. Previously blocks used a
+     sheen while inline bars used `animate-pulse`, so a loading screen showed
+     two loading animations at once, out of phase with each other.
+
+     `--sk-delay` staggers the sheen down the page so the skeleton reads as one
+     surface waking up in sequence rather than everything strobing together. */
+  .sk {
+    position: relative;
+    overflow: hidden;
+    background: var(--wb-hover);
+    border-radius: var(--radius-sm);
+  }
+  .sk::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, #ffffff0d, transparent);
+    animation: skeleton-sheen 1.8s var(--ease-standard) infinite;
+    animation-delay: var(--sk-delay, 0ms);
+  }
+  @keyframes skeleton-sheen {
+    100% {
+      transform: translateX(100%);
+    }
+  }
+
+  /* Legacy alias, so anything still asking for the old class gets the new
+     treatment rather than an unstyled block. */
   .skeleton-shimmer {
     position: relative;
     overflow: hidden;
@@ -595,12 +636,20 @@
     position: absolute;
     inset: 0;
     transform: translateX(-100%);
-    background: linear-gradient(90deg, transparent, #ffffff0a, transparent);
-    animation: skeleton-sheen 1.6s var(--ease-standard) infinite;
+    background: linear-gradient(90deg, transparent, #ffffff0d, transparent);
+    animation: skeleton-sheen 1.8s var(--ease-standard) infinite;
   }
-  @keyframes skeleton-sheen {
-    100% {
-      transform: translateX(100%);
+
+  /* Held back for a beat before fading in: navigations that resolve quickly
+     never flash a skeleton at all, which is the single biggest thing that
+     makes loading states feel cheap. */
+  .sk-reveal {
+    opacity: 0;
+    animation: sk-reveal 0.24s var(--ease-standard) 0.14s forwards;
+  }
+  @keyframes sk-reveal {
+    to {
+      opacity: 1;
     }
   }
 

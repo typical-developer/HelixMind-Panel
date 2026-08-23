@@ -103,7 +103,7 @@ export default function NotificationsPage() {
                 type="button"
                 onClick={() => setFilter(id)}
                 className={cn(
-                  "relative flex cursor-pointer items-center gap-1.5 text-xs font-medium tracking-wide uppercase transition-colors duration-100",
+                  "relative flex cursor-pointer items-center gap-1.5 text-sm transition-colors duration-100",
                   "focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none",
                   filter === id
                     ? "text-foreground"

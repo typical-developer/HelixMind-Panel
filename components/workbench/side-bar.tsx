@@ -42,8 +42,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 
 import { SideSection, ToolbarButton, TreeRow, WBInput, Chip } from "./primitives"
-import { useWorkbench } from "./workbench-provider"
-import { RUNNABLE_VIEWS, TONE_CLASS, VIEWS, WORKBENCH_GROUPS } from "./registry"
+import { useConsole, useWorkbench } from "./workbench-provider"
+import { RUNNABLE_VIEWS, VIEWS, WORKBENCH_GROUPS } from "./registry"
 
 const TITLES: Record<string, string> = {
   analyses: "Analyses",
@@ -155,7 +155,6 @@ function AnalysesView() {
             <div key={tab.href} className="group/row relative">
               <TreeRow
                 icon={tab.icon}
-                iconClassName={TONE_CLASS[tab.tone]}
                 label={tab.label}
                 active={view?.href === tab.href}
                 level={1}
@@ -182,7 +181,6 @@ function AnalysesView() {
               <TreeRow
                 key={v.href}
                 icon={v.icon}
-                iconClassName={TONE_CLASS[v.tone]}
                 label={v.label}
                 active={view?.href === v.href}
                 level={2}
@@ -285,7 +283,6 @@ function SearchView() {
             <TreeRow
               key={v.href}
               icon={v.icon}
-              iconClassName={TONE_CLASS[v.tone]}
               label={v.label}
               active={view?.href === v.href}
               level={1}
@@ -321,7 +318,8 @@ function SearchView() {
    ========================================================================= */
 
 function RunsView() {
-  const { openTab, view, runStatus, runHistory, alerts, setPanelTab } = useWorkbench()
+  const { openTab, view, setPanelTab } = useWorkbench()
+  const { runStatus, runHistory, alerts } = useConsole()
 
   const errors = alerts.filter((a) => a.severity === "error").length
   const warnings = alerts.filter((a) => a.severity === "warning").length

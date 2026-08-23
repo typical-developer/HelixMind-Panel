@@ -275,7 +275,7 @@ export default function ResistancePredictorPage() {
                   ["Drug classes", results.resistanceProfile.length],
                 ].map(([label, value]) => (
                   <div key={label as string} className="px-3 py-2">
-                    <p className="text-xs tracking-wide text-muted-foreground uppercase">
+                    <p className="text-xs text-muted-foreground">
                       {label}
                     </p>
                     <p className="mt-0.5 truncate font-mono text-sm text-foreground">

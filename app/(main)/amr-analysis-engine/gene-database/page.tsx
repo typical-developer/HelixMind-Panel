@@ -103,7 +103,7 @@ export default function GeneDatabase() {
                   {COLUMNS.map((h) => (
                     <th
                       key={h}
-                      className="px-3 py-1.5 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase"
+                      className="px-3 py-2 text-left text-xs font-medium text-muted-foreground"
                     >
                       {h}
                     </th>
@@ -116,27 +116,27 @@ export default function GeneDatabase() {
                     key={record.id}
                     className="row-hover border-b border-border/50 last:border-0"
                   >
-                    <td className="px-3 py-1.5 font-mono text-muted-foreground">
+                    <td className="px-3 py-2 font-mono text-muted-foreground">
                       {record.id}
                     </td>
-                    <td className="px-3 py-1.5 font-mono font-semibold text-foreground">
+                    <td className="px-3 py-2 font-mono font-semibold text-foreground">
                       {record.gene}
                     </td>
-                    <td className="px-3 py-1.5">
+                    <td className="px-3 py-2">
                       <Chip>{record.antibiotic}</Chip>
                     </td>
-                    <td className="px-3 py-1.5 text-muted-foreground">
+                    <td className="px-3 py-2 text-muted-foreground">
                       {record.drugClass}
                     </td>
-                    <td className="px-3 py-1.5 text-muted-foreground">
+                    <td className="px-3 py-2 text-muted-foreground">
                       {record.mechanism}
                     </td>
-                    <td className="px-3 py-1.5 text-foreground/80 italic">
+                    <td className="px-3 py-2 text-foreground/80 italic">
                       {record.organism}
                     </td>
                     <td
                       className={cn(
-                        "px-3 py-1.5 font-mono font-semibold",
+                        "px-3 py-2 font-mono font-semibold",
                         record.impact >= 10
                           ? "text-destructive"
                           : record.impact >= 5

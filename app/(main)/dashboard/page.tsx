@@ -16,8 +16,10 @@ import {
   Split,
 } from "lucide-react"
 
+import { ChartFallback } from "@/components/chart-fallback"
 import { DNAViewer } from "@/components/dna-viewer"
 import { MutationTable } from "@/components/mutation-table"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Chip,
   ViewLayout,
@@ -38,7 +40,13 @@ const AMRChart = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="skeleton-shimmer h-[332px] rounded-lg border border-border bg-surface" />
+      <div className="overflow-hidden rounded-lg border border-border bg-surface">
+        <div className="flex h-8 items-center gap-2 border-b border-border px-3">
+          <Skeleton className="size-3.5 rounded-xs" />
+          <Skeleton className="h-2.5 w-32" />
+        </div>
+        <ChartFallback height={292} />
+      </div>
     ),
   },
 )

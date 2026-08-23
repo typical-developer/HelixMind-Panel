@@ -17,26 +17,20 @@ import {
   Clock,
   LineChart as LineChartIcon,
 } from "lucide-react";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+import dynamic from "next/dynamic";
 
 // components
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import {
-  CHART_AXIS,
-  CHART_GRID,
-  CHART_TOOLTIP,
-  SERIES,
-} from "@/lib/chart-theme";
+import { ChartFallback } from "@/components/chart-fallback";
+
+// Recharts is the heaviest dependency on this route and the experiment's
+// controls do not need it, so the plot loads as its own chunk.
+const PopulationChart = dynamic(
+  () => import("./population-chart").then((m) => m.PopulationChart),
+  { ssr: false, loading: () => <ChartFallback height={288} /> },
+);
 import {
   Chip,
   ViewLayout,
@@ -811,37 +805,7 @@ export default function MicrobeGrowthLab() {
               {chartData.length > 0 ? (
                 // chartRef lets handleExportPNG find the SVG inside this div
                 <div className="h-72" ref={chartRef}>
-                  <ResponsiveContainer width={chartSize} height="100%">
-                    <LineChart
-                      data={chartData}
-                      margin={{ top: 4, right: 8, left: -8, bottom: 0 }}
-                    >
-                      <CartesianGrid {...CHART_GRID} />
-                      <XAxis
-                        dataKey="time"
-                        {...CHART_AXIS}
-                        interval="preserveStartEnd"
-                        minTickGap={40}
-                      />
-                      <YAxis {...CHART_AXIS} width={56} />
-                      <Tooltip
-                        {...CHART_TOOLTIP}
-                        formatter={(v: number) => [v.toLocaleString(), "Population"]}
-                        labelFormatter={(l) => `Step ${l}`}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="population"
-                        stroke={SERIES.primary}
-                        strokeWidth={1.5}
-                        dot={false}
-                        isAnimationActive
-                        animationDuration={280}
-                        animationEasing="linear"
-                        animationBegin={0}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
+                  <PopulationChart data={chartData} width={chartSize} />
                 </div>
               ) : (
                 <div className="bg-grid flex h-72 flex-col items-center justify-center gap-2 text-center">

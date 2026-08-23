@@ -35,8 +35,8 @@ import {
   CommandShortcut,
 } from "@/components/ui/command"
 
-import { useWorkbench } from "./workbench-provider"
-import { TONE_CLASS, VIEWS, groupLabel } from "./registry"
+import { useConsoleActions, useWorkbench } from "./workbench-provider"
+import { VIEWS, groupLabel } from "./registry"
 
 /**
  * Ctrl/Cmd+K (or Ctrl+P) command palette. Every analysis and every layout
@@ -47,6 +47,7 @@ export function CommandPalette() {
   const wb = useWorkbench()
   const router = useRouter()
   const { signOut } = useAuth()
+  const consoleActions = useConsoleActions()
 
   const [query, setQuery] = React.useState("")
 
@@ -166,8 +167,8 @@ export function CommandPalette() {
       label: "Console: History",
       action: () => wb.setPanelTab("history"),
     },
-    { icon: Trash2, label: "Clear run log", action: wb.clearLogs },
-    { icon: Trash2, label: "Clear run history", action: wb.clearRunHistory },
+    { icon: Trash2, label: "Clear run log", action: consoleActions.clearLogs },
+    { icon: Trash2, label: "Clear run history", action: consoleActions.clearRunHistory },
   ]
 
   return (
@@ -227,7 +228,7 @@ export function CommandPalette() {
                 value={`${v.label} ${v.hint}`}
                 onSelect={() => run(() => wb.openTab(v.href))}
               >
-                <v.icon className={TONE_CLASS[v.tone]} />
+                <v.icon />
                 <span className="flex min-w-0 flex-col">
                   <span className="truncate">{v.label}</span>
                   <span className="truncate text-xs text-muted-foreground">

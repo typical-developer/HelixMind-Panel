@@ -1,10 +1,23 @@
 import { cn } from '@/lib/utils'
 
-function Skeleton({ className, ...props }: React.ComponentProps<'div'>) {
+/**
+ * A placeholder bar or block.
+ *
+ * `delay` staggers its sheen (in ms) so a group of skeletons animates in
+ * sequence instead of strobing in unison.
+ */
+function Skeleton({
+  className,
+  delay = 0,
+  style,
+  ...props
+}: React.ComponentProps<'div'> & { delay?: number }) {
   return (
     <div
       data-slot="skeleton"
-      className={cn('animate-pulse rounded-md bg-[var(--wb-active)]', className)}
+      aria-hidden="true"
+      className={cn('sk', className)}
+      style={{ ...style, ['--sk-delay' as string]: `${delay}ms` }}
       {...props}
     />
   )

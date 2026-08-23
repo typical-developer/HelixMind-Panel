@@ -20,8 +20,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 
 import { ToolbarButton } from "./primitives"
-import { useWorkbench } from "./workbench-provider"
-import { TONE_CLASS, groupLabel, type WorkbenchView } from "./registry"
+import { useConsole, useWorkbench } from "./workbench-provider"
+import { groupLabel, type WorkbenchView } from "./registry"
 
 /**
  * One tab per open analysis. Opening a view keeps it open, so a half-finished
@@ -152,7 +152,7 @@ function Tab({
               active ? "bg-brand" : "bg-transparent",
             )}
           />
-          <Icon className={cn("size-3.5 shrink-0", TONE_CLASS[tab.tone])} />
+          <Icon className="size-3.5 shrink-0" />
           <span className="max-w-48 truncate">{tab.label}</span>
           <button
             type="button"
@@ -205,7 +205,7 @@ function TabOverflowMenu() {
             onClick={() => openTab(tab.href)}
             className={cn("gap-2", view?.href === tab.href && "bg-[var(--wb-active)]")}
           >
-            <tab.icon className={cn("size-3.5", TONE_CLASS[tab.tone])} />
+            <tab.icon className="size-3.5" />
             <span className="truncate">{tab.label}</span>
           </DropdownMenuItem>
         ))}
@@ -224,7 +224,8 @@ function TabOverflowMenu() {
  * view has nothing loaded yet.
  */
 export function ContextBar() {
-  const { view, viewContext } = useWorkbench()
+  const { view } = useWorkbench()
+  const { viewContext } = useConsole()
 
   if (!view) return null
 
@@ -235,7 +236,7 @@ export function ContextBar() {
       aria-label="Analysis context"
       className="flex h-7 shrink-0 items-center gap-2 overflow-hidden border-b border-border bg-surface px-3 text-xs"
     >
-      <Icon className={cn("size-3.5 shrink-0", TONE_CLASS[view.tone])} />
+      <Icon className="size-3.5 shrink-0 text-muted-foreground" />
       <span className="shrink-0 font-medium text-foreground/85">{view.label}</span>
       <span aria-hidden className="h-3 w-px shrink-0 bg-border" />
       <span

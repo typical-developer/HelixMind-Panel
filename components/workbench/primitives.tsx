@@ -125,8 +125,11 @@ export function ToolbarButton({
           aria-pressed={active}
           className={cn(
             "inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-sm",
-            "text-muted-foreground transition-colors duration-100",
+            "text-muted-foreground transition-[background-color,color,transform] duration-100",
             "hover:bg-[var(--wb-hover)] hover:text-foreground",
+            // A hair of travel on press — enough to confirm the hit without
+            // reading as a bounce on a toolbar you click all day.
+            "active:scale-[0.92]",
             "focus-visible:ring-ring/60 focus-visible:ring-2 focus-visible:outline-none",
             "disabled:pointer-events-none disabled:opacity-40",
             active && "bg-[var(--wb-active)] text-foreground",
@@ -228,9 +231,11 @@ export function TreeRow({
       type="button"
       data-active={active}
       className={cn(
-        "active-rail row-hover group flex h-[22px] w-full cursor-pointer items-center gap-1.5 pr-2 text-left text-sm",
+        "active-rail row-hover group flex h-6 w-full cursor-pointer items-center gap-2 pr-2 text-left text-sm",
         "focus-visible:ring-1 focus-visible:ring-ring/60 focus-visible:outline-none focus-visible:ring-inset",
-        active ? "bg-[var(--wb-active)] text-foreground" : "text-muted-foreground",
+        active
+          ? "bg-[var(--wb-active)] text-foreground"
+          : "text-muted-foreground hover:text-foreground/90",
         className,
       )}
       style={{ paddingLeft: `${8 + level * 12}px` }}
@@ -270,13 +275,10 @@ export function StatTile({
   tone?: "default" | "positive" | "warning" | "critical"
   className?: string
 }) {
-  const toneRing = {
-    default: "border-border",
-    positive: "border-success/30",
-    warning: "border-warning/30",
-    critical: "border-destructive/35",
-  }[tone]
-
+  // The border stays neutral at every tone. A grid of tiles each ringed in its
+  // own colour turns a metrics row into a set of warning boxes; the value and
+  // its supporting line carry the state instead, which is where the eye
+  // already is.
   const toneText = {
     default: "text-foreground",
     positive: "text-success",
@@ -294,8 +296,7 @@ export function StatTile({
   return (
     <div
       className={cn(
-        "card-hover flex flex-col gap-1.5 rounded-lg border bg-surface p-3",
-        toneRing,
+        "card-hover flex flex-col gap-2 rounded-lg border border-border bg-surface p-3.5",
         className,
       )}
     >

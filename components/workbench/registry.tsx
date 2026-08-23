@@ -24,8 +24,6 @@ export interface WorkbenchView {
   /** Group heading in the sidebar. */
   group: WorkbenchGroupId
   icon: LucideIcon
-  /** Tint applied to the view's icon, keyed to what the view works on. */
-  tone: "blue" | "green" | "amber" | "purple" | "red" | "neutral"
   /** What the view is for — shown in the context bar and the palette. */
   hint: string
   /** True for views that execute a job, so the Runs sidebar can list them. */
@@ -48,7 +46,6 @@ export const VIEWS: WorkbenchView[] = [
     label: "Overview",
     group: "lab",
     icon: Gauge,
-    tone: "blue",
     hint: "Lab-wide metrics, sequence viewer and mutation log",
   },
   {
@@ -56,7 +53,6 @@ export const VIEWS: WorkbenchView[] = [
     label: "DNA Scanner",
     group: "lab",
     icon: ScanLine,
-    tone: "green",
     hint: "Parse FASTA input and call mutations against a reference",
     runnable: true,
   },
@@ -65,7 +61,6 @@ export const VIEWS: WorkbenchView[] = [
     label: "Mutation Simulator",
     group: "lab",
     icon: Split,
-    tone: "purple",
     hint: "Run generational mutation dynamics over a query sequence",
     runnable: true,
   },
@@ -74,7 +69,6 @@ export const VIEWS: WorkbenchView[] = [
     label: "Microbe Growth Lab",
     group: "lab",
     icon: FlaskConical,
-    tone: "amber",
     hint: "Model population growth under environmental stress",
     runnable: true,
   },
@@ -83,7 +77,6 @@ export const VIEWS: WorkbenchView[] = [
     label: "Resistance Predictor",
     group: "amr",
     icon: ShieldAlert,
-    tone: "red",
     hint: "Score resistance markers and synergy rules for an organism",
     runnable: true,
   },
@@ -92,7 +85,6 @@ export const VIEWS: WorkbenchView[] = [
     label: "Gene Library",
     group: "amr",
     icon: Database,
-    tone: "blue",
     hint: "Browse curated antimicrobial resistance gene records",
   },
   {
@@ -100,7 +92,6 @@ export const VIEWS: WorkbenchView[] = [
     label: "Notifications",
     group: "workspace",
     icon: Bell,
-    tone: "neutral",
     hint: "Activity from scans, uploads and simulation runs",
   },
   {
@@ -108,21 +99,15 @@ export const VIEWS: WorkbenchView[] = [
     label: "Settings",
     group: "workspace",
     icon: Settings2,
-    tone: "neutral",
     hint: "Profile, notification preferences and appearance",
     chord: ",",
   },
 ]
 
-/** Icon tints, matched to the Geist accent ramp. */
-export const TONE_CLASS: Record<WorkbenchView["tone"], string> = {
-  blue: "text-brand-bright",
-  green: "text-success",
-  amber: "text-warning",
-  purple: "text-chart-4",
-  red: "text-destructive",
-  neutral: "text-muted-foreground",
-}
+/* View icons are deliberately untinted. Giving each view its own hue made the
+   sidebar, tabs and palette read as a colour chart and left no colour free to
+   mean anything — so colour is reserved for state (severity, run outcome,
+   nucleotide) and icons take their weight from the active/idle foreground. */
 
 /** Views that execute a job, in registry order. */
 export const RUNNABLE_VIEWS = VIEWS.filter((v) => v.runnable)

@@ -485,7 +485,7 @@ function MutationsView({
             {["Position", "Reference", "Mutation", "Type"].map((h) => (
               <th
                 key={h}
-                className="px-3 py-1.5 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase"
+                className="px-3 py-2 text-left text-xs font-medium text-muted-foreground"
               >
                 {h}
               </th>
@@ -495,12 +495,12 @@ function MutationsView({
         <tbody>
           {mutations.map((m, idx) => (
             <tr key={idx} className="row-hover border-b border-border/50 last:border-0">
-              <td className="px-3 py-1.5 font-mono text-foreground">{m.position}</td>
-              <td className="px-3 py-1.5 font-mono text-muted-foreground">{m.refBase}</td>
-              <td className="px-3 py-1.5 font-mono font-semibold text-destructive">
+              <td className="px-3 py-2 font-mono text-foreground">{m.position}</td>
+              <td className="px-3 py-2 font-mono text-muted-foreground">{m.refBase}</td>
+              <td className="px-3 py-2 font-mono font-semibold text-destructive">
                 {m.varBase}
               </td>
-              <td className="px-3 py-1.5">
+              <td className="px-3 py-2">
                 <Chip>{m.type}</Chip>
               </td>
             </tr>
