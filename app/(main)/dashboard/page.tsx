@@ -20,13 +20,14 @@ import { DNAViewer } from "@/components/dna-viewer"
 import { MutationTable } from "@/components/mutation-table"
 import {
   Chip,
-  EditorLayout,
-  EditorScroll,
+  ViewLayout,
+  ViewScroll,
   Pane,
   PaneHeader,
   Rule,
   StatTile,
   useStatusItems,
+  useViewContext,
   useWorkbench,
 } from "@/components/workbench"
 
@@ -68,9 +69,11 @@ export default function Dashboard() {
     ),
   )
 
+  useViewContext("helixmind-lab · 4 engines online · 2 runs in the last hour")
+
   return (
-    <EditorLayout inspectorId="overview" inspector={<OverviewInspector />}>
-      <EditorScroll>
+    <ViewLayout inspectorId="overview" inspector={<OverviewInspector />}>
+      <ViewScroll>
         <div className="flex flex-col gap-3 p-3">
           <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
             <StatTile
@@ -102,7 +105,7 @@ export default function Dashboard() {
           </div>
 
           {/* Sequence buffer and mutation grid sit side by side on wide screens,
-              the way an editor pairs a file with its problems view. */}
+              so a sequence and the calls made against it read together. */}
           <div className="grid gap-3 xl:grid-cols-[1.35fr_1fr]">
             <DNAViewer />
             <MutationTable />
@@ -110,8 +113,8 @@ export default function Dashboard() {
 
           <AMRChart />
         </div>
-      </EditorScroll>
-    </EditorLayout>
+      </ViewScroll>
+    </ViewLayout>
   )
 }
 

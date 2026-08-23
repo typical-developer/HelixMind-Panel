@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { ChevronRight, MoreHorizontal, PanelBottom, PanelRight, X } from "lucide-react"
+import { MoreHorizontal, PanelBottom, PanelRight, X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import {
@@ -21,12 +21,12 @@ import {
 
 import { ToolbarButton } from "./primitives"
 import { useWorkbench } from "./workbench-provider"
-import { TONE_CLASS, breadcrumbsForView, type WorkbenchView } from "./registry"
+import { TONE_CLASS, groupLabel, type WorkbenchView } from "./registry"
 
 /**
- * Editor tabs for the views currently open. Tabs are opened by navigating and
- * closed with the X, Ctrl+W, or the right-click menu — the same contract as an
- * editor, so the panel behaves the way the shell looks.
+ * One tab per open analysis. Opening a view keeps it open, so a half-finished
+ * simulation survives a detour into the gene library and comes back exactly as
+ * it was left.
  */
 export function TabBar() {
   const {
@@ -56,7 +56,7 @@ export function TabBar() {
       <div
         ref={stripRef}
         role="tablist"
-        aria-label="Open views"
+        aria-label="Open analyses"
         className="seq-scroll flex min-w-0 flex-1 items-stretch overflow-x-auto"
       >
         {tabs.map((tab) => (
@@ -73,7 +73,7 @@ export function TabBar() {
 
         {tabs.length === 0 && (
           <span className="flex items-center px-3 text-xs text-muted-foreground/70">
-            No open views
+            Nothing open
           </span>
         )}
       </div>
@@ -87,7 +87,7 @@ export function TabBar() {
         />
         <ToolbarButton
           icon={PanelBottom}
-          label="Toggle panel"
+          label="Toggle console"
           active={panelVisible}
           onClick={togglePanel}
         />
@@ -145,8 +145,7 @@ function Tab({
               : "text-muted-foreground hover:bg-[var(--wb-hover)] hover:text-foreground/90",
           )}
         >
-          {/* Accent line across the top of the active tab — VS Code's
-              `tab.activeBorderTop`. */}
+          {/* Accent line across the top of the tab you are working in. */}
           <span
             className={cn(
               "absolute inset-x-0 top-0 h-px transition-colors duration-150",
@@ -154,7 +153,7 @@ function Tab({
             )}
           />
           <Icon className={cn("size-3.5 shrink-0", TONE_CLASS[tab.tone])} />
-          <span className="max-w-44 truncate">{tab.fileName}</span>
+          <span className="max-w-48 truncate">{tab.label}</span>
           <button
             type="button"
             aria-label={`Close ${tab.label}`}
@@ -193,7 +192,7 @@ function TabOverflowMenu() {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          aria-label="Open views"
+          aria-label="Open analyses"
           className="inline-flex size-6 cursor-pointer items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-[var(--wb-hover)] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
         >
           <MoreHorizontal className="size-3.5" />
@@ -211,7 +210,7 @@ function TabOverflowMenu() {
           </DropdownMenuItem>
         ))}
         {tabs.length > 0 && <DropdownMenuSeparator />}
-        <DropdownMenuItem onClick={closeAllTabs}>Close all views</DropdownMenuItem>
+        <DropdownMenuItem onClick={closeAllTabs}>Close all</DropdownMenuItem>
         <DropdownMenuItem onClick={resetLayout}>Reset layout</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -219,33 +218,37 @@ function TabOverflowMenu() {
 }
 
 /**
- * The path strip beneath the tabs. Purely orienting — it mirrors the explorer's
- * folder structure so you always know where the open view sits.
+ * The strip beneath the tabs. Where an editor would print a file path, this
+ * prints what the open analysis is actually working on — the sample loaded,
+ * the organism selected — falling back to what the analysis is for when the
+ * view has nothing loaded yet.
  */
-export function Breadcrumbs() {
-  const { view } = useWorkbench()
-  const crumbs = breadcrumbsForView(view)
+export function ContextBar() {
+  const { view, viewContext } = useWorkbench()
+
+  if (!view) return null
+
+  const Icon = view.icon
 
   return (
-    <nav
-      aria-label="Breadcrumb"
-      className="flex h-[26px] shrink-0 items-center gap-0.5 overflow-hidden border-b border-border bg-surface px-3 text-xs text-muted-foreground"
+    <div
+      aria-label="Analysis context"
+      className="flex h-7 shrink-0 items-center gap-2 overflow-hidden border-b border-border bg-surface px-3 text-xs"
     >
-      {crumbs.map((crumb, i) => (
-        <React.Fragment key={`${crumb.label}-${i}`}>
-          {i > 0 && <ChevronRight className="size-3 shrink-0 opacity-50" />}
-          <span
-            className={cn(
-              "truncate rounded-xs px-1 py-0.5 transition-colors",
-              i === crumbs.length - 1
-                ? "text-foreground/80"
-                : "hover:text-foreground/70",
-            )}
-          >
-            {crumb.label}
-          </span>
-        </React.Fragment>
-      ))}
-    </nav>
+      <Icon className={cn("size-3.5 shrink-0", TONE_CLASS[view.tone])} />
+      <span className="shrink-0 font-medium text-foreground/85">{view.label}</span>
+      <span aria-hidden className="h-3 w-px shrink-0 bg-border" />
+      <span
+        className={cn(
+          "min-w-0 truncate",
+          viewContext ? "text-foreground/70" : "text-muted-foreground/70",
+        )}
+      >
+        {viewContext ?? view.hint}
+      </span>
+      <span className="ml-auto shrink-0 pl-2 text-muted-foreground/60">
+        {groupLabel(view)}
+      </span>
+    </div>
   )
 }

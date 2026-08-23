@@ -21,9 +21,9 @@ export type IconComponent = React.ComponentType<{ className?: string }>
 /* ============================================================================
    Panes
 
-   A pane is the workbench's unit of content — a flat, hairline-bordered region
-   with an optional 32px header. Panes replace the floating cards the dashboard
-   used to stack, so density and alignment stay consistent across every view.
+   A pane is the bench's unit of content — a flat, hairline-bordered region with
+   an optional 32px header. Panes replace the floating cards the dashboard used
+   to stack, so density and alignment stay consistent across every view.
    ========================================================================= */
 
 export function Pane({
@@ -68,9 +68,7 @@ export function PaneHeader({
       {...props}
     >
       {Icon && <Icon className="size-3.5 shrink-0 text-muted-foreground" />}
-      <h2 className="truncate text-xs font-medium tracking-wide text-foreground/90 uppercase">
-        {title}
-      </h2>
+      <h2 className="truncate text-sm font-medium text-foreground/90">{title}</h2>
       {subtitle && (
         <span className="truncate text-xs text-muted-foreground">{subtitle}</span>
       )}
@@ -159,7 +157,7 @@ export function Toolbar({ className, ...props }: React.ComponentProps<"div">) {
 }
 
 /* ============================================================================
-   Side bar sections — the collapsible groups VS Code stacks in its side bar
+   Sidebar sections — collapsible groups stacked down the sidebar
    ========================================================================= */
 
 export function SideSection({
@@ -179,7 +177,7 @@ export function SideSection({
 
   return (
     <Collapsible open={open} onOpenChange={setOpen} className={className}>
-      <div className="group/section flex h-[22px] items-center gap-1 pr-1 pl-1">
+      <div className="group/section flex h-6 items-center gap-1 px-1">
         <CollapsibleTrigger className="flex min-w-0 flex-1 cursor-pointer items-center gap-0.5 rounded-sm text-left focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none">
           <ChevronRight
             className={cn(
@@ -187,7 +185,7 @@ export function SideSection({
               open && "rotate-90",
             )}
           />
-          <span className="truncate text-[11px] font-semibold tracking-wide text-foreground/85 uppercase">
+          <span className="truncate text-xs font-semibold text-foreground/70">
             {title}
           </span>
         </CollapsibleTrigger>
@@ -205,8 +203,8 @@ export function SideSection({
 }
 
 /**
- * A single row in a side-bar tree. Indentation is expressed in levels so nested
- * groups line up on the same 8px rhythm VS Code uses.
+ * A single row in a sidebar tree. Indentation is expressed in levels so nested
+ * groups line up on a consistent 12px rhythm.
  */
 export function TreeRow({
   icon: Icon,
@@ -254,8 +252,8 @@ export function TreeRow({
    ========================================================================= */
 
 /**
- * A Vercel-style metric tile: label, large tabular value, delta line. Flat
- * fill, hairline border, no hover lift.
+ * A metric tile: label, large tabular value, supporting line. Flat fill,
+ * hairline border, no hover lift.
  */
 export function StatTile({
   label,
@@ -296,16 +294,14 @@ export function StatTile({
   return (
     <div
       className={cn(
-        "card-hover flex flex-col gap-1 rounded-lg border bg-surface p-3",
+        "card-hover flex flex-col gap-1.5 rounded-lg border bg-surface p-3",
         toneRing,
         className,
       )}
     >
       <div className="flex items-center gap-1.5">
         {Icon && <Icon className={cn("size-3.5 shrink-0", toneHint)} />}
-        <p className="truncate text-xs font-medium tracking-wide text-muted-foreground uppercase">
-          {label}
-        </p>
+        <p className="truncate text-xs font-medium text-muted-foreground">{label}</p>
       </div>
       <p className={cn("text-2xl leading-none font-semibold tabular", toneText)}>
         {value}
@@ -475,9 +471,7 @@ export function Rule({ label, className }: { label?: string; className?: string 
   if (!label) return <div className={cn("h-px w-full bg-border", className)} />
   return (
     <div className={cn("flex items-center gap-2", className)}>
-      <span className="text-2xs font-semibold tracking-widest text-muted-foreground/70 uppercase">
-        {label}
-      </span>
+      <span className="text-xs font-medium text-muted-foreground/80">{label}</span>
       <div className="h-px flex-1 bg-border" />
     </div>
   )

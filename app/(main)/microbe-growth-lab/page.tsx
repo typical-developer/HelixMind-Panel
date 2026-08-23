@@ -39,8 +39,8 @@ import {
 } from "@/lib/chart-theme";
 import {
   Chip,
-  EditorLayout,
-  EditorScroll,
+  ViewLayout,
+  ViewScroll,
   Field,
   Pane,
   PaneHeader,
@@ -48,10 +48,11 @@ import {
   ToolbarButton,
   WBInput,
   useLogStream,
-  useProblems,
+  useAlerts,
   useRunStatus,
   useStatusItems,
-  type Problem,
+  useViewContext,
+  type WorkbenchAlert,
 } from "@/components/workbench";
 
 // ────────────────────────────────────────────────
@@ -638,12 +639,12 @@ export default function MicrobeGrowthLab() {
     ? customStrain
     : STRAINS[selectedStrain];
 
-  /* ---- Workbench integration -------------------------------------------
+  /* ---- Bench integration ------------------------------------------------
      Environment warnings become Problems, the adaptation log streams to the
-     terminal, and the run drives the status bar. */
+     run log, and the run itself drives the status bar. */
 
-  const problems = useMemo<Problem[]>(() => {
-    const list: Problem[] = [];
+  const problems = useMemo<WorkbenchAlert[]>(() => {
+    const list: WorkbenchAlert[] = [];
     if (tempWarning)
       list.push({
         source: "microbe-growth-lab",
@@ -668,7 +669,7 @@ export default function MicrobeGrowthLab() {
     return list;
   }, [tempWarning, phWarning, state.population, state.timeStep]);
 
-  useProblems("microbe-growth-lab", problems);
+  useAlerts("microbe-growth-lab", problems);
   useLogStream("microbe-lab", state.adaptationLog);
 
   useRunStatus(
@@ -705,13 +706,19 @@ export default function MicrobeGrowthLab() {
     ),
   );
 
+  useViewContext(
+    `${currentStrain.name}${
+      genomeInfo ? ` · genome ${genomeInfo.header}` : " · no genome loaded"
+    } · step ${state.timeStep}`,
+  );
+
   const peakPopulation = useMemo(
     () => chartData.reduce((max, d) => Math.max(max, d.population), 0),
     [chartData],
   );
 
   return (
-    <EditorLayout
+    <ViewLayout
       inspectorId="microbe-growth-lab"
       defaultInspectorSize={30}
       inspector={
@@ -742,7 +749,7 @@ export default function MicrobeGrowthLab() {
         />
       }
     >
-      <EditorScroll>
+      <ViewScroll>
         <div className="flex flex-col gap-3 p-3">
           <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
             <StatTile
@@ -882,7 +889,7 @@ export default function MicrobeGrowthLab() {
               <PaneHeader
                 icon={Clock}
                 title="Adaptation log"
-                subtitle="also streamed to the terminal"
+                subtitle="also streamed to the run log"
                 actions={
                   <Chip tone={isRunning ? "success" : "neutral"}>
                     {isRunning ? "live" : "idle"}
@@ -891,7 +898,7 @@ export default function MicrobeGrowthLab() {
               />
               <div className="seq-scroll max-h-56 min-h-40 overflow-auto bg-[hsl(0_0%_2%)] p-2 font-mono text-xs leading-5">
                 {state.adaptationLog.length === 0 ? (
-                  <p className="px-1 text-[var(--term-dim)]">
+                  <p className="px-1 text-[var(--log-dim)]">
                     Simulation not started yet.
                   </p>
                 ) : (
@@ -900,8 +907,8 @@ export default function MicrobeGrowthLab() {
                       key={`${i}-${entry}`}
                       className="animate-line-in flex gap-2 px-1 hover:bg-[var(--wb-hover)]"
                     >
-                      <span className="shrink-0 text-[var(--term-dim)]">›</span>
-                      <span className="text-[var(--term-fg)]">{entry}</span>
+                      <span className="shrink-0 text-[var(--log-dim)]">›</span>
+                      <span className="text-[var(--log-fg)]">{entry}</span>
                     </div>
                   ))
                 )}
@@ -909,8 +916,8 @@ export default function MicrobeGrowthLab() {
             </Pane>
           </div>
         </div>
-      </EditorScroll>
-    </EditorLayout>
+      </ViewScroll>
+    </ViewLayout>
   );
 }
 

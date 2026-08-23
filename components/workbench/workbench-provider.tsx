@@ -9,15 +9,11 @@ import { VIEWS, viewForPath, type WorkbenchView } from "./registry"
    Types
    ========================================================================= */
 
-export type ActivityId =
-  | "explorer"
-  | "search"
-  | "run"
-  | "database"
-  | "notifications"
-  | "settings"
+/** The sidebar's modes, in rail order. */
+export type ActivityId = "analyses" | "search" | "runs" | "genes" | "preferences"
 
-export type PanelTabId = "problems" | "output" | "terminal"
+/** The console's tabs. */
+export type PanelTabId = "alerts" | "log" | "history"
 
 export type LogLevel = "info" | "success" | "warn" | "error" | "debug" | "command"
 
@@ -25,16 +21,22 @@ export interface LogLine {
   id: number
   ts: number
   level: LogLevel
+  /** Which view produced the line — the log's channel. */
   source: string
   message: string
 }
 
-export interface Problem {
-  /** Which view raised it — used for grouping in the Problems tab. */
+/**
+ * Something a view wants the operator to notice: bad input it cannot work
+ * with, or a result that warrants attention (a high-confidence resistance
+ * call, a stress threshold crossed).
+ */
+export interface WorkbenchAlert {
+  /** Which view raised it — used for grouping in the Alerts tab. */
   source: string
   severity: "error" | "warning" | "info"
   message: string
-  /** Optional location hint, rendered like a file position. */
+  /** What the alert is about: an organism, a sample, a position. */
   at?: string
 }
 
@@ -49,12 +51,22 @@ export interface StatusItem {
 }
 
 export interface RunStatus {
-  /** Label shown in the status bar and the Run view. */
+  /** Label shown in the status bar and the Runs sidebar. */
   label: string
   state: "idle" | "running" | "paused" | "done"
   /** 0–100; omitted when the job has no determinate progress. */
   progress?: number
   detail?: string
+}
+
+/** A finished run, kept so the console can show what the bench has done. */
+export interface RunRecord {
+  id: number
+  label: string
+  detail?: string
+  startedAt: number
+  endedAt: number
+  outcome: "completed" | "stopped"
 }
 
 interface LayoutState {
@@ -67,34 +79,43 @@ interface LayoutState {
   panelTab: PanelTabId
   inspectorVisible: boolean
   statusBarVisible: boolean
-  breadcrumbsVisible: boolean
+  contextBarVisible: boolean
   tabBarVisible: boolean
-  zen: boolean
+  focusMode: boolean
   zoom: number
   openTabs: string[]
 }
 
 const DEFAULT_LAYOUT: LayoutState = {
-  activity: "explorer",
+  activity: "analyses",
   sidebarVisible: true,
   sidebarSize: 18,
   panelVisible: false,
   panelSize: 32,
   panelMaximized: false,
-  panelTab: "terminal",
+  panelTab: "log",
   inspectorVisible: true,
   statusBarVisible: true,
-  breadcrumbsVisible: true,
+  contextBarVisible: true,
   tabBarVisible: true,
-  zen: false,
+  focusMode: false,
   zoom: 0,
   openTabs: ["/dashboard"],
 }
 
-const STORAGE_KEY = "helixmind.workbench.v1"
+const STORAGE_KEY = "helixmind.workbench.v2"
 
-/** Zoom step → root font size, mirroring VS Code's Ctrl+= / Ctrl+- behaviour. */
-const ZOOM_STEPS = [13, 14, 15, 16, 17, 18, 20] // index 3 (16px) is 100%
+const ACTIVITY_IDS: ActivityId[] = [
+  "analyses",
+  "search",
+  "runs",
+  "genes",
+  "preferences",
+]
+const PANEL_TAB_IDS: PanelTabId[] = ["alerts", "log", "history"]
+
+/** Zoom step → root font size. Index 3 (16px) is 100%. */
+const ZOOM_STEPS = [13, 14, 15, 16, 17, 18, 20]
 const ZOOM_BASE_INDEX = 3
 
 interface WorkbenchContextValue extends LayoutState {
@@ -117,9 +138,9 @@ interface WorkbenchContextValue extends LayoutState {
 
   toggleInspector: () => void
   toggleStatusBar: () => void
-  toggleBreadcrumbs: () => void
+  toggleContextBar: () => void
   toggleTabBar: () => void
-  toggleZen: () => void
+  toggleFocusMode: () => void
 
   zoomIn: () => void
   zoomOut: () => void
@@ -138,19 +159,25 @@ interface WorkbenchContextValue extends LayoutState {
   paletteSeed: string
   openPalette: (seed?: string) => void
 
-  /* ---- Terminal / diagnostics ---- */
+  /* ---- Console ---- */
   logs: LogLine[]
   pushLog: (line: Omit<LogLine, "id" | "ts"> & { ts?: number }) => void
   clearLogs: () => void
 
-  problems: Problem[]
-  publishProblems: (source: string, problems: Problem[]) => void
+  alerts: WorkbenchAlert[]
+  publishAlerts: (source: string, alerts: WorkbenchAlert[]) => void
 
   runStatus: RunStatus | null
   publishRunStatus: (status: RunStatus | null) => void
+  runHistory: RunRecord[]
+  clearRunHistory: () => void
 
   statusItems: StatusItem[]
   publishStatusItems: (items: StatusItem[]) => void
+
+  /** What the open view is working on, shown in the context bar. */
+  viewContext: string | null
+  publishViewContext: (detail: string | null) => void
 }
 
 const WorkbenchContext = React.createContext<WorkbenchContextValue | null>(null)
@@ -176,12 +203,14 @@ export function WorkbenchProvider({ children }: { children: React.ReactNode }) {
   const [logs, setLogs] = React.useState<LogLine[]>([])
   const logId = React.useRef(0)
 
-  // Problems are stored per-source so one view publishing doesn't wipe another.
-  const [problemMap, setProblemMap] = React.useState<Record<string, Problem[]>>({})
+  // Alerts are stored per-source so one view publishing doesn't wipe another.
+  const [alertMap, setAlertMap] = React.useState<Record<string, WorkbenchAlert[]>>({})
   const [runStatus, setRunStatus] = React.useState<RunStatus | null>(null)
-  // Only the view currently in the editor contributes status-bar items, so this
-  // is a single slot rather than a per-source map.
+  const [runHistory, setRunHistory] = React.useState<RunRecord[]>([])
+  // Only the view currently on the bench contributes status-bar items and a
+  // context line, so these are single slots rather than per-source maps.
   const [statusItems, setStatusItems] = React.useState<StatusItem[]>([])
+  const [viewContext, setViewContext] = React.useState<string | null>(null)
 
   const view = React.useMemo(() => viewForPath(pathname), [pathname])
 
@@ -195,10 +224,18 @@ export function WorkbenchProvider({ children }: { children: React.ReactNode }) {
         setLayout((prev) => ({
           ...prev,
           ...saved,
-          // Never restore a maximized panel or zen mode — both hide chrome, and
-          // waking up inside them is disorienting.
+          // Never restore a maximized console or focus mode — both hide chrome,
+          // and waking up inside them is disorienting.
           panelMaximized: false,
-          zen: false,
+          focusMode: false,
+          // Guard the enums: a build that renames a sidebar mode or a console
+          // tab must not leave a returning operator staring at an empty region.
+          activity: ACTIVITY_IDS.includes(saved.activity as ActivityId)
+            ? (saved.activity as ActivityId)
+            : prev.activity,
+          panelTab: PANEL_TAB_IDS.includes(saved.panelTab as PanelTabId)
+            ? (saved.panelTab as PanelTabId)
+            : prev.panelTab,
           openTabs: Array.isArray(saved.openTabs)
             ? saved.openTabs.filter((h) => VIEWS.some((v) => v.href === h))
             : prev.openTabs,
@@ -235,7 +272,7 @@ export function WorkbenchProvider({ children }: { children: React.ReactNode }) {
 
   /* ---- Responsive collapse --------------------------------------------- */
 
-  // Three columns plus a 48px rail need room. Below these widths the workbench
+  // Three columns plus a 48px rail need room. Below these widths the bench
   // folds the optional columns away.
   //
   // This is deliberately kept OUT of `layout`: folding is a property of the
@@ -269,10 +306,10 @@ export function WorkbenchProvider({ children }: { children: React.ReactNode }) {
   const sidebarVisible = layout.sidebarVisible && !forced.sidebar
   const inspectorVisible = layout.inspectorVisible && !forced.inspector
 
-  /* ---- Tabs ------------------------------------------------------------ */
+  /* ---- Open analyses --------------------------------------------------- */
 
-  // Visiting a route opens a tab for it, the way clicking a file in the
-  // explorer opens an editor.
+  // Opening a view keeps it open, so a half-finished simulation is still one
+  // click away after you go and check a gene record.
   React.useEffect(() => {
     if (!view) return
     setLayout((prev) =>
@@ -313,7 +350,7 @@ export function WorkbenchProvider({ children }: { children: React.ReactNode }) {
         openTabs: prev.openTabs.filter((h) => h !== href),
       }))
 
-      // Closing the active tab hands focus to its neighbour, VS Code-style.
+      // Closing the open view hands the bench to its neighbour.
       if (view?.href === href) {
         router.push(next[index] ?? next[index - 1] ?? "/dashboard")
       }
@@ -342,7 +379,8 @@ export function WorkbenchProvider({ children }: { children: React.ReactNode }) {
   )
 
   const setActivity = React.useCallback((id: ActivityId) => {
-    // Clicking the active icon collapses the side bar, exactly like VS Code.
+    // Clicking the mode you are already in collapses the sidebar and gives the
+    // width back to the bench.
     setLayout((prev) =>
       prev.activity === id && prev.sidebarVisible
         ? { ...prev, sidebarVisible: false }
@@ -383,16 +421,16 @@ export function WorkbenchProvider({ children }: { children: React.ReactNode }) {
     () => setLayout((p) => ({ ...p, statusBarVisible: !p.statusBarVisible })),
     [],
   )
-  const toggleBreadcrumbs = React.useCallback(
-    () => setLayout((p) => ({ ...p, breadcrumbsVisible: !p.breadcrumbsVisible })),
+  const toggleContextBar = React.useCallback(
+    () => setLayout((p) => ({ ...p, contextBarVisible: !p.contextBarVisible })),
     [],
   )
   const toggleTabBar = React.useCallback(
     () => setLayout((p) => ({ ...p, tabBarVisible: !p.tabBarVisible })),
     [],
   )
-  const toggleZen = React.useCallback(
-    () => setLayout((p) => ({ ...p, zen: !p.zen })),
+  const toggleFocusMode = React.useCallback(
+    () => setLayout((p) => ({ ...p, focusMode: !p.focusMode })),
     [],
   )
 
@@ -411,7 +449,7 @@ export function WorkbenchProvider({ children }: { children: React.ReactNode }) {
     [],
   )
 
-  /* ---- Terminal -------------------------------------------------------- */
+  /* ---- Run log --------------------------------------------------------- */
 
   const pushLog = React.useCallback(
     (line: Omit<LogLine, "id" | "ts"> & { ts?: number }) => {
@@ -429,18 +467,18 @@ export function WorkbenchProvider({ children }: { children: React.ReactNode }) {
 
   const clearLogs = React.useCallback(() => setLogs([]), [])
 
-  const publishProblems = React.useCallback((source: string, next: Problem[]) => {
-    setProblemMap((prev) => {
+  const publishAlerts = React.useCallback((source: string, next: WorkbenchAlert[]) => {
+    setAlertMap((prev) => {
       const current = prev[source]
       // Bail when nothing changed so publishing from a render effect can't loop.
       if (
         current &&
         current.length === next.length &&
         current.every(
-          (p, i) =>
-            p.message === next[i].message &&
-            p.severity === next[i].severity &&
-            p.at === next[i].at,
+          (a, i) =>
+            a.message === next[i].message &&
+            a.severity === next[i].severity &&
+            a.at === next[i].at,
         )
       ) {
         return prev
@@ -450,27 +488,75 @@ export function WorkbenchProvider({ children }: { children: React.ReactNode }) {
     })
   }, [])
 
-  const problems = React.useMemo(
-    () => Object.values(problemMap).flat(),
-    [problemMap],
-  )
+  const alerts = React.useMemo(() => Object.values(alertMap).flat(), [alertMap])
+
+  /* ---- Runs ------------------------------------------------------------ */
+
+  // The run in flight, tracked outside state so recording its completion never
+  // depends on a render having happened first.
+  const activeRun = React.useRef<{
+    label: string
+    startedAt: number
+    detail?: string
+  } | null>(null)
+  const runId = React.useRef(0)
 
   const publishRunStatus = React.useCallback((status: RunStatus | null) => {
     setRunStatus((prev) => {
-      if (prev === status) return prev
       if (
-        prev &&
-        status &&
-        prev.label === status.label &&
-        prev.state === status.state &&
-        prev.progress === status.progress &&
-        prev.detail === status.detail
+        prev === status ||
+        (prev &&
+          status &&
+          prev.label === status.label &&
+          prev.state === status.state &&
+          prev.progress === status.progress &&
+          prev.detail === status.detail)
       ) {
         return prev
       }
       return status
     })
+
+    // History is derived from the transition, not the value, so it is recorded
+    // here rather than inside the updater above (which React may replay).
+    const active = activeRun.current
+    const inFlight = status?.state === "running" || status?.state === "paused"
+
+    if (inFlight) {
+      if (!active || active.label !== status.label) {
+        activeRun.current = {
+          label: status.label,
+          startedAt: Date.now(),
+          detail: status.detail,
+        }
+      } else if (status.detail) {
+        active.detail = status.detail
+      }
+      return
+    }
+
+    // A run that leaves the in-flight states — or whose view unmounts — is
+    // finished, one way or the other.
+    if (!active) return
+    activeRun.current = null
+    setRunHistory((prev) =>
+      [
+        {
+          id: runId.current++,
+          label: active.label,
+          detail: status?.detail ?? active.detail,
+          startedAt: active.startedAt,
+          endedAt: Date.now(),
+          outcome: status?.state === "done" ? ("completed" as const) : ("stopped" as const),
+        },
+        ...prev,
+      ].slice(0, 50),
+    )
   }, [])
+
+  const clearRunHistory = React.useCallback(() => setRunHistory([]), [])
+
+  /* ---- Contextual chrome ----------------------------------------------- */
 
   const publishStatusItems = React.useCallback((items: StatusItem[]) => {
     setStatusItems((prev) => {
@@ -485,6 +571,11 @@ export function WorkbenchProvider({ children }: { children: React.ReactNode }) {
       return items
     })
   }, [])
+
+  const publishViewContext = React.useCallback(
+    (detail: string | null) => setViewContext((prev) => (prev === detail ? prev : detail)),
+    [],
+  )
 
   /* ---- Keybindings ----------------------------------------------------- */
 
@@ -503,8 +594,8 @@ export function WorkbenchProvider({ children }: { children: React.ReactNode }) {
         setLayout((p) => ({ ...p, panelMaximized: false }))
         return
       }
-      if (e.key === "Escape" && layout.zen) {
-        setLayout((p) => ({ ...p, zen: false }))
+      if (e.key === "Escape" && layout.focusMode) {
+        setLayout((p) => ({ ...p, focusMode: false }))
         return
       }
 
@@ -541,8 +632,8 @@ export function WorkbenchProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // Command palette. Ctrl+K / Ctrl+P open it in "go to view" mode;
-      // Ctrl+Shift+P opens it in command mode, exactly like VS Code.
+      // Ctrl+K / Ctrl+P open the palette on views; Ctrl+Shift+P opens it in
+      // command mode.
       if (e.key.toLowerCase() === "k" || e.key.toLowerCase() === "p") {
         e.preventDefault()
         openPalette(e.shiftKey && e.key.toLowerCase() === "p" ? ">" : "")
@@ -564,7 +655,7 @@ export function WorkbenchProvider({ children }: { children: React.ReactNode }) {
           break
         case "`":
           e.preventDefault()
-          setLayout((p) => ({ ...p, panelVisible: true, panelTab: "terminal" }))
+          setLayout((p) => ({ ...p, panelVisible: true, panelTab: "log" }))
           break
         case ",":
           if (!typing) {
@@ -580,7 +671,7 @@ export function WorkbenchProvider({ children }: { children: React.ReactNode }) {
   }, [
     closeTab,
     layout.panelMaximized,
-    layout.zen,
+    layout.focusMode,
     openPalette,
     router,
     toggleInspector,
@@ -618,9 +709,9 @@ export function WorkbenchProvider({ children }: { children: React.ReactNode }) {
       togglePanelMaximized,
       toggleInspector,
       toggleStatusBar,
-      toggleBreadcrumbs,
+      toggleContextBar,
       toggleTabBar,
-      toggleZen,
+      toggleFocusMode,
       zoomIn,
       zoomOut,
       zoomReset,
@@ -636,12 +727,16 @@ export function WorkbenchProvider({ children }: { children: React.ReactNode }) {
       logs,
       pushLog,
       clearLogs,
-      problems,
-      publishProblems,
+      alerts,
+      publishAlerts,
       runStatus,
       publishRunStatus,
+      runHistory,
+      clearRunHistory,
       statusItems,
       publishStatusItems,
+      viewContext,
+      publishViewContext,
     }),
     [
       layout,
@@ -658,9 +753,9 @@ export function WorkbenchProvider({ children }: { children: React.ReactNode }) {
       togglePanelMaximized,
       toggleInspector,
       toggleStatusBar,
-      toggleBreadcrumbs,
+      toggleContextBar,
       toggleTabBar,
-      toggleZen,
+      toggleFocusMode,
       zoomIn,
       zoomOut,
       zoomReset,
@@ -675,12 +770,16 @@ export function WorkbenchProvider({ children }: { children: React.ReactNode }) {
       logs,
       pushLog,
       clearLogs,
-      problems,
-      publishProblems,
+      alerts,
+      publishAlerts,
       runStatus,
       publishRunStatus,
+      runHistory,
+      clearRunHistory,
       statusItems,
       publishStatusItems,
+      viewContext,
+      publishViewContext,
     ],
   )
 
@@ -700,7 +799,7 @@ export function useWorkbench() {
 }
 
 /**
- * Mirror a producer's log strings into the terminal panel.
+ * Mirror a producer's log strings into the console's run log.
  *
  * Tracks the last line it emitted rather than a count, so it works for both
  * append-only histories and fixed-size rolling buffers (a simulation that keeps
@@ -734,23 +833,23 @@ export function useLogStream(
   }, [lines, level, pushLog, source])
 }
 
-/** Publish a view's diagnostics to the Problems tab and the status bar. */
-export function useProblems(source: string, problems: Problem[]) {
-  const { publishProblems } = useWorkbench()
+/** Publish a view's alerts to the console and the status bar. */
+export function useAlerts(source: string, alerts: WorkbenchAlert[]) {
+  const { publishAlerts } = useWorkbench()
 
   React.useEffect(() => {
-    publishProblems(source, problems)
-  }, [problems, publishProblems, source])
+    publishAlerts(source, alerts)
+  }, [alerts, publishAlerts, source])
 
-  // Clear this view's problems when it unmounts so stale entries don't linger.
+  // Clear this view's alerts when it unmounts so stale entries don't linger.
   React.useEffect(() => {
-    return () => publishProblems(source, [])
-  }, [publishProblems, source])
+    return () => publishAlerts(source, [])
+  }, [publishAlerts, source])
 }
 
 /**
- * Publish the open view's contextual status-bar items — the workbench analogue
- * of an editor showing "Ln 42, Col 8 · UTF-8 · TypeScript".
+ * Publish the open view's readouts to the right of the status bar — the counts
+ * and settings that describe what is currently loaded.
  */
 export function useStatusItems(items: StatusItem[]) {
   const { publishStatusItems } = useWorkbench()
@@ -764,7 +863,7 @@ export function useStatusItems(items: StatusItem[]) {
   }, [publishStatusItems])
 }
 
-/** Publish the current long-running job to the status bar and Run view. */
+/** Publish the current long-running job to the status bar and Runs sidebar. */
 export function useRunStatus(status: RunStatus | null) {
   const { publishRunStatus } = useWorkbench()
 
@@ -775,4 +874,21 @@ export function useRunStatus(status: RunStatus | null) {
   React.useEffect(() => {
     return () => publishRunStatus(null)
   }, [publishRunStatus])
+}
+
+/**
+ * Name what the open view is working on — the sample loaded, the organism
+ * selected, the reference in use. Shown in the context bar above the bench,
+ * which otherwise falls back to describing what the view is for.
+ */
+export function useViewContext(detail: string | null) {
+  const { publishViewContext } = useWorkbench()
+
+  React.useEffect(() => {
+    publishViewContext(detail)
+  }, [detail, publishViewContext])
+
+  React.useEffect(() => {
+    return () => publishViewContext(null)
+  }, [publishViewContext])
 }

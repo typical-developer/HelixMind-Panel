@@ -16,21 +16,21 @@ import { BottomPanel } from "./panel"
 import { CommandPalette } from "./command-palette"
 import { SideBar } from "./side-bar"
 import { StatusBar } from "./status-bar"
-import { Breadcrumbs, TabBar } from "./tab-bar"
+import { ContextBar, TabBar } from "./tab-bar"
 import { TitleBar } from "./title-bar"
 import { useWorkbench } from "./workbench-provider"
 
 /**
- * The workbench shell.
+ * The bench shell.
  *
  * Regions are laid out exactly once here and persist across navigation, so the
- * side bar's scroll position, the terminal buffer and the resize handles all
- * survive route changes. Only the editor body swaps.
+ * sidebar's scroll position, the run log and the resize handles all survive
+ * moving between analyses. Only the bench body swaps.
  */
 export function Workbench({ children }: { children: React.ReactNode }) {
   const {
     hydrated,
-    zen,
+    focusMode,
     sidebarVisible,
     sidebarSize,
     setSidebarVisible,
@@ -42,7 +42,7 @@ export function Workbench({ children }: { children: React.ReactNode }) {
     setPanelSize,
     statusBarVisible,
     tabBarVisible,
-    breadcrumbsVisible,
+    contextBarVisible,
   } = useWorkbench()
 
   const sidebarRef = React.useRef<ImperativePanelHandle>(null)
@@ -77,8 +77,8 @@ export function Workbench({ children }: { children: React.ReactNode }) {
     return syncPanel(panelRef, panelVisible)
   }, [hydrated, panelVisible])
 
-  // Maximizing hands almost the whole editor column to the panel, and restoring
-  // puts it back at the size the user last dragged it to.
+  // Maximizing hands almost the whole column to the console, and restoring puts
+  // it back at the size the user last dragged it to.
   React.useEffect(() => {
     if (!restored.current) return
     const panel = panelRef.current
@@ -91,10 +91,10 @@ export function Workbench({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-svh flex-col overflow-hidden bg-chrome text-foreground">
-      {!zen && <TitleBar />}
+      {!focusMode && <TitleBar />}
 
       <div className="flex min-h-0 flex-1">
-        {!zen && <ActivityBar />}
+        {!focusMode && <ActivityBar />}
 
         <ResizablePanelGroup direction="horizontal" className="min-w-0 flex-1">
           <ResizablePanel
@@ -111,27 +111,30 @@ export function Workbench({ children }: { children: React.ReactNode }) {
             onResize={(size) => {
               if (size > 0) setSidebarSize(size)
             }}
-            className={cn(zen && "hidden")}
+            className={cn(focusMode && "hidden")}
           >
             <SideBar />
           </ResizablePanel>
 
           <ResizableHandle
-            className={cn("wb-resize-handle w-px", zen && "hidden")}
-            aria-label="Resize side bar"
+            className={cn("wb-resize-handle w-px", focusMode && "hidden")}
+            aria-label="Resize sidebar"
           />
 
-          <ResizablePanel id="wb-editor" order={2} minSize={30}>
+          <ResizablePanel id="wb-bench" order={2} minSize={30}>
             <ResizablePanelGroup direction="vertical">
               <ResizablePanel id="wb-content" order={1} minSize={8}>
                 <div className="flex h-full min-h-0 flex-col bg-surface">
-                  {!zen && tabBarVisible && <TabBar />}
-                  {!zen && breadcrumbsVisible && <Breadcrumbs />}
+                  {!focusMode && tabBarVisible && <TabBar />}
+                  {!focusMode && contextBarVisible && <ContextBar />}
                   <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
                 </div>
               </ResizablePanel>
 
-              <ResizableHandle className="wb-resize-handle h-px" aria-label="Resize panel" />
+              <ResizableHandle
+                className="wb-resize-handle h-px"
+                aria-label="Resize console"
+              />
 
               <ResizablePanel
                 id="wb-panel"
@@ -154,7 +157,7 @@ export function Workbench({ children }: { children: React.ReactNode }) {
         </ResizablePanelGroup>
       </div>
 
-      {!zen && statusBarVisible && <StatusBar />}
+      {!focusMode && statusBarVisible && <StatusBar />}
 
       <CommandPalette />
       <Toaster />
@@ -183,8 +186,8 @@ function syncPanel(
 }
 
 /**
- * Writes a short startup banner into the terminal once per session, so opening
- * the panel for the first time shows a live buffer rather than an empty box.
+ * Notes the session start in the run log, so opening the console for the first
+ * time shows what the lab has been doing rather than an empty box.
  */
 function useBootLog() {
   const { pushLog } = useWorkbench()
@@ -195,33 +198,29 @@ function useBootLog() {
     seeded.current = true
 
     pushLog({
-      level: "command",
-      source: "workbench",
-      message: "helixmind workbench --workspace helixmind-lab",
-    })
-    pushLog({
       level: "success",
-      source: "workbench",
-      message: "analysis engine ready",
+      source: "lab",
+      message: "Analysis engines ready",
     })
     pushLog({
       level: "debug",
-      source: "workbench",
-      message: "run output from scans and simulations streams into this terminal",
+      source: "lab",
+      message: "Output from scans, simulations and predictions streams in here",
     })
   }, [pushLog])
 }
 
 /* ============================================================================
-   Editor layout helper
+   Bench layout helper
    ========================================================================= */
 
 /**
  * Splits a view into a main region and an optional inspector column on the
- * right. The inspector obeys the workbench-wide toggle (Ctrl+Alt+B), and each
- * view keeps its own remembered width via `autoSaveId`.
+ * right, where its inputs and parameters live. The inspector obeys the
+ * lab-wide toggle (Ctrl+Alt+B), and each view keeps its own remembered width
+ * via `autoSaveId`.
  */
-export function EditorLayout({
+export function ViewLayout({
   children,
   inspector,
   inspectorId,
@@ -293,7 +292,7 @@ export function EditorLayout({
  * Standard scroll container for a view's main region. Views that need their own
  * internal scrolling (a chart that fills the height, say) skip this.
  */
-export function EditorScroll({
+export function ViewScroll({
   className,
   ...props
 }: React.ComponentProps<"div">) {

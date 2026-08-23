@@ -19,8 +19,8 @@ import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Chip,
-  EditorLayout,
-  EditorScroll,
+  ViewLayout,
+  ViewScroll,
   EmptyState,
   Pane,
   PaneHeader,
@@ -29,9 +29,10 @@ import {
   ToolbarButton,
   WBSelect,
   useLogStream,
-  useProblems,
+  useAlerts,
   useStatusItems,
-  type Problem,
+  useViewContext,
+  type WorkbenchAlert,
 } from "@/components/workbench"
 
 // --- Types ---
@@ -209,13 +210,14 @@ export default function DNAScanner() {
     a.click()
   }
 
-  /* ---- Workbench integration -------------------------------------------
-     The scan's own diagnostics feed the Problems tab, its progress feeds the
-     terminal, and its headline figures feed the status bar. */
+  /* ---- Bench integration -----------------------------------------------
+     What the scan flags goes to the console's Alerts tab, its progress to the
+     run log, its headline figures to the status bar, and what it has loaded to
+     the context bar. */
 
-  useProblems(
+  useAlerts(
     "dna-scanner",
-    useMemo<Problem[]>(
+    useMemo<WorkbenchAlert[]>(
       () =>
         warnings.map((message) => ({
           source: "dna-scanner",
@@ -261,6 +263,17 @@ export default function DNAScanner() {
     ),
   )
 
+  useViewContext(
+    activeSequence
+      ? [
+          activeSequence.header,
+          referenceSequence
+            ? `reference ${referenceSequence.header}`
+            : "no reference loaded",
+        ].join(" · ")
+      : null,
+  )
+
   const TABS = [
     { id: "stats" as const, label: "Statistics" },
     { id: "mutations" as const, label: "Mutations", count: mutations.length },
@@ -268,7 +281,7 @@ export default function DNAScanner() {
   ]
 
   return (
-    <EditorLayout
+    <ViewLayout
       inspectorId="dna-scanner"
       defaultInspectorSize={30}
       inspector={
@@ -288,7 +301,7 @@ export default function DNAScanner() {
     >
       <div className="flex h-full min-h-0 flex-col">
         {/* Result toolbar — tabs on the left, exports on the right, mirroring
-            an editor's view switcher. */}
+            the scan's readouts. */}
         <Tabs
           value={activeTab}
           onValueChange={(v) => setActiveTab(v as typeof activeTab)}
@@ -333,9 +346,9 @@ export default function DNAScanner() {
           ) : (
             <div className="min-h-0 flex-1">
               <TabsContent value="stats" className="h-full min-h-0">
-                <EditorScroll className="p-3">
+                <ViewScroll className="p-3">
                   <StatsView stats={stats} warnings={warnings} />
-                </EditorScroll>
+                </ViewScroll>
               </TabsContent>
 
               <TabsContent value="mutations" className="h-full min-h-0">
@@ -356,7 +369,7 @@ export default function DNAScanner() {
           )}
         </Tabs>
       </div>
-    </EditorLayout>
+    </ViewLayout>
   )
 }
 

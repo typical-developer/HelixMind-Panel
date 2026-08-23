@@ -5,19 +5,20 @@ import { useRouter } from "next/navigation"
 import {
   AlertCircle,
   ChevronRight,
-  Database,
+  Dna,
   Eye,
-  Files,
+  History,
   LayoutGrid,
   LogOut,
   Maximize2,
+  Microscope,
   PanelBottom,
   PanelLeft,
   PanelRight,
   PlayCircle,
   RotateCcw,
+  ScrollText,
   Search,
-  Terminal,
   Trash2,
   Type,
 } from "lucide-react"
@@ -35,12 +36,12 @@ import {
 } from "@/components/ui/command"
 
 import { useWorkbench } from "./workbench-provider"
-import { TONE_CLASS, VIEWS } from "./registry"
+import { TONE_CLASS, VIEWS, groupLabel } from "./registry"
 
 /**
- * Ctrl/Cmd+K (or Ctrl+P) command palette. Every navigation target and layout
- * toggle in the workbench is reachable from here, which is what makes the
- * customisation options discoverable rather than hidden in menus.
+ * Ctrl/Cmd+K (or Ctrl+P) command palette. Every analysis and every layout
+ * control is reachable from here, which is what keeps them discoverable rather
+ * than buried in menus.
  */
 export function CommandPalette() {
   const wb = useWorkbench()
@@ -49,8 +50,8 @@ export function CommandPalette() {
 
   const [query, setQuery] = React.useState("")
 
-  // VS Code's convention: a leading `>` switches from "go to file" to
-  // "run a command". Ctrl+Shift+P opens straight into it by seeding the `>`.
+  // A leading `>` switches from "go to an analysis" to "run a command".
+  // Ctrl+Shift+P opens straight into it by seeding the `>`.
   const commandMode = query.startsWith(">")
   const term = commandMode ? query.slice(1) : query
 
@@ -85,13 +86,13 @@ export function CommandPalette() {
   const toggles = [
     {
       icon: PanelLeft,
-      label: "Toggle side bar",
+      label: "Toggle sidebar",
       shortcut: "Ctrl B",
       action: wb.toggleSidebar,
     },
     {
       icon: PanelBottom,
-      label: "Toggle panel",
+      label: "Toggle console",
       shortcut: "Ctrl J",
       action: wb.togglePanel,
     },
@@ -103,13 +104,13 @@ export function CommandPalette() {
     },
     {
       icon: LayoutGrid,
-      label: "Toggle editor tabs",
+      label: "Toggle open tabs",
       action: wb.toggleTabBar,
     },
     {
       icon: LayoutGrid,
-      label: "Toggle breadcrumbs",
-      action: wb.toggleBreadcrumbs,
+      label: "Toggle context bar",
+      action: wb.toggleContextBar,
     },
     {
       icon: LayoutGrid,
@@ -118,50 +119,55 @@ export function CommandPalette() {
     },
     {
       icon: Eye,
-      label: "Toggle zen mode",
+      label: "Toggle focus mode",
       shortcut: "Esc to exit",
-      action: wb.toggleZen,
+      action: wb.toggleFocusMode,
     },
     {
       icon: Maximize2,
-      label: "Maximize panel",
+      label: "Maximize console",
       action: wb.togglePanelMaximized,
     },
   ]
 
   const sideViews = [
-    { icon: Files, label: "Show explorer", action: () => wb.setActivity("explorer") },
-    { icon: Search, label: "Show search", action: () => wb.setActivity("search") },
+    {
+      icon: Microscope,
+      label: "Sidebar: Analyses",
+      action: () => wb.setActivity("analyses"),
+    },
+    { icon: Search, label: "Sidebar: Search", action: () => wb.setActivity("search") },
     {
       icon: PlayCircle,
-      label: "Show run & analyze",
-      action: () => wb.setActivity("run"),
+      label: "Sidebar: Runs",
+      action: () => wb.setActivity("runs"),
     },
     {
-      icon: Database,
-      label: "Show gene database",
-      action: () => wb.setActivity("database"),
+      icon: Dna,
+      label: "Sidebar: Gene library",
+      action: () => wb.setActivity("genes"),
     },
   ]
 
   const panels = [
     {
       icon: AlertCircle,
-      label: "Panel: Problems",
-      action: () => wb.setPanelTab("problems"),
+      label: "Console: Alerts",
+      action: () => wb.setPanelTab("alerts"),
     },
     {
-      icon: Terminal,
-      label: "Panel: Output",
-      action: () => wb.setPanelTab("output"),
-    },
-    {
-      icon: Terminal,
-      label: "Panel: Terminal",
+      icon: ScrollText,
+      label: "Console: Run log",
       shortcut: "Ctrl `",
-      action: () => wb.setPanelTab("terminal"),
+      action: () => wb.setPanelTab("log"),
     },
-    { icon: Trash2, label: "Clear terminal output", action: wb.clearLogs },
+    {
+      icon: History,
+      label: "Console: History",
+      action: () => wb.setPanelTab("history"),
+    },
+    { icon: Trash2, label: "Clear run log", action: wb.clearLogs },
+    { icon: Trash2, label: "Clear run history", action: wb.clearRunHistory },
   ]
 
   return (
@@ -179,8 +185,8 @@ export function CommandPalette() {
         onValueChange={setQuery}
         placeholder={
           commandMode
-            ? "Run a workbench command…"
-            : "Search views, or type > to run a command…"
+            ? "Run a command…"
+            : "Search analyses, or type > to run a command…"
         }
       />
 
@@ -191,7 +197,7 @@ export function CommandPalette() {
           </span>
           <span className="text-xs text-muted-foreground">
             Clear the <span className="font-mono text-foreground/70">&gt;</span> to
-            search views again
+            search analyses again
           </span>
         </div>
       )}
@@ -200,15 +206,12 @@ export function CommandPalette() {
         <CommandEmpty>
           {commandMode
             ? `No command matches "${term.trim()}".`
-            : `No view matches "${term.trim()}".`}
+            : `No analysis matches "${term.trim()}".`}
         </CommandEmpty>
 
         {!commandMode && !term.trim() && (
           <CommandGroup heading="Modes">
-            <CommandItem
-              value="show all commands workbench"
-              onSelect={() => setQuery(">")}
-            >
+            <CommandItem value="show all commands" onSelect={() => setQuery(">")}>
               <ChevronRight />
               Show all commands
               <CommandShortcut>Ctrl Shift P</CommandShortcut>
@@ -217,11 +220,11 @@ export function CommandPalette() {
         )}
 
         {!commandMode && (
-          <CommandGroup heading="Go to view">
+          <CommandGroup heading="Go to">
             {VIEWS.map((v) => (
               <CommandItem
                 key={v.href}
-                value={`${v.label} ${v.fileName} ${v.hint}`}
+                value={`${v.label} ${v.hint}`}
                 onSelect={() => run(() => wb.openTab(v.href))}
               >
                 <v.icon className={TONE_CLASS[v.tone]} />
@@ -231,7 +234,7 @@ export function CommandPalette() {
                     {v.hint}
                   </span>
                 </span>
-                <CommandShortcut className="font-mono">{v.fileName}</CommandShortcut>
+                <CommandShortcut>{groupLabel(v)}</CommandShortcut>
               </CommandItem>
             ))}
           </CommandGroup>
@@ -239,7 +242,7 @@ export function CommandPalette() {
 
         {!commandMode && <CommandSeparator />}
 
-        <CommandGroup heading="Side bar">
+        <CommandGroup heading="Sidebar">
           {sideViews.map((c) => (
             <CommandItem key={c.label} onSelect={() => run(c.action)}>
               <c.icon />
@@ -250,7 +253,7 @@ export function CommandPalette() {
 
         <CommandSeparator />
 
-        <CommandGroup heading="Panel">
+        <CommandGroup heading="Console">
           {panels.map((c) => (
             <CommandItem key={c.label} onSelect={() => run(c.action)}>
               <c.icon />
@@ -281,17 +284,17 @@ export function CommandPalette() {
         <CommandGroup heading="Appearance">
           <CommandItem onSelect={() => run(wb.zoomIn)}>
             <Type />
-            Zoom in
+            Larger interface
             <CommandShortcut>Ctrl Alt +</CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={() => run(wb.zoomOut)}>
             <Type />
-            Zoom out
+            Smaller interface
             <CommandShortcut>Ctrl Alt -</CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={() => run(wb.zoomReset)}>
             <Type />
-            Reset zoom
+            Reset interface scale
             <CommandShortcut>Ctrl Alt 0</CommandShortcut>
           </CommandItem>
         </CommandGroup>

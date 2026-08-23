@@ -4,12 +4,12 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ============================================================================
-   HelixMind Workbench — design tokens
+   HelixMind Lab — design tokens
 
    Palette is derived from Vercel's Geist dark scale (near-black surfaces,
-   alpha-white hairlines, #ededed foreground, blue-700 focus). Structure tokens
-   (activity bar / side bar / tab / panel / status bar) follow VS Code's
-   "Dark Modern" workbench so the shell reads as a tool, not a dashboard.
+   alpha-white hairlines, #ededed foreground, blue-700 focus). The structure
+   tokens describe the lab bench's own regions — rail, sidebar, bench, console,
+   status strip — at the density a data tool needs.
    ========================================================================= */
 
 :root {
@@ -87,9 +87,9 @@
 
   --radius: 0.375rem;
 
-  /* ---- Workbench structure (VS Code "Dark Modern" mapping) -------------- */
-  --wb-chrome: hsl(0 0% 0%); /* title bar, activity bar, status bar */
-  --wb-surface: hsl(0 0% 4%); /* side bar, editor, panel body */
+  /* ---- Bench structure -------------------------------------------------- */
+  --wb-chrome: hsl(0 0% 0%); /* title bar, rail, status strip */
+  --wb-surface: hsl(0 0% 4%); /* sidebar, bench, console body */
   --wb-raised: hsl(0 0% 8%); /* menus, inputs, hovered rows */
   --wb-overlay: hsl(0 0% 7%); /* command palette, popovers */
 
@@ -97,27 +97,30 @@
   --wb-border-strong: var(--alpha-400);
   --wb-focus: var(--blue-700);
 
-  --wb-activitybar-width: 3rem; /* 48px */
+  --wb-rail-width: 3rem; /* 48px */
   --wb-titlebar-height: 2.25rem; /* 36px */
   --wb-tabbar-height: 2.25rem; /* 36px */
-  --wb-breadcrumb-height: 1.625rem; /* 26px */
+  --wb-contextbar-height: 1.75rem; /* 28px */
   --wb-statusbar-height: 1.5rem; /* 24px */
 
   --wb-hover: #ffffff0d;
   --wb-active: #ffffff17;
   --wb-selected: #ffffff1f;
 
-  /* ---- Terminal / log stream (VS Code ANSI defaults) -------------------- */
-  --term-bg: hsl(0 0% 4%);
-  --term-fg: #cccccc;
-  --term-dim: #7d7d7d;
-  --term-red: #f14c4c;
-  --term-green: #23d18b;
-  --term-yellow: #e5c07b;
-  --term-blue: #3b8eea;
-  --term-magenta: #d670d6;
-  --term-cyan: #29b8db;
-  --term-white: #e5e5e5;
+  /* ---- Run log — one colour per severity, not an ANSI palette ---------- */
+  --log-fg: #cccccc;
+  --log-dim: #7d7d7d;
+  --log-error: #f14c4c;
+  --log-success: #23d18b;
+  --log-warn: #e5c07b;
+  --log-command: #29b8db;
+  --log-source: #d670d6;
+
+  /* ---- Nucleotide colours, used by every sequence readout -------------- */
+  --base-a: #23d18b;
+  --base-t: #f14c4c;
+  --base-g: #3b8eea;
+  --base-c: #e5c07b;
 
   /* ---- Charts — restrained, Geist-hued -------------------------------- */
   --chart-1: var(--blue-900);
@@ -155,27 +158,40 @@
   --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, Consolas,
     monospace;
 
-  /* Tighter type ramp. Vercel and VS Code both run noticeably smaller than a
-     stock Tailwind app; shifting the scale itself keeps every shadcn component
-     dense without sprinkling one-off sizes through the markup. */
+  /* Tighter type ramp — a control panel runs noticeably smaller than a stock
+     Tailwind app, and shifting the scale itself keeps every shadcn component
+     dense without sprinkling one-off sizes through the markup.
+
+     Tracking is part of the ramp: Geist needs a little air at caption sizes and
+     progressively tighter setting as it grows, otherwise headline numbers look
+     loose next to the dense rows around them. */
   --text-2xs: 0.625rem; /* 10px */
   --text-2xs--line-height: 0.875rem;
+  --text-2xs--letter-spacing: 0.01em;
   --text-xs: 0.6875rem; /* 11px */
   --text-xs--line-height: 1rem;
+  --text-xs--letter-spacing: 0.004em;
   --text-sm: 0.8125rem; /* 13px */
   --text-sm--line-height: 1.125rem;
+  --text-sm--letter-spacing: -0.002em;
   --text-base: 0.875rem; /* 14px */
   --text-base--line-height: 1.25rem;
+  --text-base--letter-spacing: -0.006em;
   --text-lg: 1rem; /* 16px */
   --text-lg--line-height: 1.375rem;
+  --text-lg--letter-spacing: -0.011em;
   --text-xl: 1.125rem; /* 18px */
   --text-xl--line-height: 1.625rem;
+  --text-xl--letter-spacing: -0.015em;
   --text-2xl: 1.375rem; /* 22px */
   --text-2xl--line-height: 1.75rem;
+  --text-2xl--letter-spacing: -0.019em;
   --text-3xl: 1.75rem; /* 28px */
   --text-3xl--line-height: 2.125rem;
+  --text-3xl--letter-spacing: -0.022em;
   --text-4xl: 2.125rem; /* 34px */
   --text-4xl--line-height: 2.5rem;
+  --text-4xl--letter-spacing: -0.025em;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -212,7 +228,7 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  /* Workbench-specific colours exposed as Tailwind utilities. */
+  /* Bench-specific colours exposed as Tailwind utilities. */
   --color-chrome: var(--wb-chrome);
   --color-surface: var(--wb-surface);
   --color-raised: var(--wb-raised);
@@ -220,7 +236,6 @@
   --color-brand-bright: var(--blue-900);
   --color-success: var(--green-900);
   --color-warning: var(--amber-700);
-  --color-term-fg: var(--term-fg);
 
   /* Radii — Geist runs 4–8px, tighter than shadcn's default. */
   --radius-xs: 2px;

@@ -43,9 +43,10 @@ import { useWorkbench } from "./workbench-provider"
 import { VIEWS } from "./registry"
 
 /**
- * The 36px title bar. Structured like VS Code's: menus on the left, a quick
- * input in the middle that opens the command palette, and layout controls on
- * the right — deliberately not a dashboard header with a page title in it.
+ * The 36px title bar: menus on the left, a search field in the middle that
+ * opens the command palette, and layout controls on the right. Deliberately
+ * not a page header — the open analysis names itself in the tab and the
+ * context bar directly below.
  */
 export function TitleBar() {
   const wb = useWorkbench()
@@ -71,13 +72,13 @@ export function TitleBar() {
         <span className="mx-1 h-4 w-px bg-border" />
         <ToolbarButton
           icon={PanelLeft}
-          label="Toggle side bar (Ctrl+B)"
+          label="Toggle sidebar (Ctrl+B)"
           active={wb.sidebarVisible}
           onClick={wb.toggleSidebar}
         />
         <ToolbarButton
           icon={PanelBottom}
-          label="Toggle panel (Ctrl+J)"
+          label="Toggle console (Ctrl+J)"
           active={wb.panelVisible}
           onClick={wb.togglePanel}
         />
@@ -94,11 +95,11 @@ export function TitleBar() {
 }
 
 /* ============================================================================
-   Quick input
+   Search field
    ========================================================================= */
 
 function QuickInput() {
-  const { openPalette, view } = useWorkbench()
+  const { openPalette } = useWorkbench()
 
   return (
     <div className="flex min-w-0 flex-1 justify-center px-2">
@@ -113,9 +114,7 @@ function QuickInput() {
         )}
       >
         <Search className="size-3 shrink-0" />
-        <span className="truncate">
-          {view ? `${view.fileName} — helixmind-lab` : "Search HelixMind"}
-        </span>
+        <span className="truncate">Search analyses, genes and commands</span>
         <kbd className="ml-auto hidden shrink-0 rounded-xs border border-border px-1 font-mono text-2xs text-muted-foreground/80 sm:inline">
           Ctrl K
         </kbd>
@@ -141,7 +140,7 @@ function WorkbenchMenus() {
   return (
     <Menubar className="h-auto gap-0 border-0 bg-transparent p-0 shadow-none">
       <MenubarMenu>
-        <MenubarTrigger className={MENU_TRIGGER}>Workspace</MenubarTrigger>
+        <MenubarTrigger className={MENU_TRIGGER}>Lab</MenubarTrigger>
         <MenubarContent align="start" className="w-60">
           <MenubarItem onClick={() => wb.openTab("/dna-scanner")}>
             New DNA scan
@@ -151,6 +150,11 @@ function WorkbenchMenus() {
           </MenubarItem>
           <MenubarItem onClick={() => wb.openTab("/microbe-growth-lab")}>
             New growth experiment
+          </MenubarItem>
+          <MenubarItem
+            onClick={() => wb.openTab("/amr-analysis-engine/resistance-predictor")}
+          >
+            New resistance prediction
           </MenubarItem>
           <MenubarSeparator />
           <MenubarItem onClick={() => wb.openTab("/settings")}>
@@ -165,42 +169,53 @@ function WorkbenchMenus() {
       </MenubarMenu>
 
       <MenubarMenu>
-        <MenubarTrigger className={MENU_TRIGGER}>View</MenubarTrigger>
+        <MenubarTrigger className={MENU_TRIGGER}>Go</MenubarTrigger>
         <MenubarContent align="start" className="w-64">
           <MenubarItem onClick={() => wb.openPalette()}>
-            Go to view
+            Go to analysis
             <MenubarShortcut>Ctrl K</MenubarShortcut>
           </MenubarItem>
           <MenubarItem onClick={() => wb.openPalette(">")}>
-            Command palette
+            Run a command
             <MenubarShortcut>Ctrl Shift P</MenubarShortcut>
           </MenubarItem>
           <MenubarSeparator />
+          {VIEWS.map((v) => (
+            <MenubarItem key={v.href} onClick={() => wb.openTab(v.href)}>
+              <v.icon className="size-3.5" />
+              {v.label}
+              {v.chord && <MenubarShortcut>Ctrl {v.chord}</MenubarShortcut>}
+            </MenubarItem>
+          ))}
+        </MenubarContent>
+      </MenubarMenu>
+
+      <MenubarMenu>
+        <MenubarTrigger className={MENU_TRIGGER}>Layout</MenubarTrigger>
+        <MenubarContent align="start" className="w-64">
           <MenubarSub>
-            <MenubarSubTrigger>Open view</MenubarSubTrigger>
+            <MenubarSubTrigger>Sidebar</MenubarSubTrigger>
             <MenubarSubContent className="w-56">
-              <MenubarItem onClick={() => wb.setActivity("explorer")}>
-                Explorer
+              <MenubarItem onClick={() => wb.setActivity("analyses")}>
+                Analyses
               </MenubarItem>
               <MenubarItem onClick={() => wb.setActivity("search")}>Search</MenubarItem>
-              <MenubarItem onClick={() => wb.setActivity("run")}>
-                Run &amp; Analyze
-              </MenubarItem>
-              <MenubarItem onClick={() => wb.setActivity("database")}>
-                Gene Database
+              <MenubarItem onClick={() => wb.setActivity("runs")}>Runs</MenubarItem>
+              <MenubarItem onClick={() => wb.setActivity("genes")}>
+                Gene library
               </MenubarItem>
             </MenubarSubContent>
           </MenubarSub>
           <MenubarSub>
-            <MenubarSubTrigger>Panel</MenubarSubTrigger>
+            <MenubarSubTrigger>Console</MenubarSubTrigger>
             <MenubarSubContent className="w-56">
-              <MenubarItem onClick={() => wb.setPanelTab("problems")}>
-                Problems
-              </MenubarItem>
-              <MenubarItem onClick={() => wb.setPanelTab("output")}>Output</MenubarItem>
-              <MenubarItem onClick={() => wb.setPanelTab("terminal")}>
-                Terminal
+              <MenubarItem onClick={() => wb.setPanelTab("alerts")}>Alerts</MenubarItem>
+              <MenubarItem onClick={() => wb.setPanelTab("log")}>
+                Run log
                 <MenubarShortcut>Ctrl `</MenubarShortcut>
+              </MenubarItem>
+              <MenubarItem onClick={() => wb.setPanelTab("history")}>
+                History
               </MenubarItem>
             </MenubarSubContent>
           </MenubarSub>
@@ -209,14 +224,14 @@ function WorkbenchMenus() {
             checked={wb.sidebarVisible}
             onCheckedChange={wb.toggleSidebar}
           >
-            Side bar
+            Sidebar
             <MenubarShortcut>Ctrl B</MenubarShortcut>
           </MenubarCheckboxItem>
           <MenubarCheckboxItem
             checked={wb.panelVisible}
             onCheckedChange={wb.togglePanel}
           >
-            Panel
+            Console
             <MenubarShortcut>Ctrl J</MenubarShortcut>
           </MenubarCheckboxItem>
           <MenubarCheckboxItem
@@ -224,18 +239,19 @@ function WorkbenchMenus() {
             onCheckedChange={wb.toggleInspector}
           >
             Inspector
+            <MenubarShortcut>Ctrl Alt B</MenubarShortcut>
           </MenubarCheckboxItem>
           <MenubarCheckboxItem
             checked={wb.tabBarVisible}
             onCheckedChange={wb.toggleTabBar}
           >
-            Editor tabs
+            Open tabs
           </MenubarCheckboxItem>
           <MenubarCheckboxItem
-            checked={wb.breadcrumbsVisible}
-            onCheckedChange={wb.toggleBreadcrumbs}
+            checked={wb.contextBarVisible}
+            onCheckedChange={wb.toggleContextBar}
           >
-            Breadcrumbs
+            Context bar
           </MenubarCheckboxItem>
           <MenubarCheckboxItem
             checked={wb.statusBarVisible}
@@ -244,36 +260,26 @@ function WorkbenchMenus() {
             Status bar
           </MenubarCheckboxItem>
           <MenubarSeparator />
-          <MenubarCheckboxItem checked={wb.zen} onCheckedChange={wb.toggleZen}>
-            Zen mode
+          <MenubarCheckboxItem
+            checked={wb.focusMode}
+            onCheckedChange={wb.toggleFocusMode}
+          >
+            Focus mode
             <MenubarShortcut>Esc</MenubarShortcut>
           </MenubarCheckboxItem>
           <MenubarSeparator />
           <MenubarItem onClick={wb.zoomIn}>
-            Zoom in
+            Larger
             <MenubarShortcut>Ctrl Alt +</MenubarShortcut>
           </MenubarItem>
           <MenubarItem onClick={wb.zoomOut}>
-            Zoom out
+            Smaller
             <MenubarShortcut>Ctrl Alt -</MenubarShortcut>
           </MenubarItem>
           <MenubarItem onClick={wb.zoomReset}>
-            Reset zoom
+            Reset scale
             <MenubarShortcut>Ctrl Alt 0</MenubarShortcut>
           </MenubarItem>
-        </MenubarContent>
-      </MenubarMenu>
-
-      <MenubarMenu>
-        <MenubarTrigger className={MENU_TRIGGER}>Go</MenubarTrigger>
-        <MenubarContent align="start" className="w-64">
-          {VIEWS.map((v) => (
-            <MenubarItem key={v.href} onClick={() => wb.openTab(v.href)}>
-              <v.icon className="size-3.5" />
-              {v.label}
-              {v.chord && <MenubarShortcut>Ctrl {v.chord}</MenubarShortcut>}
-            </MenubarItem>
-          ))}
         </MenubarContent>
       </MenubarMenu>
     </Menubar>
@@ -303,18 +309,18 @@ function CustomizeLayoutMenu() {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-60">
-        <DropdownMenuLabel>Customize layout</DropdownMenuLabel>
+        <DropdownMenuLabel>Show</DropdownMenuLabel>
         <DropdownMenuCheckboxItem
           checked={wb.sidebarVisible}
           onCheckedChange={wb.toggleSidebar}
         >
-          Side bar
+          Sidebar
         </DropdownMenuCheckboxItem>
         <DropdownMenuCheckboxItem
           checked={wb.panelVisible}
           onCheckedChange={wb.togglePanel}
         >
-          Panel
+          Console
         </DropdownMenuCheckboxItem>
         <DropdownMenuCheckboxItem
           checked={wb.inspectorVisible}
@@ -327,13 +333,13 @@ function CustomizeLayoutMenu() {
           checked={wb.tabBarVisible}
           onCheckedChange={wb.toggleTabBar}
         >
-          Editor tabs
+          Open tabs
         </DropdownMenuCheckboxItem>
         <DropdownMenuCheckboxItem
-          checked={wb.breadcrumbsVisible}
-          onCheckedChange={wb.toggleBreadcrumbs}
+          checked={wb.contextBarVisible}
+          onCheckedChange={wb.toggleContextBar}
         >
-          Breadcrumbs
+          Context bar
         </DropdownMenuCheckboxItem>
         <DropdownMenuCheckboxItem
           checked={wb.statusBarVisible}
@@ -342,8 +348,11 @@ function CustomizeLayoutMenu() {
           Status bar
         </DropdownMenuCheckboxItem>
         <DropdownMenuSeparator />
-        <DropdownMenuCheckboxItem checked={wb.zen} onCheckedChange={wb.toggleZen}>
-          Zen mode
+        <DropdownMenuCheckboxItem
+          checked={wb.focusMode}
+          onCheckedChange={wb.toggleFocusMode}
+        >
+          Focus mode
         </DropdownMenuCheckboxItem>
       </DropdownMenuContent>
     </DropdownMenu>

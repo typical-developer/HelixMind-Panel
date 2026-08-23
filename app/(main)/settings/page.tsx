@@ -24,19 +24,20 @@ import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import {
   Chip,
-  EditorLayout,
-  EditorScroll,
+  ViewLayout,
+  ViewScroll,
   EmptyState,
   Pane,
   PaneHeader,
   WBInput,
   useStatusItems,
+  useViewContext,
   useWorkbench,
 } from "@/components/workbench"
 
 /* ============================================================================
-   Settings rows — modelled on VS Code's settings editor: one row per setting,
-   label and description on the left, control on the right.
+   Settings rows — one row per setting, label and description on the left,
+   control on the right.
    ========================================================================= */
 
 function SettingRow({
@@ -88,16 +89,16 @@ const SECTIONS: Section[] = [
     keywords: "alerts email inbox scans uploads",
   },
   {
-    id: "workbench",
-    title: "Workbench",
+    id: "layout",
+    title: "Layout",
     icon: Layout,
-    keywords: "layout side bar panel inspector status breadcrumbs tabs zen",
+    keywords: "sidebar console inspector status context bar tabs focus mode",
   },
   {
     id: "appearance",
     title: "Appearance",
     icon: Monitor,
-    keywords: "theme dark zoom font size density",
+    keywords: "theme dark scale font size density",
   },
   {
     id: "keyboard",
@@ -115,15 +116,16 @@ const SECTIONS: Section[] = [
 ]
 
 const SHORTCUTS: Array<[string, string]> = [
-  ["Command palette", "Ctrl K  /  Ctrl P"],
-  ["Toggle side bar", "Ctrl B"],
+  ["Search analyses and commands", "Ctrl K  /  Ctrl P"],
+  ["Run a command", "Ctrl Shift P"],
+  ["Toggle sidebar", "Ctrl B"],
   ["Toggle inspector", "Ctrl Alt B"],
-  ["Toggle bottom panel", "Ctrl J"],
-  ["Focus terminal", "Ctrl `"],
-  ["Close current view", "Alt W"],
-  ["Zoom in / out", "Ctrl Alt +  /  Ctrl Alt -"],
-  ["Reset zoom", "Ctrl Alt 0"],
-  ["Exit zen mode", "Esc"],
+  ["Toggle console", "Ctrl J"],
+  ["Open the run log", "Ctrl `"],
+  ["Close the open analysis", "Alt W"],
+  ["Larger / smaller interface", "Ctrl Alt +  /  Ctrl Alt -"],
+  ["Reset interface scale", "Ctrl Alt 0"],
+  ["Exit focus mode", "Esc"],
 ]
 
 export default function Settings() {
@@ -153,15 +155,25 @@ export default function Settings() {
 
   useStatusItems(
     useMemo(
-      () => [{ id: "zoom", label: wb.zoom === 0 ? "Zoom 100%" : `Zoom ${wb.zoom > 0 ? "+" : ""}${wb.zoom}` }],
+      () => [
+        {
+          id: "scale",
+          label:
+            wb.zoom === 0 ? "Scale 100%" : `Scale ${wb.zoom > 0 ? "+" : ""}${wb.zoom}`,
+        },
+      ],
       [wb.zoom],
     ),
+  )
+
+  useViewContext(
+    needle ? `Filtered to “${query}” · ${visibleSections.length} of ${SECTIONS.length} sections` : null,
   )
 
   const isVisible = (id: string) => visibleSections.some((s) => s.id === id)
 
   return (
-    <EditorLayout
+    <ViewLayout
       inspectorId="settings"
       defaultInspectorSize={22}
       inspector={
@@ -192,7 +204,7 @@ export default function Settings() {
             description={`Nothing matches “${query}”.`}
           />
         ) : (
-          <EditorScroll>
+          <ViewScroll>
             <div className="mx-auto flex max-w-3xl flex-col gap-3 p-3">
               {isVisible("profile") && (
                 <Pane id="profile">
@@ -264,26 +276,26 @@ export default function Settings() {
                 </Pane>
               )}
 
-              {isVisible("workbench") && (
-                <Pane id="workbench">
+              {isVisible("layout") && (
+                <Pane id="layout">
                   <PaneHeader
                     icon={Layout}
-                    title="Workbench"
+                    title="Layout"
                     subtitle="which regions are visible"
                   />
                   <SettingRow
-                    label="Side bar"
-                    description="Explorer, search, run configurations and the gene database."
+                    label="Sidebar"
+                    description="Analyses, search, runs and the gene library."
                   >
                     <Switch
                       checked={wb.sidebarVisible}
                       onCheckedChange={wb.toggleSidebar}
-                      aria-label="Side bar"
+                      aria-label="Sidebar"
                     />
                   </SettingRow>
                   <SettingRow
                     label="Inspector"
-                    description="The right-hand column holding a view's inputs and parameters."
+                    description="The right-hand column holding the open analysis's inputs and parameters."
                   >
                     <Switch
                       checked={wb.inspectorVisible}
@@ -292,33 +304,33 @@ export default function Settings() {
                     />
                   </SettingRow>
                   <SettingRow
-                    label="Bottom panel"
-                    description="Problems, output channels and the run terminal."
+                    label="Console"
+                    description="Alerts, the run log and the history of finished runs."
                   >
                     <Switch
                       checked={wb.panelVisible}
                       onCheckedChange={wb.togglePanel}
-                      aria-label="Bottom panel"
+                      aria-label="Console"
                     />
                   </SettingRow>
                   <SettingRow
-                    label="Editor tabs"
-                    description="Keep opened views as closable tabs above the editor."
+                    label="Open tabs"
+                    description="Keep every analysis you open one click away."
                   >
                     <Switch
                       checked={wb.tabBarVisible}
                       onCheckedChange={wb.toggleTabBar}
-                      aria-label="Editor tabs"
+                      aria-label="Open tabs"
                     />
                   </SettingRow>
                   <SettingRow
-                    label="Breadcrumbs"
-                    description="Show the workspace path above the editor."
+                    label="Context bar"
+                    description="The line above the bench naming what the open analysis is working on."
                   >
                     <Switch
-                      checked={wb.breadcrumbsVisible}
-                      onCheckedChange={wb.toggleBreadcrumbs}
-                      aria-label="Breadcrumbs"
+                      checked={wb.contextBarVisible}
+                      onCheckedChange={wb.toggleContextBar}
+                      aria-label="Context bar"
                     />
                   </SettingRow>
                   <SettingRow
@@ -357,13 +369,13 @@ export default function Settings() {
                   />
                   <SettingRow
                     label="Colour theme"
-                    description="HelixMind ships a single dark workbench theme."
+                    description="HelixMind ships a single dark lab theme, tuned for long sessions."
                   >
                     <Chip tone="info">Dark</Chip>
                   </SettingRow>
                   <SettingRow
-                    label="Interface zoom"
-                    description="Scales every region of the workbench. Ctrl+Alt+= and Ctrl+Alt+- do the same (plain Ctrl+ is the browser's own zoom)."
+                    label="Interface scale"
+                    description="Scales every region of the panel. Ctrl+Alt+= and Ctrl+Alt+- do the same (plain Ctrl+ is the browser's own zoom)."
                   >
                     <div className="flex items-center gap-1">
                       <Button
@@ -390,13 +402,13 @@ export default function Settings() {
                     </div>
                   </SettingRow>
                   <SettingRow
-                    label="Zen mode"
-                    description="Hide all chrome and keep only the editor. Esc exits."
+                    label="Focus mode"
+                    description="Hide every region except the bench itself. Esc exits."
                   >
                     <Switch
-                      checked={wb.zen}
-                      onCheckedChange={wb.toggleZen}
-                      aria-label="Zen mode"
+                      checked={wb.focusMode}
+                      onCheckedChange={wb.toggleFocusMode}
+                      aria-label="Focus mode"
                     />
                   </SettingRow>
                 </Pane>
@@ -446,10 +458,10 @@ export default function Settings() {
                 </Pane>
               )}
             </div>
-          </EditorScroll>
+          </ViewScroll>
         )}
       </div>
-    </EditorLayout>
+    </ViewLayout>
   )
 }
 
@@ -462,6 +474,8 @@ function SettingsToc({
   onSave: () => void
   saved: boolean
 }) {
+  const wb = useWorkbench()
+
   const scrollTo = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })
   }
@@ -470,7 +484,7 @@ function SettingsToc({
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="seq-scroll min-h-0 flex-1 overflow-y-auto p-3">
         <Pane>
-          <PaneHeader title="Table of contents" />
+          <PaneHeader title="Sections" />
           <div className="p-1.5">
             {sections.map((s) => (
               <button
@@ -491,16 +505,21 @@ function SettingsToc({
         </Pane>
 
         <Pane className="mt-3">
-          <PaneHeader title="Layout" />
+          <PaneHeader title="Regions" />
           <div className="grid grid-cols-3 gap-1.5 p-3">
             {[
-              { icon: PanelLeft, label: "Side" },
-              { icon: PanelBottom, label: "Panel" },
-              { icon: PanelRight, label: "Inspect" },
+              { icon: PanelLeft, label: "Sidebar", on: wb.sidebarVisible },
+              { icon: PanelBottom, label: "Console", on: wb.panelVisible },
+              { icon: PanelRight, label: "Inspector", on: wb.inspectorVisible },
             ].map((r) => (
               <div
                 key={r.label}
-                className="flex flex-col items-center gap-1 rounded-sm border border-border bg-[var(--wb-raised)] py-2 text-xs text-muted-foreground"
+                className={cn(
+                  "flex flex-col items-center gap-1 rounded-sm border py-2 text-xs transition-colors",
+                  r.on
+                    ? "border-border bg-[var(--wb-active)] text-foreground/80"
+                    : "border-border/60 bg-[var(--wb-raised)] text-muted-foreground/60",
+                )}
               >
                 <r.icon className="size-3.5" />
                 {r.label}

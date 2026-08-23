@@ -1,16 +1,18 @@
-export { Workbench, EditorLayout, EditorScroll } from "./workbench"
+export { Workbench, ViewLayout, ViewScroll } from "./workbench"
 export {
   WorkbenchProvider,
   useWorkbench,
+  useAlerts,
   useLogStream,
-  useProblems,
   useRunStatus,
   useStatusItems,
+  useViewContext,
   type LogLevel,
   type LogLine,
-  type Problem,
+  type RunRecord,
   type RunStatus,
   type StatusItem,
+  type WorkbenchAlert,
 } from "./workbench-provider"
 export {
   Chip,
@@ -31,10 +33,11 @@ export {
   type IconComponent,
 } from "./primitives"
 export {
+  RUNNABLE_VIEWS,
   VIEWS,
   WORKBENCH_GROUPS,
   TONE_CLASS,
+  groupLabel,
   viewForPath,
-  breadcrumbsForView,
   type WorkbenchView,
 } from "./registry"

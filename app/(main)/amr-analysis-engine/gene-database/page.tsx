@@ -7,8 +7,8 @@ import { cn } from "@/lib/utils"
 import { AMR_DATABASE_STATS, AMR_RECORDS } from "@/lib/amr-records"
 import {
   Chip,
-  EditorLayout,
-  EditorScroll,
+  ViewLayout,
+  ViewScroll,
   EmptyState,
   Pane,
   PaneHeader,
@@ -16,6 +16,7 @@ import {
   ToolbarButton,
   WBInput,
   useStatusItems,
+  useViewContext,
 } from "@/components/workbench"
 
 const STAT_ICONS = [Dna, Bug, Layers, Clock]
@@ -52,11 +53,17 @@ export default function GeneDatabase() {
     ),
   )
 
+  useViewContext(
+    searchTerm.trim()
+      ? `${filteredRecords.length} of ${AMR_RECORDS.length} records matching “${searchTerm.trim()}”`
+      : `${AMR_RECORDS.length} curated resistance records`,
+  )
+
   return (
-    <EditorLayout inspectorId="gene-database" inspector={<DatabaseInspector />}>
+    <ViewLayout inspectorId="gene-database" inspector={<DatabaseInspector />}>
       <div className="flex h-full min-h-0 flex-col">
-        {/* Filter bar sits above the grid, the way a find widget sits above an
-            editor buffer. */}
+        {/* Filtering is the primary action here, so it sits above the grid
+            rather than inside the inspector. */}
         <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border px-2">
           <div className="relative min-w-0 flex-1 sm:max-w-sm">
             <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -88,7 +95,7 @@ export default function GeneDatabase() {
             description={`Nothing in the database matches “${searchTerm}”.`}
           />
         ) : (
-          <EditorScroll>
+          <ViewScroll>
             {/* Desktop grid */}
             <table className="hidden w-full text-sm lg:table">
               <thead className="sticky top-0 z-10 bg-surface">
@@ -182,10 +189,10 @@ export default function GeneDatabase() {
                 </div>
               ))}
             </div>
-          </EditorScroll>
+          </ViewScroll>
         )}
       </div>
-    </EditorLayout>
+    </ViewLayout>
   )
 }
 

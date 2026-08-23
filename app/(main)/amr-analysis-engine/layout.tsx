@@ -20,9 +20,8 @@ const NAV = [
 ]
 
 /**
- * Secondary navigation for the AMR engine, rendered as an editor-group header
- * inside the workbench's editor region. The title bar, activity bar, tabs and
- * status bar all come from the persistent shell.
+ * Secondary navigation for the AMR engine, rendered inside the bench itself.
+ * The title bar, rail, tabs and status bar all come from the persistent shell.
  */
 export default function AMRLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()

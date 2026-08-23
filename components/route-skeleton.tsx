@@ -3,10 +3,10 @@ import { Skeleton } from "@/components/ui/skeleton"
 /**
  * Placeholder rendered by each route's `loading.tsx` while its segment loads.
  *
- * It fills the editor region of the persistent workbench shell (the title bar,
- * activity bar, side bar, tabs and status bar are already on screen), and
- * mirrors the rough block layout of the view it stands in for so nothing
- * shifts when the real content swaps in.
+ * It fills the bench of the persistent shell (the title bar, rail, sidebar,
+ * tabs and status bar are already on screen), and mirrors the rough block
+ * layout of the view it stands in for so nothing shifts when the real content
+ * swaps in.
  */
 export function RouteSkeleton({
   variant = "default",

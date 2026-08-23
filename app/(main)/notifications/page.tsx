@@ -9,11 +9,12 @@ import NotificationItem from "@/components/notifications/NotificationItem"
 import { useNotifications } from "@/components/notifications/notifications-provider"
 import {
   Chip,
-  EditorScroll,
+  ViewScroll,
   EmptyState,
   Pane,
   PaneHeader,
   useStatusItems,
+  useViewContext,
 } from "@/components/workbench"
 
 type Filter = "all" | "unread"
@@ -47,8 +48,14 @@ export default function NotificationsPage() {
     ),
   )
 
+  useViewContext(
+    `${notifications.length} notification${notifications.length === 1 ? "" : "s"} · ${
+      unreadCount === 0 ? "all read" : `${unreadCount} unread`
+    }`,
+  )
+
   return (
-    <EditorScroll>
+    <ViewScroll>
       <div className="mx-auto max-w-3xl p-3">
         <Pane>
           <PaneHeader
@@ -141,6 +148,6 @@ export default function NotificationsPage() {
           )}
         </Pane>
       </div>
-    </EditorScroll>
+    </ViewScroll>
   )
 }

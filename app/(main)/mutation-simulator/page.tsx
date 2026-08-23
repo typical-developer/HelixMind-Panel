@@ -35,8 +35,8 @@ import {
   SERIES,
 } from "@/lib/chart-theme";
 import {
-  EditorLayout,
-  EditorScroll,
+  ViewLayout,
+  ViewScroll,
   Field,
   Pane,
   PaneHeader,
@@ -45,10 +45,11 @@ import {
   WBInput,
   WBSelect,
   useLogStream,
-  useProblems,
+  useAlerts,
   useRunStatus,
   useStatusItems,
-  type Problem,
+  useViewContext,
+  type WorkbenchAlert,
 } from "@/components/workbench";
 
 // ==================== SIMULATION UTILITIES ====================
@@ -493,12 +494,12 @@ export default function MutationSimulator() {
     URL.revokeObjectURL(url);
   };
 
-  /* ---- Workbench integration -------------------------------------------
+  /* ---- Bench integration ------------------------------------------------
      Validation errors become Problems, each completed generation becomes a
-     terminal line, and the run itself drives the status bar. */
+     run-log line, and the run itself drives the status bar. */
 
-  const problems = useMemo<Problem[]>(() => {
-    const list: Problem[] = []
+  const problems = useMemo<WorkbenchAlert[]>(() => {
+    const list: WorkbenchAlert[] = []
     for (const [field, message] of Object.entries(errors)) {
       if (message) {
         list.push({ source: "mutation-simulator", severity: "error", message, at: field })
@@ -514,7 +515,7 @@ export default function MutationSimulator() {
     return list
   }, [errors, queryFastaFile])
 
-  useProblems("mutation-simulator", problems)
+  useAlerts("mutation-simulator", problems)
 
   const logLines = useMemo(
     () =>
@@ -566,8 +567,14 @@ export default function MutationSimulator() {
     ),
   )
 
+  useViewContext(
+    queryFastaFile
+      ? `${queryFastaFile.name} · ${sequence.length.toLocaleString()} bp · ${params.numGenerations} generations at ${params.temperature}°${params.tempUnit}`
+      : null,
+  )
+
   return (
-    <EditorLayout
+    <ViewLayout
       inspectorId="mutation-simulator"
       defaultInspectorSize={28}
       inspector={
@@ -588,7 +595,7 @@ export default function MutationSimulator() {
         />
       }
     >
-      <EditorScroll>
+      <ViewScroll>
         <div className="flex flex-col gap-3 p-3">
           <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
             <StatTile icon={Activity} label="Total mutations" value={totalMutations} />
@@ -716,8 +723,8 @@ export default function MutationSimulator() {
             </div>
           </Pane>
         </div>
-      </EditorScroll>
-    </EditorLayout>
+      </ViewScroll>
+    </ViewLayout>
   )
 }
 

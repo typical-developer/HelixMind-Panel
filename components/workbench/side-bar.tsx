@@ -3,23 +3,28 @@
 import * as React from "react"
 import { useRouter } from "next/navigation"
 import {
-  AlertTriangle,
+  AlertCircle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   CircleDot,
-  Database,
+  CircleSlash,
   Dna,
   Eye,
   EyeOff,
-  FileCode2,
-  Layout,
+  History,
+  Layers,
   MoreHorizontal,
   PanelBottom,
   PanelLeft,
   PanelRight,
+  Pill,
   Play,
   RotateCcw,
   Search,
   SlidersHorizontal,
   Square,
+  TriangleAlert,
   Type,
   X,
 } from "lucide-react"
@@ -36,28 +41,23 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
-import {
-  SideSection,
-  ToolbarButton,
-  TreeRow,
-  WBInput,
-  Chip,
-} from "./primitives"
+import { SideSection, ToolbarButton, TreeRow, WBInput, Chip } from "./primitives"
 import { useWorkbench } from "./workbench-provider"
-import { TONE_CLASS, VIEWS, WORKBENCH_GROUPS } from "./registry"
+import { RUNNABLE_VIEWS, TONE_CLASS, VIEWS, WORKBENCH_GROUPS } from "./registry"
 
 const TITLES: Record<string, string> = {
-  explorer: "Explorer",
+  analyses: "Analyses",
   search: "Search",
-  run: "Run & Analyze",
-  database: "Gene Database",
-  notifications: "Notifications",
-  settings: "Manage",
+  runs: "Runs",
+  genes: "Gene library",
+  preferences: "Preferences",
 }
 
+const GENE_LIBRARY_HREF = "/amr-analysis-engine/gene-database"
+
 /**
- * The contextual side bar. Its header stays fixed while the body swaps between
- * activity views, so switching views never shifts the chrome.
+ * The sidebar. Its header stays fixed while the body swaps between modes, so
+ * switching never shifts the chrome around it.
  */
 export function SideBar() {
   const { activity, toggleSidebar } = useWorkbench()
@@ -68,21 +68,20 @@ export function SideBar() {
       className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-surface"
     >
       <header className="flex h-9 shrink-0 items-center gap-1 pr-1 pl-3">
-        <h2 className="flex-1 truncate text-xs font-medium tracking-wide text-muted-foreground uppercase">
+        <h2 className="flex-1 truncate text-sm font-medium text-foreground/85">
           {TITLES[activity]}
         </h2>
         <SideBarMenu />
-        <ToolbarButton icon={X} label="Close side bar" onClick={toggleSidebar} />
+        <ToolbarButton icon={X} label="Hide sidebar" onClick={toggleSidebar} />
       </header>
 
       <div className="seq-scroll min-h-0 flex-1 overflow-y-auto pb-4">
         <div key={activity} className="animate-fade-in">
-          {activity === "explorer" && <ExplorerView />}
+          {activity === "analyses" && <AnalysesView />}
           {activity === "search" && <SearchView />}
-          {activity === "run" && <RunView />}
-          {activity === "database" && <DatabaseView />}
-          {activity === "settings" && <ManageView />}
-          {activity === "notifications" && <ExplorerView />}
+          {activity === "runs" && <RunsView />}
+          {activity === "genes" && <GenesView />}
+          {activity === "preferences" && <PreferencesView />}
         </div>
       </div>
     </aside>
@@ -92,11 +91,11 @@ export function SideBar() {
 function SideBarMenu() {
   const {
     tabBarVisible,
-    breadcrumbsVisible,
+    contextBarVisible,
     statusBarVisible,
     inspectorVisible,
     toggleTabBar,
-    toggleBreadcrumbs,
+    toggleContextBar,
     toggleStatusBar,
     toggleInspector,
   } = useWorkbench()
@@ -106,28 +105,28 @@ function SideBarMenu() {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          aria-label="Side bar options"
+          aria-label="Sidebar options"
           className="inline-flex size-6 cursor-pointer items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-[var(--wb-hover)] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
         >
           <MoreHorizontal className="size-3.5" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel>Views</DropdownMenuLabel>
+        <DropdownMenuLabel>Show</DropdownMenuLabel>
         <DropdownMenuCheckboxItem checked={tabBarVisible} onCheckedChange={toggleTabBar}>
-          Editor tabs
+          Open tabs
         </DropdownMenuCheckboxItem>
         <DropdownMenuCheckboxItem
-          checked={breadcrumbsVisible}
-          onCheckedChange={toggleBreadcrumbs}
+          checked={contextBarVisible}
+          onCheckedChange={toggleContextBar}
         >
-          Breadcrumbs
+          Context bar
         </DropdownMenuCheckboxItem>
         <DropdownMenuCheckboxItem
           checked={inspectorVisible}
           onCheckedChange={toggleInspector}
         >
-          Inspector panel
+          Inspector
         </DropdownMenuCheckboxItem>
         <DropdownMenuSeparator />
         <DropdownMenuCheckboxItem
@@ -142,22 +141,22 @@ function SideBarMenu() {
 }
 
 /* ============================================================================
-   Explorer
+   Analyses — everything the lab can do, plus what is currently open
    ========================================================================= */
 
-function ExplorerView() {
+function AnalysesView() {
   const { view, tabs, openTab, closeTab } = useWorkbench()
 
   return (
     <div className="space-y-1">
       {tabs.length > 0 && (
-        <SideSection title="Open Editors" defaultOpen={false}>
+        <SideSection title="Open" defaultOpen={false}>
           {tabs.map((tab) => (
             <div key={tab.href} className="group/row relative">
               <TreeRow
                 icon={tab.icon}
                 iconClassName={TONE_CLASS[tab.tone]}
-                label={tab.fileName}
+                label={tab.label}
                 active={view?.href === tab.href}
                 level={1}
                 onClick={() => openTab(tab.href)}
@@ -176,35 +175,29 @@ function ExplorerView() {
         </SideSection>
       )}
 
-      <SideSection title="helixmind-lab">
+      <SideSection title="HelixMind Lab">
         {WORKBENCH_GROUPS.map((group) => (
-          <ExplorerFolder key={group.id} label={group.label}>
+          <AnalysisGroup key={group.id} label={group.label}>
             {VIEWS.filter((v) => v.group === group.id).map((v) => (
               <TreeRow
                 key={v.href}
                 icon={v.icon}
                 iconClassName={TONE_CLASS[v.tone]}
-                label={v.fileName}
+                label={v.label}
                 active={view?.href === v.href}
                 level={2}
                 onClick={() => openTab(v.href)}
                 title={v.hint}
               />
             ))}
-          </ExplorerFolder>
+          </AnalysisGroup>
         ))}
-      </SideSection>
-
-      <SideSection title="Outline" defaultOpen={false}>
-        <p className="px-3 py-2 text-xs leading-relaxed text-muted-foreground/70">
-          {view ? view.hint : "No view is open."}
-        </p>
       </SideSection>
     </div>
   )
 }
 
-function ExplorerFolder({
+function AnalysisGroup({
   label,
   children,
 }: {
@@ -216,7 +209,7 @@ function ExplorerFolder({
   return (
     <div>
       <TreeRow
-        icon={open ? FolderOpenIcon : FolderIcon}
+        icon={open ? ChevronDown : ChevronRight}
         iconClassName="text-muted-foreground"
         label={label}
         level={1}
@@ -225,34 +218,6 @@ function ExplorerFolder({
       />
       {open && <div className="animate-fade-in">{children}</div>}
     </div>
-  )
-}
-
-/* Folder glyphs kept local — lucide's folder icons carry more visual weight
-   than the tree needs at 14px. */
-function FolderIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" className={className} aria-hidden>
-      <path
-        d="M1.5 3.5h4l1.2 1.6h7.8v7.4H1.5z"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
-function FolderOpenIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" className={className} aria-hidden>
-      <path
-        d="M1.5 12.5V3.5h4l1.2 1.6h7.8v1.9M1.5 12.5l2-5.5h12l-2 5.5z"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinejoin="round"
-      />
-    </svg>
   )
 }
 
@@ -269,7 +234,7 @@ function SearchView() {
   const viewMatches = React.useMemo(() => {
     if (!needle) return []
     return VIEWS.filter((v) =>
-      [v.label, v.fileName, v.hint].some((f) => f.toLowerCase().includes(needle)),
+      [v.label, v.hint].some((f) => f.toLowerCase().includes(needle)),
     )
   }, [needle])
 
@@ -293,9 +258,9 @@ function SearchView() {
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search views and genes"
+            placeholder="Search analyses and genes"
             className="pl-7"
-            aria-label="Search the workspace"
+            aria-label="Search the lab"
           />
         </div>
         {needle && (
@@ -308,23 +273,24 @@ function SearchView() {
 
       {!needle && (
         <p className="px-3 py-2 text-xs leading-relaxed text-muted-foreground/70">
-          Search across analysis views and the resistance gene database. Press{" "}
-          <span className="font-mono text-foreground/80">Ctrl+K</span> for the full
-          command palette.
+          Search across every analysis and the resistance gene library. Press{" "}
+          <span className="font-mono text-foreground/80">Ctrl+K</span> to search and
+          run commands from anywhere.
         </p>
       )}
 
       {viewMatches.length > 0 && (
-        <SideSection title={`Views · ${viewMatches.length}`}>
+        <SideSection title={`Analyses · ${viewMatches.length}`}>
           {viewMatches.map((v) => (
             <TreeRow
               key={v.href}
               icon={v.icon}
               iconClassName={TONE_CLASS[v.tone]}
-              label={v.fileName}
+              label={v.label}
               active={view?.href === v.href}
               level={1}
               onClick={() => openTab(v.href)}
+              title={v.hint}
             />
           ))}
         </SideSection>
@@ -340,7 +306,7 @@ function SearchView() {
               label={<span className="font-mono">{r.gene}</span>}
               detail={`${r.impact}%`}
               level={1}
-              onClick={() => openTab("/amr-analysis-engine/gene-database")}
+              onClick={() => openTab(GENE_LIBRARY_HREF)}
               title={`${r.organism} · ${r.mechanism}`}
             />
           ))}
@@ -351,23 +317,19 @@ function SearchView() {
 }
 
 /* ============================================================================
-   Run & Analyze
+   Runs — what you can start, what is running, what has finished
    ========================================================================= */
 
-const RUNNABLE = VIEWS.filter((v) =>
-  ["/dna-scanner", "/mutation-simulator", "/microbe-growth-lab"].includes(v.href),
-)
+function RunsView() {
+  const { openTab, view, runStatus, runHistory, alerts, setPanelTab } = useWorkbench()
 
-function RunView() {
-  const { openTab, view, runStatus, problems, setPanelTab } = useWorkbench()
-
-  const errors = problems.filter((p) => p.severity === "error").length
-  const warnings = problems.filter((p) => p.severity === "warning").length
+  const errors = alerts.filter((a) => a.severity === "error").length
+  const warnings = alerts.filter((a) => a.severity === "warning").length
 
   return (
     <div className="space-y-1">
-      <SideSection title="Run configurations">
-        {RUNNABLE.map((v) => (
+      <SideSection title="Start a run">
+        {RUNNABLE_VIEWS.map((v) => (
           <TreeRow
             key={v.href}
             icon={Play}
@@ -376,12 +338,13 @@ function RunView() {
             active={view?.href === v.href}
             level={1}
             onClick={() => openTab(v.href)}
+            title={v.hint}
           />
         ))}
       </SideSection>
 
-      <SideSection title="Active job">
-        {runStatus ? (
+      <SideSection title="In progress">
+        {runStatus && runStatus.state !== "idle" ? (
           <div className="space-y-2 px-3 py-2">
             <div className="flex items-center gap-2">
               {runStatus.state === "running" ? (
@@ -389,7 +352,7 @@ function RunView() {
               ) : runStatus.state === "paused" ? (
                 <Square className="size-3.5 text-warning" />
               ) : (
-                <CircleDot className="size-3.5 text-muted-foreground" />
+                <CheckCircle2 className="size-3.5 text-muted-foreground" />
               )}
               <span className="truncate text-sm text-foreground">
                 {runStatus.label}
@@ -402,7 +365,7 @@ function RunView() {
                       ? "warning"
                       : "neutral"
                 }
-                className="ml-auto capitalize"
+                className="ml-auto"
               >
                 {runStatus.state}
               </Chip>
@@ -422,39 +385,78 @@ function RunView() {
             )}
           </div>
         ) : (
-          <p className="px-3 py-2 text-xs text-muted-foreground/70">
-            Nothing is running. Start a simulation to track it here.
+          <p className="px-3 py-2 text-xs leading-relaxed text-muted-foreground/70">
+            Nothing is running. Start a scan or a simulation and its progress
+            appears here.
           </p>
         )}
       </SideSection>
 
-      <SideSection title="Diagnostics">
+      <SideSection title="Finished" defaultOpen={runHistory.length > 0}>
+        {runHistory.length === 0 ? (
+          <p className="px-3 py-2 text-xs text-muted-foreground/70">
+            No runs finished this session.
+          </p>
+        ) : (
+          runHistory.slice(0, 6).map((record) => (
+            <TreeRow
+              key={record.id}
+              icon={record.outcome === "completed" ? CheckCircle2 : CircleSlash}
+              iconClassName={
+                record.outcome === "completed" ? "text-success" : "text-muted-foreground"
+              }
+              label={record.label}
+              detail={formatAgo(record.endedAt)}
+              level={1}
+              onClick={() => setPanelTab("history")}
+              title={record.detail}
+            />
+          ))
+        )}
+      </SideSection>
+
+      <SideSection title="Alerts">
         <TreeRow
-          icon={AlertTriangle}
+          icon={AlertCircle}
           iconClassName={errors ? "text-destructive" : "text-muted-foreground"}
           label="Errors"
           detail={errors}
           level={1}
-          onClick={() => setPanelTab("problems")}
+          onClick={() => setPanelTab("alerts")}
         />
         <TreeRow
-          icon={AlertTriangle}
+          icon={TriangleAlert}
           iconClassName={warnings ? "text-warning" : "text-muted-foreground"}
           label="Warnings"
           detail={warnings}
           level={1}
-          onClick={() => setPanelTab("problems")}
+          onClick={() => setPanelTab("alerts")}
+        />
+        <TreeRow
+          icon={History}
+          label="Open the run log"
+          level={1}
+          onClick={() => setPanelTab("log")}
         />
       </SideSection>
     </div>
   )
 }
 
+/** Coarse relative time — the sidebar only needs "how recently". */
+function formatAgo(ts: number) {
+  const seconds = Math.max(0, Math.round((Date.now() - ts) / 1000))
+  if (seconds < 60) return "just now"
+  const minutes = Math.round(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  return `${Math.round(minutes / 60)}h ago`
+}
+
 /* ============================================================================
-   Gene database
+   Gene library
    ========================================================================= */
 
-function DatabaseView() {
+function GenesView() {
   const { openTab } = useWorkbench()
   const [query, setQuery] = React.useState("")
 
@@ -492,7 +494,7 @@ function DatabaseView() {
         </div>
       </div>
 
-      <SideSection title={`Markers · ${records.length}`}>
+      <SideSection title={`Resistance genes · ${records.length}`}>
         {records.map((r) => (
           <TreeRow
             key={r.id}
@@ -501,12 +503,14 @@ function DatabaseView() {
             label={<span className="font-mono">{r.gene}</span>}
             detail={r.organism}
             level={1}
-            onClick={() => openTab("/amr-analysis-engine/gene-database")}
+            onClick={() => openTab(GENE_LIBRARY_HREF)}
             title={`${r.antibiotic} · ${r.mechanism}`}
           />
         ))}
         {records.length === 0 && (
-          <p className="px-3 py-2 text-xs text-muted-foreground/70">No matches.</p>
+          <p className="px-3 py-2 text-xs text-muted-foreground/70">
+            No gene matches “{query}”.
+          </p>
         )}
       </SideSection>
 
@@ -514,11 +518,11 @@ function DatabaseView() {
         {byClass.map(([label, count]) => (
           <TreeRow
             key={label}
-            icon={Database}
+            icon={Pill}
             label={label}
             detail={count}
             level={1}
-            onClick={() => openTab("/amr-analysis-engine/gene-database")}
+            onClick={() => openTab(GENE_LIBRARY_HREF)}
           />
         ))}
       </SideSection>
@@ -527,15 +531,15 @@ function DatabaseView() {
 }
 
 /* ============================================================================
-   Manage — the layout customisation surface
+   Preferences — the layout controls, close at hand
    ========================================================================= */
 
-function ManageView() {
+function PreferencesView() {
   const wb = useWorkbench()
   const router = useRouter()
 
   const toggles: Array<{
-    icon: typeof Layout
+    icon: typeof Layers
     label: string
     hint: string
     checked: boolean
@@ -543,7 +547,7 @@ function ManageView() {
   }> = [
     {
       icon: PanelLeft,
-      label: "Side bar",
+      label: "Sidebar",
       hint: "Ctrl+B",
       checked: wb.sidebarVisible,
       onChange: wb.toggleSidebar,
@@ -557,24 +561,24 @@ function ManageView() {
     },
     {
       icon: PanelBottom,
-      label: "Bottom panel",
+      label: "Console",
       hint: "Ctrl+J",
       checked: wb.panelVisible,
       onChange: wb.togglePanel,
     },
     {
-      icon: FileCode2,
-      label: "Editor tabs",
-      hint: "Show open views",
+      icon: Layers,
+      label: "Open tabs",
+      hint: "Switch between open analyses",
       checked: wb.tabBarVisible,
       onChange: wb.toggleTabBar,
     },
     {
-      icon: Layout,
-      label: "Breadcrumbs",
-      hint: "Path above the editor",
-      checked: wb.breadcrumbsVisible,
-      onChange: wb.toggleBreadcrumbs,
+      icon: SlidersHorizontal,
+      label: "Context bar",
+      hint: "What the open analysis is working on",
+      checked: wb.contextBarVisible,
+      onChange: wb.toggleContextBar,
     },
     {
       icon: SlidersHorizontal,
@@ -584,11 +588,11 @@ function ManageView() {
       onChange: wb.toggleStatusBar,
     },
     {
-      icon: wb.zen ? EyeOff : Eye,
-      label: "Zen mode",
-      hint: "Hide all chrome · Esc to exit",
-      checked: wb.zen,
-      onChange: wb.toggleZen,
+      icon: wb.focusMode ? EyeOff : Eye,
+      label: "Focus mode",
+      hint: "Bench only · Esc to exit",
+      checked: wb.focusMode,
+      onChange: wb.toggleFocusMode,
     },
   ]
 
@@ -624,17 +628,17 @@ function ManageView() {
         <div className="space-y-2 px-3 py-2">
           <div className="flex items-center gap-2">
             <Type className="size-3.5 shrink-0 text-muted-foreground" />
-            <span className="flex-1 text-sm text-foreground">Interface zoom</span>
+            <span className="flex-1 text-sm text-foreground">Interface scale</span>
             <div className="flex items-center gap-1">
-              <ToolbarButton icon={MinusIcon} label="Zoom out" onClick={wb.zoomOut} />
+              <ToolbarButton icon={MinusIcon} label="Smaller" onClick={wb.zoomOut} />
               <span className="w-9 text-center font-mono text-xs text-muted-foreground tabular">
                 {wb.zoom === 0 ? "100%" : `${wb.zoom > 0 ? "+" : ""}${wb.zoom}`}
               </span>
-              <ToolbarButton icon={PlusIcon} label="Zoom in" onClick={wb.zoomIn} />
+              <ToolbarButton icon={PlusIcon} label="Larger" onClick={wb.zoomIn} />
             </div>
           </div>
-          <p className="text-xs text-muted-foreground/70">
-            Ctrl+Alt+= and Ctrl+Alt+- resize the whole workbench. Ctrl+Alt+0 resets it.
+          <p className="text-xs leading-relaxed text-muted-foreground/70">
+            Ctrl+Alt+= and Ctrl+Alt+- resize the whole panel. Ctrl+Alt+0 resets it.
           </p>
         </div>
       </SideSection>
@@ -648,7 +652,7 @@ function ManageView() {
         />
         <TreeRow
           icon={SlidersHorizontal}
-          label="Open settings"
+          label="All settings"
           level={1}
           onClick={() => router.push("/settings")}
         />
@@ -657,7 +661,7 @@ function ManageView() {
   )
 }
 
-/* Minimal +/- glyphs so the zoom stepper matches the 14px toolbar icons. */
+/* Minimal +/- glyphs so the scale stepper matches the 14px toolbar icons. */
 function MinusIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 16 16" fill="none" className={cn(className)} aria-hidden>

@@ -13,42 +13,40 @@ import {
 /**
  * Single source of truth for every routed view in the workbench.
  *
- * The activity bar, explorer tree, editor tabs, breadcrumbs and command
- * palette all read from here, so adding a view is a one-line change instead of
- * six parallel edits.
+ * The rail, sidebar, open tabs, context bar and command palette all read from
+ * here, so adding a view is a one-line change instead of six parallel edits.
  */
 export interface WorkbenchView {
   /** Route the view lives at — also the tab id. */
   href: string
-  /** Human label used in tabs, breadcrumbs and the palette. */
+  /** The view's name. The only name the user ever sees. */
   label: string
-  /** File-style name shown in the explorer tree. */
-  fileName: string
-  /** Group heading in the explorer tree. */
+  /** Group heading in the sidebar. */
   group: WorkbenchGroupId
   icon: LucideIcon
-  /** Tint applied to the file icon, mirroring VS Code's seti file colours. */
+  /** Tint applied to the view's icon, keyed to what the view works on. */
   tone: "blue" | "green" | "amber" | "purple" | "red" | "neutral"
-  /** Short description surfaced in the command palette and empty states. */
+  /** What the view is for — shown in the context bar and the palette. */
   hint: string
+  /** True for views that execute a job, so the Runs sidebar can list them. */
+  runnable?: boolean
   /** Keyboard hint shown next to the palette entry. */
   chord?: string
 }
 
-export type WorkbenchGroupId = "analysis" | "amr-engine" | "workspace"
+export type WorkbenchGroupId = "lab" | "amr" | "workspace"
 
 export const WORKBENCH_GROUPS: Array<{ id: WorkbenchGroupId; label: string }> = [
-  { id: "analysis", label: "analysis" },
-  { id: "amr-engine", label: "amr-engine" },
-  { id: "workspace", label: "workspace" },
+  { id: "lab", label: "Lab" },
+  { id: "amr", label: "AMR Engine" },
+  { id: "workspace", label: "Workspace" },
 ]
 
 export const VIEWS: WorkbenchView[] = [
   {
     href: "/dashboard",
     label: "Overview",
-    fileName: "overview.dash",
-    group: "analysis",
+    group: "lab",
     icon: Gauge,
     tone: "blue",
     hint: "Lab-wide metrics, sequence viewer and mutation log",
@@ -56,44 +54,43 @@ export const VIEWS: WorkbenchView[] = [
   {
     href: "/dna-scanner",
     label: "DNA Scanner",
-    fileName: "dna-scanner.fa",
-    group: "analysis",
+    group: "lab",
     icon: ScanLine,
     tone: "green",
     hint: "Parse FASTA input and call mutations against a reference",
+    runnable: true,
   },
   {
     href: "/mutation-simulator",
     label: "Mutation Simulator",
-    fileName: "mutation-simulator.sim",
-    group: "analysis",
+    group: "lab",
     icon: Split,
     tone: "purple",
     hint: "Run generational mutation dynamics over a query sequence",
+    runnable: true,
   },
   {
     href: "/microbe-growth-lab",
     label: "Microbe Growth Lab",
-    fileName: "microbe-growth-lab.sim",
-    group: "analysis",
+    group: "lab",
     icon: FlaskConical,
     tone: "amber",
     hint: "Model population growth under environmental stress",
+    runnable: true,
   },
   {
     href: "/amr-analysis-engine/resistance-predictor",
     label: "Resistance Predictor",
-    fileName: "resistance-predictor.amr",
-    group: "amr-engine",
+    group: "amr",
     icon: ShieldAlert,
     tone: "red",
     hint: "Score resistance markers and synergy rules for an organism",
+    runnable: true,
   },
   {
     href: "/amr-analysis-engine/gene-database",
-    label: "Gene Database",
-    fileName: "gene-database.db",
-    group: "amr-engine",
+    label: "Gene Library",
+    group: "amr",
     icon: Database,
     tone: "blue",
     hint: "Browse curated antimicrobial resistance gene records",
@@ -101,7 +98,6 @@ export const VIEWS: WorkbenchView[] = [
   {
     href: "/notifications",
     label: "Notifications",
-    fileName: "notifications.log",
     group: "workspace",
     icon: Bell,
     tone: "neutral",
@@ -110,7 +106,6 @@ export const VIEWS: WorkbenchView[] = [
   {
     href: "/settings",
     label: "Settings",
-    fileName: "settings.json",
     group: "workspace",
     icon: Settings2,
     tone: "neutral",
@@ -129,6 +124,9 @@ export const TONE_CLASS: Record<WorkbenchView["tone"], string> = {
   neutral: "text-muted-foreground",
 }
 
+/** Views that execute a job, in registry order. */
+export const RUNNABLE_VIEWS = VIEWS.filter((v) => v.runnable)
+
 /**
  * Resolve a pathname to its view. Falls back to prefix matching so nested
  * segments (and the `/amr-analysis-engine` redirect) still land on a view.
@@ -144,13 +142,8 @@ export function viewForPath(pathname: string): WorkbenchView | undefined {
     .find((v) => pathname.startsWith(v.href + "/") || v.href.startsWith(pathname + "/"))
 }
 
-/** Breadcrumb segments for a view, e.g. `HelixMind › analysis › DNA Scanner`. */
-export function breadcrumbsForView(view: WorkbenchView | undefined) {
-  if (!view) return [{ label: "HelixMind" }]
-  const group = WORKBENCH_GROUPS.find((g) => g.id === view.group)
-  return [
-    { label: "helixmind-lab" },
-    { label: group?.label ?? view.group },
-    { label: view.fileName, view },
-  ]
+/** The group a view belongs to, e.g. `AMR Engine`. */
+export function groupLabel(view: WorkbenchView | undefined) {
+  if (!view) return "Workspace"
+  return WORKBENCH_GROUPS.find((g) => g.id === view.group)?.label ?? "Workspace"
 }

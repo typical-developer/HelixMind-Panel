@@ -4,15 +4,15 @@ import * as React from "react"
 
 const STEPS = [
   "Connecting to lab core",
-  "Restoring workspace layout",
+  "Restoring your layout",
   "Indexing resistance markers",
-  "Starting analysis engine",
+  "Starting analysis engines",
 ]
 
 /**
  * Startup state. Rather than a spinner on an empty page, this draws the
- * workbench's own chrome as skeletons so the shell appears to assemble in
- * place — nothing jumps when the real regions take over.
+ * shell's own regions as skeletons so it appears to assemble in place —
+ * nothing jumps when the real regions take over.
  */
 export function WorkbenchBoot() {
   const [step, setStep] = React.useState(0)
@@ -42,14 +42,14 @@ export function WorkbenchBoot() {
       </div>
 
       <div className="flex min-h-0 flex-1">
-        {/* Activity bar */}
+        {/* Rail */}
         <div className="flex w-12 shrink-0 flex-col items-center gap-4 border-r border-border py-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="size-5 rounded-sm bg-[var(--wb-hover)]" />
           ))}
         </div>
 
-        {/* Side bar */}
+        {/* Sidebar */}
         <div className="hidden w-56 shrink-0 flex-col gap-2 border-r border-border bg-surface p-3 sm:flex">
           <div className="h-3 w-24 rounded-xs bg-[var(--wb-active)]" />
           {Array.from({ length: 7 }).map((_, i) => (
@@ -61,7 +61,7 @@ export function WorkbenchBoot() {
           ))}
         </div>
 
-        {/* Editor */}
+        {/* Bench */}
         <div className="flex min-w-0 flex-1 flex-col bg-surface">
           <div className="flex h-9 shrink-0 items-center gap-3 border-b border-border px-3">
             <div className="h-3 w-28 rounded-xs bg-[var(--wb-active)]" />
@@ -85,9 +85,9 @@ export function WorkbenchBoot() {
       {/* Status bar */}
       <div className="flex h-6 shrink-0 items-center border-t border-border">
         <div className="flex h-full items-center gap-1.5 bg-brand px-2 text-xs font-medium text-white">
-          HelixMind
+          HelixMind Lab
         </div>
-        <span className="px-2 text-xs text-muted-foreground">Starting workbench…</span>
+        <span className="px-2 text-xs text-muted-foreground">Starting the lab…</span>
       </div>
     </div>
   )

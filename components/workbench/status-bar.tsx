@@ -5,11 +5,10 @@ import { useRouter } from "next/navigation"
 import {
   AlertCircle,
   Bell,
+  CheckCircle2,
   CircleDot,
-  GitBranch,
   Loader2,
-  RefreshCw,
-  Terminal,
+  PanelBottom,
   TriangleAlert,
   Zap,
 } from "lucide-react"
@@ -21,65 +20,60 @@ import { useNotifications } from "@/components/notifications/notifications-provi
 import { useWorkbench } from "./workbench-provider"
 
 /**
- * The 24px strip along the bottom. Left side is workspace-wide (branch, sync,
- * diagnostics); right side is contextual — views publish their own items with
- * `useStatusItems`, the way an editor shows cursor position and encoding.
+ * The 24px strip along the bottom. Left side is lab-wide — what needs
+ * attention and what is running. Right side belongs to the open analysis:
+ * views publish their own readouts with `useStatusItems`.
  */
 export function StatusBar() {
   const {
-    problems,
+    alerts,
     setPanelTab,
     panelVisible,
     togglePanel,
     runStatus,
     statusItems,
     openPalette,
-    view,
   } = useWorkbench()
   const { unreadCount } = useNotifications()
   const router = useRouter()
 
-  const errors = problems.filter((p) => p.severity === "error").length
-  const warnings = problems.filter((p) => p.severity === "warning").length
+  const errors = alerts.filter((a) => a.severity === "error").length
+  const warnings = alerts.filter((a) => a.severity === "warning").length
 
   return (
     <footer
       aria-label="Status bar"
       className="relative flex h-6 shrink-0 items-stretch gap-0 border-t border-border bg-chrome pr-1 pl-0 text-xs text-muted-foreground select-none"
     >
-      {/* Remote-indicator style brand chip. */}
+      {/* The lab you are working in, and the way into everything it can do. */}
       <button
         type="button"
         onClick={() => openPalette()}
-        title="Open command palette (Ctrl+K)"
+        title="Search and run commands (Ctrl+K)"
         className="flex cursor-pointer items-center gap-1.5 bg-brand px-2 font-medium text-white transition-colors hover:bg-brand/85 focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none focus-visible:ring-inset"
       >
         <Zap className="size-3" />
-        <span className="hidden sm:inline">HelixMind</span>
+        <span className="hidden sm:inline">HelixMind Lab</span>
       </button>
 
       <StatusItem
-        icon={GitBranch}
-        label="main"
-        title="Active workspace branch"
-        onClick={() => router.push("/dashboard")}
-      />
-      <StatusItem icon={RefreshCw} label="" title="Synchronize workspace" />
-
-      <StatusItem
-        icon={AlertCircle}
+        icon={errors + warnings === 0 ? CheckCircle2 : AlertCircle}
         label={
-          <span className="flex items-center gap-1.5 tabular">
-            {errors}
-            <TriangleAlert className="size-3" />
-            {warnings}
-          </span>
+          errors + warnings === 0 ? (
+            "No alerts"
+          ) : (
+            <span className="flex items-center gap-1.5 tabular">
+              {errors}
+              <TriangleAlert className="size-3" />
+              {warnings}
+            </span>
+          )
         }
         title={`${errors} error${errors === 1 ? "" : "s"}, ${warnings} warning${
           warnings === 1 ? "" : "s"
-        }`}
+        } — open the console`}
         tone={errors > 0 ? "danger" : warnings > 0 ? "warning" : "default"}
-        onClick={() => setPanelTab("problems")}
+        onClick={() => setPanelTab("alerts")}
       />
 
       {runStatus && (
@@ -95,7 +89,7 @@ export function StatusBar() {
           }
           title={runStatus.detail ?? runStatus.label}
           tone={runStatus.state === "running" ? "info" : "default"}
-          onClick={() => setPanelTab("output")}
+          onClick={() => setPanelTab("log")}
         />
       )}
 
@@ -112,18 +106,10 @@ export function StatusBar() {
         />
       ))}
 
-      {view && (
-        <StatusItem
-          label={view.fileName.split(".").pop()?.toUpperCase() ?? ""}
-          title="View type"
-        />
-      )}
-      <StatusItem label="UTF-8" title="Encoding" />
-
       <StatusItem
-        icon={Terminal}
+        icon={PanelBottom}
         label=""
-        title="Toggle panel (Ctrl+J)"
+        title="Toggle console (Ctrl+J)"
         tone={panelVisible ? "info" : "default"}
         onClick={togglePanel}
       />

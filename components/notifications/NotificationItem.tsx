@@ -52,7 +52,7 @@ export default function NotificationItem({
         !data.read && "bg-[var(--wb-hover)]",
       )}
     >
-      {/* Unread accent bar, matching the explorer's active-item rail. */}
+      {/* Unread accent bar, matching the sidebar's active-item rail. */}
       {!data.read && (
         <span className="absolute top-1/2 left-0 h-6 w-0.5 -translate-y-1/2 rounded-r-full bg-brand" />
       )}

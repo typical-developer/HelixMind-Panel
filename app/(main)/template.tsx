@@ -5,7 +5,7 @@ import type React from "react"
 /**
  * Next.js re-mounts a `template` on every navigation (unlike `layout`, which
  * persists), so wrapping the routed content here replays a short fade-and-rise
- * on each route change while the workbench chrome around it stays put. The
+ * on each route change while the chrome around it stays put. The
  * animation is opacity/transform only, and is neutralised for users with
  * `prefers-reduced-motion` via globals.css.
  */

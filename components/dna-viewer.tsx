@@ -15,16 +15,16 @@ const BASES_PER_ROW = 60
 
 /** Per-base tint, kept low-chroma so a wall of sequence stays readable. */
 const BASE_CLASS: Record<string, string> = {
-  A: "text-[var(--term-green)]",
-  T: "text-[var(--term-red)]",
-  G: "text-[var(--term-blue)]",
-  C: "text-[var(--term-yellow)]",
+  A: "text-[var(--base-a)]",
+  T: "text-[var(--base-t)]",
+  G: "text-[var(--base-g)]",
+  C: "text-[var(--base-c)]",
   N: "text-muted-foreground",
 }
 
 /**
- * Sequence readout rendered like an editor buffer: a line-number gutter on the
- * left, fixed-width rows of bases, and a highlighted variant hotspot.
+ * Sequence readout: a position gutter down the left, fixed-width rows of bases
+ * coloured by nucleotide, and a highlighted variant hotspot.
  */
 export function DNAViewer() {
   const [copied, setCopied] = useState(false)

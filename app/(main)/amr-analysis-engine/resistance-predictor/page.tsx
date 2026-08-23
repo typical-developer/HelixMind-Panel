@@ -29,17 +29,18 @@ import {
 } from "@/components/ui/select"
 import {
   Chip,
-  EditorLayout,
-  EditorScroll,
+  ViewLayout,
+  ViewScroll,
   EmptyState,
   Pane,
   PaneHeader,
   Rule,
   ToolbarButton,
   useLogStream,
-  useProblems,
+  useAlerts,
   useStatusItems,
-  type Problem,
+  useViewContext,
+  type WorkbenchAlert,
 } from "@/components/workbench"
 
 const amrDatabase = {
@@ -170,12 +171,12 @@ export default function ResistancePredictorPage() {
     return "neutral" as const
   }
 
-  /* ---- Workbench integration ------------------------------------------- */
+  /* ---- Bench integration ------------------------------------------------ */
 
-  useProblems(
+  useAlerts(
     "amr-engine",
-    useMemo<Problem[]>(() => {
-      const list: Problem[] = []
+    useMemo<WorkbenchAlert[]>(() => {
+      const list: WorkbenchAlert[] = []
       if (error) {
         list.push({ source: "amr-engine", severity: "error", message: error })
       }
@@ -227,8 +228,14 @@ export default function ResistancePredictorPage() {
     ),
   )
 
+  useViewContext(
+    `${selectedOrganism} · ${selectedGenes.length} marker${
+      selectedGenes.length === 1 ? "" : "s"
+    } selected${results ? ` · last run ${results.timestamp}` : ""}`,
+  )
+
   return (
-    <EditorLayout
+    <ViewLayout
       inspectorId="amr-predictor"
       defaultInspectorSize={30}
       inspector={
@@ -245,7 +252,7 @@ export default function ResistancePredictorPage() {
       }
     >
       {results ? (
-        <EditorScroll>
+        <ViewScroll>
           <div className="flex flex-col gap-3 p-3">
             <Pane>
               <PaneHeader
@@ -335,7 +342,7 @@ export default function ResistancePredictorPage() {
               </Accordion>
             </Pane>
           </div>
-        </EditorScroll>
+        </ViewScroll>
       ) : (
         <EmptyState
           icon={FlaskConical}
@@ -343,7 +350,7 @@ export default function ResistancePredictorPage() {
           description="Pick an organism and one or more detected genes in the inspector, then run the analysis to see the predicted resistance profile."
         />
       )}
-    </EditorLayout>
+    </ViewLayout>
   )
 }
 

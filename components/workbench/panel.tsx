@@ -3,10 +3,12 @@
 import * as React from "react"
 import {
   AlertCircle,
+  CheckCircle2,
   ChevronsDownUp,
   ChevronsUpDown,
+  CircleSlash,
   Info,
-  Terminal as TerminalIcon,
+  ScrollText,
   Trash2,
   TriangleAlert,
   X,
@@ -14,25 +16,26 @@ import {
 
 import { cn } from "@/lib/utils"
 
-import { ToolbarButton, WBSelect } from "./primitives"
+import { Chip, ToolbarButton, WBSelect } from "./primitives"
 import {
   useWorkbench,
   type LogLevel,
   type LogLine,
   type PanelTabId,
-  type Problem,
+  type RunRecord,
+  type WorkbenchAlert,
 } from "./workbench-provider"
 
 const PANEL_TABS: Array<{ id: PanelTabId; label: string }> = [
-  { id: "problems", label: "Problems" },
-  { id: "output", label: "Output" },
-  { id: "terminal", label: "Terminal" },
+  { id: "alerts", label: "Alerts" },
+  { id: "log", label: "Run log" },
+  { id: "history", label: "History" },
 ]
 
 /**
- * The bottom panel. Same furniture as VS Code's: a row of underlined tab
- * headings on the left, panel actions on the right, and a monospace body that
- * fills whatever height the resize handle gives it.
+ * The console: everything a run produces, in one place under the bench.
+ * Alerts are what needs attention, the run log is what happened line by line,
+ * and history is what the bench has finished.
  */
 export function BottomPanel() {
   const {
@@ -41,22 +44,32 @@ export function BottomPanel() {
     panelMaximized,
     togglePanelMaximized,
     togglePanel,
-    problems,
+    alerts,
+    logs,
+    runHistory,
     clearLogs,
+    clearRunHistory,
   } = useWorkbench()
 
-  const errors = problems.filter((p) => p.severity === "error").length
-  const warnings = problems.filter((p) => p.severity === "warning").length
+  const errors = alerts.filter((a) => a.severity === "error").length
+  const warnings = alerts.filter((a) => a.severity === "warning").length
+
+  const counts: Record<PanelTabId, number> = {
+    alerts: errors + warnings,
+    log: logs.length,
+    history: runHistory.length,
+  }
 
   return (
     <section
-      aria-label="Panel"
+      aria-label="Console"
       className="flex h-full min-h-0 flex-col overflow-hidden border-t border-border bg-surface"
     >
       <header className="flex h-9 shrink-0 items-center gap-1 border-b border-border pr-1.5 pl-3">
-        <div role="tablist" aria-label="Panel views" className="flex items-stretch gap-4">
+        <div role="tablist" aria-label="Console" className="flex items-stretch gap-4">
           {PANEL_TABS.map((tab) => {
             const active = panelTab === tab.id
+            const count = counts[tab.id]
             return (
               <button
                 key={tab.id}
@@ -65,15 +78,25 @@ export function BottomPanel() {
                 aria-selected={active}
                 onClick={() => setPanelTab(tab.id)}
                 className={cn(
-                  "relative flex cursor-pointer items-center gap-1.5 text-xs font-medium tracking-wide uppercase",
+                  "relative flex cursor-pointer items-center gap-1.5 text-sm",
                   "transition-colors duration-100 focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none",
-                  active ? "text-foreground" : "text-muted-foreground hover:text-foreground/80",
+                  active
+                    ? "font-medium text-foreground"
+                    : "text-muted-foreground hover:text-foreground/80",
                 )}
               >
                 {tab.label}
-                {tab.id === "problems" && (errors > 0 || warnings > 0) && (
-                  <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--wb-selected)] px-1 text-2xs font-semibold text-foreground tabular">
-                    {errors + warnings}
+                {count > 0 && (
+                  <span
+                    className={cn(
+                      "flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-2xs font-semibold tabular",
+                      active
+                        ? "bg-[var(--wb-selected)] text-foreground"
+                        : "bg-[var(--wb-active)] text-muted-foreground",
+                      tab.id === "alerts" && errors > 0 && "bg-destructive/20 text-destructive",
+                    )}
+                  >
+                    {count > 99 ? "99+" : count}
                   </span>
                 )}
                 {/* Active underline sits on the header's bottom hairline. */}
@@ -89,23 +112,31 @@ export function BottomPanel() {
         </div>
 
         <div className="ml-auto flex items-center gap-0.5">
-          {panelTab !== "problems" && (
+          {panelTab === "log" && (
             <ToolbarButton
               icon={Trash2}
-              label="Clear output"
+              label="Clear run log"
               side="top"
               onClick={clearLogs}
             />
           )}
+          {panelTab === "history" && (
+            <ToolbarButton
+              icon={Trash2}
+              label="Clear run history"
+              side="top"
+              onClick={clearRunHistory}
+            />
+          )}
           <ToolbarButton
             icon={panelMaximized ? ChevronsDownUp : ChevronsUpDown}
-            label={panelMaximized ? "Restore panel size" : "Maximize panel"}
+            label={panelMaximized ? "Restore console size" : "Maximize console"}
             side="top"
             onClick={togglePanelMaximized}
           />
           <ToolbarButton
             icon={X}
-            label="Close panel"
+            label="Close console"
             side="top"
             onClick={togglePanel}
           />
@@ -113,16 +144,16 @@ export function BottomPanel() {
       </header>
 
       <div className="min-h-0 flex-1">
-        {panelTab === "problems" && <ProblemsView />}
-        {panelTab === "output" && <OutputView />}
-        {panelTab === "terminal" && <TerminalView />}
+        {panelTab === "alerts" && <AlertsView />}
+        {panelTab === "log" && <RunLogView />}
+        {panelTab === "history" && <HistoryView />}
       </div>
     </section>
   )
 }
 
 /* ============================================================================
-   Problems
+   Alerts
    ========================================================================= */
 
 const SEVERITY_ICON = {
@@ -137,24 +168,25 @@ const SEVERITY_CLASS = {
   info: "text-brand-bright",
 } as const
 
-function ProblemsView() {
-  const { problems } = useWorkbench()
+function AlertsView() {
+  const { alerts } = useWorkbench()
 
   const grouped = React.useMemo(() => {
-    const map = new Map<string, Problem[]>()
-    for (const p of problems) {
-      const list = map.get(p.source) ?? []
-      list.push(p)
-      map.set(p.source, list)
+    const map = new Map<string, WorkbenchAlert[]>()
+    for (const a of alerts) {
+      const list = map.get(a.source) ?? []
+      list.push(a)
+      map.set(a.source, list)
     }
     return [...map.entries()]
-  }, [problems])
+  }, [alerts])
 
-  if (problems.length === 0) {
+  if (alerts.length === 0) {
     return (
-      <div className="flex h-full items-center px-3 text-sm text-muted-foreground">
-        No problems have been detected in the workspace.
-      </div>
+      <ConsoleEmpty
+        icon={CheckCircle2}
+        message="Nothing needs attention. Bad input and notable results are raised here as you run."
+      />
     )
   }
 
@@ -162,29 +194,29 @@ function ProblemsView() {
     <div className="seq-scroll h-full overflow-auto py-1">
       {grouped.map(([source, list]) => (
         <div key={source}>
-          <div className="flex h-[22px] items-center gap-1.5 px-3 text-xs text-muted-foreground">
+          <div className="flex h-6 items-center gap-1.5 px-3 text-xs text-muted-foreground">
             <span className="font-medium text-foreground/80">{source}</span>
             <span className="tabular">({list.length})</span>
           </div>
-          {list.map((problem, i) => {
-            const Icon = SEVERITY_ICON[problem.severity]
+          {list.map((alert, i) => {
+            const Icon = SEVERITY_ICON[alert.severity]
             return (
               <div
                 key={`${source}-${i}`}
-                className="row-hover flex min-h-[22px] items-start gap-2 py-0.5 pr-3 pl-7 text-sm"
+                className="row-hover flex min-h-6 items-start gap-2 py-1 pr-3 pl-7 text-sm"
               >
                 <Icon
                   className={cn(
                     "mt-0.5 size-3.5 shrink-0",
-                    SEVERITY_CLASS[problem.severity],
+                    SEVERITY_CLASS[alert.severity],
                   )}
                 />
                 <span className="min-w-0 flex-1 text-foreground/85">
-                  {problem.message}
+                  {alert.message}
                 </span>
-                {problem.at && (
+                {alert.at && (
                   <span className="shrink-0 font-mono text-xs text-muted-foreground/70">
-                    {problem.at}
+                    {alert.at}
                   </span>
                 )}
               </div>
@@ -197,10 +229,10 @@ function ProblemsView() {
 }
 
 /* ============================================================================
-   Output
+   Run log
    ========================================================================= */
 
-function OutputView() {
+function RunLogView() {
   const { logs } = useWorkbench()
   const [channel, setChannel] = React.useState("all")
 
@@ -217,63 +249,31 @@ function OutputView() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex h-8 shrink-0 items-center gap-2 border-b border-border px-3">
-        <span className="text-xs text-muted-foreground">Channel</span>
+        <span className="text-xs text-muted-foreground">From</span>
         <WBSelect
           value={channel}
           onChange={(e) => setChannel(e.target.value)}
           className="h-6 w-56 text-xs"
-          aria-label="Output channel"
+          aria-label="Filter the run log by source"
         >
           {channels.map((c) => (
             <option key={c} value={c}>
-              {c === "all" ? "All channels" : c}
+              {c === "all" ? "All analyses" : c}
             </option>
           ))}
         </WBSelect>
         <span className="ml-auto font-mono text-xs text-muted-foreground tabular">
-          {filtered.length} lines
+          {filtered.length} {filtered.length === 1 ? "line" : "lines"}
         </span>
       </div>
-      <LogStream lines={filtered} showSource={channel === "all"} />
-    </div>
-  )
-}
-
-/* ============================================================================
-   Terminal
-   ========================================================================= */
-
-function TerminalView() {
-  const { logs, view } = useWorkbench()
-  const cwd = view ? view.href.replace(/^\//, "") : "~"
-
-  return (
-    <div className="flex h-full min-h-0 flex-col bg-[var(--term-bg)]">
       <LogStream
-        lines={logs}
-        showSource
-        prompt={
-          <div className="flex items-center gap-1.5 pt-1 pl-1">
-            <span className="text-[var(--term-green)]">helixmind@lab</span>
-            <span className="text-[var(--term-dim)]">:</span>
-            <span className="text-[var(--term-blue)]">~/{cwd}</span>
-            <span className="text-[var(--term-dim)]">$</span>
-            {/* Decorative caret — the terminal mirrors run output, it does not
-                accept input. */}
-            <span
-              aria-hidden
-              className="ml-0.5 inline-block h-3.5 w-[7px] animate-soft-pulse bg-[var(--term-fg)]"
-            />
-          </div>
-        }
+        lines={filtered}
+        showSource={channel === "all"}
         empty={
-          <div className="flex items-start gap-2 p-1 text-[var(--term-dim)]">
-            <TerminalIcon className="mt-0.5 size-3.5 shrink-0" />
-            <span>
-              Waiting for output. Run a scan or start a simulation and its log
-              stream appears here.
-            </span>
-          </div>
+          <ConsoleEmpty
+            icon={ScrollText}
+            message="No output yet. Start a scan or a simulation and its log streams here as it runs."
+          />
         }
       />
     </div>
@@ -281,16 +281,94 @@ function TerminalView() {
 }
 
 /* ============================================================================
-   Shared monospace log stream
+   History
    ========================================================================= */
 
+function HistoryView() {
+  const { runHistory, setPanelTab } = useWorkbench()
+
+  if (runHistory.length === 0) {
+    return (
+      <ConsoleEmpty
+        icon={CircleSlash}
+        message="No finished runs in this session yet."
+      />
+    )
+  }
+
+  return (
+    <div className="seq-scroll h-full overflow-auto py-1">
+      {runHistory.map((record) => (
+        <button
+          key={record.id}
+          type="button"
+          onClick={() => setPanelTab("log")}
+          className="row-hover flex w-full cursor-pointer items-center gap-2.5 px-3 py-1.5 text-left focus-visible:ring-1 focus-visible:ring-ring/60 focus-visible:outline-none focus-visible:ring-inset"
+        >
+          {record.outcome === "completed" ? (
+            <CheckCircle2 className="size-3.5 shrink-0 text-success" />
+          ) : (
+            <CircleSlash className="size-3.5 shrink-0 text-muted-foreground" />
+          )}
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm text-foreground/90">
+              {record.label}
+            </span>
+            {record.detail && (
+              <span className="block truncate text-xs text-muted-foreground/70">
+                {record.detail}
+              </span>
+            )}
+          </span>
+          <Chip tone={record.outcome === "completed" ? "success" : "neutral"}>
+            {record.outcome}
+          </Chip>
+          <span className="w-14 shrink-0 text-right font-mono text-xs text-muted-foreground tabular">
+            {formatDuration(record.endedAt - record.startedAt)}
+          </span>
+          <span className="w-16 shrink-0 text-right font-mono text-xs text-muted-foreground/60 tabular">
+            {formatTime(record.endedAt)}
+          </span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function formatDuration(ms: number) {
+  if (ms < 1000) return `${ms}ms`
+  const seconds = ms / 1000
+  if (seconds < 60) return `${seconds.toFixed(1)}s`
+  const minutes = Math.floor(seconds / 60)
+  return `${minutes}m ${Math.round(seconds % 60)}s`
+}
+
+/* ============================================================================
+   Shared pieces
+   ========================================================================= */
+
+function ConsoleEmpty({
+  icon: Icon,
+  message,
+}: {
+  icon: React.ComponentType<{ className?: string }>
+  message: string
+}) {
+  return (
+    <div className="flex h-full items-start gap-2 px-3 py-3 text-sm text-muted-foreground">
+      <Icon className="mt-0.5 size-3.5 shrink-0 opacity-70" />
+      <span className="max-w-lg leading-relaxed">{message}</span>
+    </div>
+  )
+}
+
 const LEVEL_CLASS: Record<LogLevel, string> = {
-  info: "text-[var(--term-fg)]",
-  success: "text-[var(--term-green)]",
-  warn: "text-[var(--term-yellow)]",
-  error: "text-[var(--term-red)]",
-  debug: "text-[var(--term-dim)]",
-  command: "text-[var(--term-cyan)]",
+  info: "text-[var(--log-fg)]",
+  success: "text-[var(--log-success)]",
+  warn: "text-[var(--log-warn)]",
+  error: "text-[var(--log-error)]",
+  debug: "text-[var(--log-dim)]",
+  command: "text-[var(--log-command)]",
 }
 
 const LEVEL_GLYPH: Record<LogLevel, string> = {
@@ -299,7 +377,7 @@ const LEVEL_GLYPH: Record<LogLevel, string> = {
   warn: "▲",
   error: "✖",
   debug: "·",
-  command: "$",
+  command: "▸",
 }
 
 function formatTime(ts: number) {
@@ -311,12 +389,10 @@ function formatTime(ts: number) {
 function LogStream({
   lines,
   showSource,
-  prompt,
   empty,
 }: {
   lines: LogLine[]
   showSource?: boolean
-  prompt?: React.ReactNode
   empty?: React.ReactNode
 }) {
   const endRef = React.useRef<HTMLDivElement>(null)
@@ -335,26 +411,26 @@ function LogStream({
     if (pinned.current) endRef.current?.scrollIntoView({ block: "end" })
   }, [lines])
 
+  if (lines.length === 0) {
+    return <div className="min-h-0 flex-1 overflow-hidden">{empty}</div>
+  }
+
   return (
     <div
       ref={scrollRef}
       onScroll={onScroll}
       className="seq-scroll min-h-0 flex-1 overflow-auto p-2 font-mono text-xs leading-5"
     >
-      {lines.length === 0 && empty}
-
       {lines.map((line) => (
         <div
           key={line.id}
           className="animate-line-in flex items-start gap-2 rounded-xs px-1 hover:bg-[var(--wb-hover)]"
         >
-          <span className="shrink-0 text-[var(--term-dim)] tabular">
+          <span className="shrink-0 text-[var(--log-dim)] tabular">
             {formatTime(line.ts)}
           </span>
           {showSource && (
-            <span className="shrink-0 text-[var(--term-magenta)]">
-              [{line.source}]
-            </span>
+            <span className="shrink-0 text-[var(--log-source)]">[{line.source}]</span>
           )}
           <span className={cn("shrink-0", LEVEL_CLASS[line.level])}>
             {LEVEL_GLYPH[line.level]}
@@ -365,7 +441,6 @@ function LogStream({
         </div>
       ))}
 
-      {prompt}
       <div ref={endRef} />
     </div>
   )

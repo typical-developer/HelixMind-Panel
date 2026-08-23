@@ -5,9 +5,9 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
   Bell,
-  Database,
-  Files,
+  Dna,
   LogOut,
+  Microscope,
   PlayCircle,
   Search,
   Settings,
@@ -41,23 +41,23 @@ interface ActivityItem {
 }
 
 const PRIMARY: ActivityItem[] = [
-  { id: "explorer", icon: Files, label: "Explorer" },
+  { id: "analyses", icon: Microscope, label: "Analyses" },
   { id: "search", icon: Search, label: "Search" },
-  { id: "run", icon: PlayCircle, label: "Run & Analyze" },
-  { id: "database", icon: Database, label: "Gene Database" },
+  { id: "runs", icon: PlayCircle, label: "Runs" },
+  { id: "genes", icon: Dna, label: "Gene library" },
 ]
 
 /**
- * The 48px icon rail on the far left. Selecting an icon swaps the side bar's
- * contents; selecting the already-active icon collapses the side bar, which is
- * the behaviour VS Code users reach for without thinking.
+ * The 48px rail on the far left — the lab's four working modes. Selecting one
+ * swaps what the sidebar shows; selecting the mode you are already in collapses
+ * the sidebar and hands the width back to the bench.
  */
 export function ActivityBar() {
   const { activity, sidebarVisible, setActivity, unreadCount } = useActivityState()
 
   return (
     <nav
-      aria-label="Primary"
+      aria-label="Lab modes"
       className="flex w-12 shrink-0 flex-col items-center border-r border-border bg-chrome py-1"
     >
       {PRIMARY.map((item) => (
@@ -73,7 +73,7 @@ export function ActivityBar() {
 
       <NotificationsButton count={unreadCount} />
       <AccountButton />
-      <SettingsButton />
+      <PreferencesButton />
     </nav>
   )
 }
@@ -205,17 +205,17 @@ function AccountButton() {
   )
 }
 
-function SettingsButton() {
+function PreferencesButton() {
   const { setActivity, activity, sidebarVisible } = useWorkbench()
-  const active = activity === "settings" && sidebarVisible
+  const active = activity === "preferences" && sidebarVisible
 
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <button
           type="button"
-          onClick={() => setActivity("settings")}
-          aria-label="Manage"
+          onClick={() => setActivity("preferences")}
+          aria-label="Preferences"
           className={cn(
             "relative flex size-12 shrink-0 cursor-pointer items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none focus-visible:ring-inset",
             active && "text-foreground",
@@ -227,11 +227,11 @@ function SettingsButton() {
               active ? "h-7 opacity-100" : "h-0 opacity-0",
             )}
           />
-          <Settings className="size-5 transition-transform duration-300 hover:rotate-45" />
+          <Settings className="size-5 transition-transform duration-150 active:scale-90" />
         </button>
       </TooltipTrigger>
       <TooltipContent side="right" sideOffset={6}>
-        Manage
+        Preferences
       </TooltipContent>
     </Tooltip>
   )
