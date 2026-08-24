@@ -40,7 +40,7 @@ export function ErrorState({
     <div
       role="alert"
       className={cn(
-        "bg-grid flex h-full min-h-0 w-full flex-col items-center justify-center gap-4 overflow-auto p-6 text-center",
+        "flex h-full min-h-0 w-full flex-col items-center justify-center gap-4 overflow-auto p-6 text-center",
         className,
       )}
     >

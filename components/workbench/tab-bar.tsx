@@ -29,7 +29,7 @@ import {
   useWorkbench,
   type ConsoleSignals,
 } from "./workbench-provider"
-import { groupLabel, type WorkbenchView } from "./registry"
+import { type WorkbenchView } from "./registry"
 
 /**
  * One tab per open analysis.
@@ -80,10 +80,18 @@ export function TabBar() {
     setDropIndex(null)
   }, [])
 
+  /**
+   * The tab the operator just aimed at, which is the one the announcement is
+   * about. Swapping two neighbours looks identical from the order alone, so
+   * this is what tells the two readings apart — see `movedHref`.
+   */
+  const intent = React.useRef<string | null>(null)
+
   const dropAt = React.useCallback(
     (index: number) => {
       if (!dragHref) return
       const from = tabs.findIndex((t) => t.href === dragHref)
+      intent.current = dragHref
       endDrag()
       if (from === -1) return
       // Removing the dragged tab shifts everything after it down one, so a slot
@@ -107,14 +115,18 @@ export function TabBar() {
     const before = previous.current
     previous.current = order
 
+    // A drag names its own tab; Alt+Shift+Arrow always moves the open one.
+    const aimedAt = intent.current ?? view?.href ?? null
+    intent.current = null
+
     if (!before || before.length !== order.length) return
-    const href = movedHref(before, order)
+    const href = movedHref(before, order, aimedAt)
     if (!href) return
 
     const index = order.indexOf(href)
     const label = tabs[index]?.label
     if (label) setAnnouncement(`${label} moved to position ${index + 1} of ${order.length}`)
-  }, [tabs])
+  }, [tabs, view])
 
   // Keep the active tab in view when navigation comes from elsewhere (the
   // explorer, the palette, a keyboard chord).
@@ -170,7 +182,10 @@ export function TabBar() {
   }
 
   return (
-    <div className="flex h-9 shrink-0 items-stretch border-b border-border bg-chrome">
+    // A query container, so the analysis context hides on a narrow *bench*
+    // rather than a narrow window — dragging the sidebar out changes the
+    // strip's width without the viewport changing at all.
+    <div className="@container flex h-9 shrink-0 items-stretch border-b border-border bg-chrome">
       <div
         ref={stripRef}
         role="tablist"
@@ -219,6 +234,8 @@ export function TabBar() {
       <span aria-live="polite" className="sr-only">
         {announcement}
       </span>
+
+      <AnalysisContext />
 
       <div className="flex shrink-0 items-center gap-0.5 border-l border-border px-1.5">
         <ToolbarButton
@@ -277,7 +294,10 @@ function signalTitle(
   signals: ConsoleSignals,
   signal: "running" | "attention" | "idle",
   severity: "error" | "warning" | null,
+  /** False on the last tab open, which says so rather than just losing its ×. */
+  canClose = true,
 ) {
+  if (!canClose) return `${tab.label} — stays open, the bench always has a view`
   if (signal === "running") return `${tab.label} — running`
   if (signal === "attention") {
     const counts = signals.alertsBySource[tab.source]
@@ -407,7 +427,7 @@ function Tab({
           // Only the active tab is in the tab order; arrows move within the
           // strip. This is the roving-tabindex pattern a tablist expects.
           tabIndex={active ? 0 : -1}
-          title={signalTitle(tab, signals, signal, severity)}
+          title={signalTitle(tab, signals, signal, severity, canClose)}
           className={cn(
             "group relative flex min-w-0 shrink-0 cursor-pointer items-center gap-1.5 border-r border-border px-3 text-sm",
             "transition-colors duration-100 focus-visible:ring-1 focus-visible:ring-ring/60 focus-visible:outline-none focus-visible:ring-inset",
@@ -664,38 +684,30 @@ function TabOverflowMenu() {
 }
 
 /**
- * The strip beneath the tabs. Where an editor would print a file path, this
- * prints what the open analysis is actually working on — the sample loaded,
- * the organism selected — falling back to what the analysis is for when the
- * view has nothing loaded yet.
+ * What the open analysis is working on — the sample loaded, the organism
+ * selected — falling back to what the analysis is *for* until it has one.
+ *
+ * This used to be a 28px band of its own beneath the tabs, which also drew the
+ * view's icon, its name and its group. The active tab already carries the first
+ * two and the sidebar carries the third, and `VIEWS` is a flat registry, so
+ * there was no hierarchy for it to breadcrumb — a whole horizontal band, on top
+ * of three others, for one string. The string is the part worth keeping, so it
+ * rides at the end of the strip that already names the view.
  */
-export function ContextBar() {
+function AnalysisContext() {
   const { view } = useWorkbench()
   const { viewContext } = useConsole()
 
   if (!view) return null
 
-  const Icon = view.icon
-
   return (
-    <div
-      aria-label="Analysis context"
-      className="flex h-7 shrink-0 items-center gap-2 overflow-hidden border-b border-border bg-surface px-3 text-xs"
+    <span
+      // Given away first when the strip runs out of room: the tabs themselves
+      // and the toolbar are both load-bearing, and this is a detail line.
+      className="hidden min-w-0 shrink items-center truncate px-2 text-xs text-muted-foreground @2xl:flex"
+      title={viewContext ?? view.hint}
     >
-      <Icon className="size-3.5 shrink-0 text-muted-foreground" />
-      <span className="shrink-0 font-medium text-foreground/85">{view.label}</span>
-      <span aria-hidden className="h-3 w-px shrink-0 bg-border" />
-      <span
-        className={cn(
-          "min-w-0 truncate",
-          viewContext ? "text-foreground/70" : "text-muted-foreground/70",
-        )}
-      >
-        {viewContext ?? view.hint}
-      </span>
-      <span className="ml-auto shrink-0 pl-2 text-muted-foreground/60">
-        {groupLabel(view)}
-      </span>
-    </div>
+      {viewContext ?? view.hint}
+    </span>
   )
 }

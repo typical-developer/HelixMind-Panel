@@ -304,14 +304,12 @@ export function StatTile({
   label,
   value,
   hint,
-  icon: Icon,
   tone = "default",
   className,
 }: {
   label: React.ReactNode
   value: React.ReactNode
   hint?: React.ReactNode
-  icon?: IconComponent
   tone?: "default" | "positive" | "warning" | "critical"
   className?: string
 }) {
@@ -343,7 +341,10 @@ export function StatTile({
       )}
     >
       <div className="flex min-w-0 items-center gap-1.5">
-        {Icon && <Icon className={cn("size-3.5 shrink-0", toneHint)} />}
+        {/* No icon. A tile is a label, a number and a line of support; a glyph
+            beside the label is a fourth mark saying nothing the label does not,
+            and a row of four of them reads as decoration. Tone still colours
+            the value and its hint. */}
         <p className="min-w-0 truncate text-xs font-medium text-muted-foreground">
           {label}
         </p>
@@ -384,7 +385,7 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        "bg-grid relative flex flex-1 flex-col items-center justify-center gap-2 px-6 py-12 text-center",
+        "relative flex flex-1 flex-col items-center justify-center gap-2 px-6 py-12 text-center",
         className,
       )}
     >

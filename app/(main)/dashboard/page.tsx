@@ -4,10 +4,8 @@ import { useMemo } from "react"
 import dynamic from "next/dynamic"
 import {
   Activity,
-  AlertCircle,
   Clock,
   Gauge,
-  Play,
   ScanLine,
   ShieldAlert,
   Split,
@@ -149,7 +147,6 @@ export default function Dashboard() {
               metric tiles across it would be unreadable. */}
           <div className="grid grid-cols-1 gap-3 @sm/bench:grid-cols-2 @4xl/bench:grid-cols-4">
             <StatTile
-              icon={Activity}
               label="Sequences analysed"
               value={summary.sequencesAnalysed.toLocaleString()}
               hint={
@@ -161,7 +158,6 @@ export default function Dashboard() {
               }
             />
             <StatTile
-              icon={Play}
               label="Running now"
               value={activeRuns}
               hint={
@@ -172,7 +168,6 @@ export default function Dashboard() {
               tone={activeRuns > 0 ? "positive" : "default"}
             />
             <StatTile
-              icon={AlertCircle}
               label="AMR threats"
               value={summary.threatCount}
               hint={
@@ -183,7 +178,6 @@ export default function Dashboard() {
               tone={summary.threatCount > 0 ? "critical" : "default"}
             />
             <StatTile
-              icon={Gauge}
               label="Open alerts"
               value={openAlerts}
               hint={
@@ -322,7 +316,7 @@ function OverviewInspector() {
             you run them.
           </p>
         ) : (
-          <div className="divide-y divide-border/60">
+          <div>
             {events.slice(0, 12).map((event) => (
               <ActivityRow
                 key={event.id}

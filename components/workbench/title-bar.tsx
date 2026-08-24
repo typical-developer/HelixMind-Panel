@@ -153,12 +153,6 @@ function CustomizeLayoutMenu() {
           Open tabs
         </DropdownMenuCheckboxItem>
         <DropdownMenuCheckboxItem
-          checked={wb.contextBarVisible}
-          onCheckedChange={wb.toggleContextBar}
-        >
-          Context bar
-        </DropdownMenuCheckboxItem>
-        <DropdownMenuCheckboxItem
           checked={wb.statusBarVisible}
           onCheckedChange={wb.toggleStatusBar}
         >

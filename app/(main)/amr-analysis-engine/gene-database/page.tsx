@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
-import { Bug, Clock, Database, Dna, Layers, Search, ShieldAlert, X } from "lucide-react"
+import { Database, Dna, Search, ShieldAlert, X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { AMR_RECORDS, databaseStats, searchRecords } from "@/lib/amr-records"
@@ -22,8 +22,6 @@ import {
   useViewContext,
   useWorkbench,
 } from "@/components/workbench"
-
-const STAT_ICONS = [Dna, Bug, Layers, Clock]
 
 const COLUMNS = [
   "ID",
@@ -255,12 +253,10 @@ function DatabaseInspector() {
   return (
     <InspectorScroll>
       <div className="grid grid-cols-2 gap-2">
-        {databaseStats().map((stat, i) => {
-          const Icon = STAT_ICONS[i]
+        {databaseStats().map((stat) => {
           return (
             <StatTile
               key={stat.label}
-              icon={Icon}
               label={stat.label}
               value={<span className="text-lg">{stat.value}</span>}
             />

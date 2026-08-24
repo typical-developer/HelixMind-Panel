@@ -73,4 +73,27 @@ describe("movedHref", () => {
     expect(movedHref(["a", "b"], ["b", "a"])).toBe("a")
     expect(movedHref(["a"], ["a"])).toBeNull()
   })
+
+  /**
+   * Swapping neighbours is the one case the order cannot settle on its own:
+   * `[a, b, c] → [a, c, b]` is equally "b moved right" and "c moved left". The
+   * caller knows which tab was dragged or aimed at, and announcing the other
+   * one of the pair tells the listener their own keypress moved something else.
+   */
+  it("prefers the tab the caller says was moved, for an ambiguous swap", () => {
+    expect(movedHref(["a", "b", "c"], ["a", "c", "b"], "c")).toBe("c")
+    expect(movedHref(["a", "b", "c"], ["a", "c", "b"], "b")).toBe("b")
+  })
+
+  it("ignores a preference that did not move, or is not in the list", () => {
+    // `a` is untouched by this swap, so the honest answer is still the pair.
+    expect(movedHref(["a", "b", "c"], ["a", "c", "b"], "a")).toBe("b")
+    expect(movedHref(["a", "b", "c"], ["a", "c", "b"], "zzz")).toBe("b")
+    expect(movedHref(["a", "b", "c"], ["a", "b", "c"], "b")).toBeNull()
+  })
+
+  it("still reports an unambiguous move when the preference disagrees", () => {
+    // Only `d` can have moved here, whatever the caller was aiming at.
+    expect(movedHref(["a", "b", "c", "d"], ["d", "a", "b", "c"], "b")).toBe("d")
+  })
 })

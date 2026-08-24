@@ -45,6 +45,28 @@ export function splitName(name: string): { fname: string; lname: string } {
   };
 }
 
+/**
+ * Local testing switch: start already signed in.
+ *
+ * Signing in needs a live backend and real credentials, which makes every part
+ * of the panel behind the gate — that is, all of it — impossible to open on a
+ * machine that has neither. With this set the provider seeds a local session
+ * and never calls the API.
+ *
+ * It only changes the *initial* session: `signIn`, `signUp` and `signOut` are
+ * the real ones, and the gate in `app/(main)/layout.tsx` is untouched.
+ *
+ * The `NODE_ENV` half is the important half. `next build` reads `.env.local`
+ * too, so without it a local production build made on a machine that has this
+ * switch on would ship with the front door open. A production bundle ignores
+ * the flag entirely, whatever the environment says. See `.env.example`.
+ */
+const AUTH_DISABLED =
+  process.env.NODE_ENV !== "production" &&
+  process.env.NEXT_PUBLIC_DISABLE_AUTH === "1";
+
+const LOCAL_USER: AuthUser = { name: "Lab User", email: "lab@localhost" };
+
 function readToken(): string {
   if (typeof window === "undefined") return "";
   try {
@@ -66,6 +88,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
+    // Local testing: hand over a session and skip the network entirely.
+    if (AUTH_DISABLED) {
+      setUser(LOCAL_USER);
+      setIsLoading(false);
+      return;
+    }
+
     /**
      * Restore the session — but only if there is one to restore.
      *

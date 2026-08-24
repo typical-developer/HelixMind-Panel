@@ -20,7 +20,7 @@ import { BottomPanel } from "./panel"
 import { CommandPalette } from "./command-palette"
 import { SideBar } from "./side-bar"
 import { StatusBar } from "./status-bar"
-import { ContextBar, TabBar } from "./tab-bar"
+import { TabBar } from "./tab-bar"
 import { TitleBar } from "./title-bar"
 import { useConsoleActions, useWorkbench } from "./workbench-provider"
 
@@ -46,7 +46,6 @@ export function Workbench({ children }: { children: React.ReactNode }) {
     setPanelSize,
     statusBarVisible,
     tabBarVisible,
-    contextBarVisible,
   } = useWorkbench()
 
   const sidebarRef = usePanelRef()
@@ -142,7 +141,6 @@ export function Workbench({ children }: { children: React.ReactNode }) {
               <ResizablePanel id="wb-content" minSize="8%">
                 <div className="flex h-full min-h-0 flex-col bg-surface">
                   {!focusMode && tabBarVisible && <TabBar />}
-                  {!focusMode && contextBarVisible && <ContextBar />}
                   <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
                 </div>
               </ResizablePanel>

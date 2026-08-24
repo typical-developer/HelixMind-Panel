@@ -526,17 +526,6 @@ export default function Settings() {
                     />
                   </SettingRow>
                   <SettingRow
-                    label="Context bar"
-                    description="The line above the bench naming what the open analysis is working on."
-                    matched={flashed === "Context bar"}
-                  >
-                    <Switch
-                      checked={wb.contextBarVisible}
-                      onCheckedChange={wb.toggleContextBar}
-                      aria-label="Context bar"
-                    />
-                  </SettingRow>
-                  <SettingRow
                     label="Status bar"
                     description="The summary strip along the bottom of the window."
                     matched={flashed === "Status bar"}

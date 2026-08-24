@@ -578,7 +578,7 @@ function ScanProgress({
     <div
       role="status"
       aria-live="polite"
-      className="bg-grid flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center"
+      className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center"
     >
       <Loader2 className="size-5 animate-spin text-muted-foreground" />
       <div className="space-y-1">

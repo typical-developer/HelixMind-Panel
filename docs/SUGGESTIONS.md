@@ -135,6 +135,29 @@ which views are open, so the actions that complete it are the ones the tab strip
 owns: *Close all analyses* and *Reopen closed*. A `⋯` menu beside the collapse
 button, the way VS Code's Explorer carries its overflow.
 
+### 3.8 The layout controls exist in five places · ~2 hours
+Found while removing the context bar, and left alone because you kept them. The
+same handful of switches is reachable from:
+
+1. the title bar's three buttons and its Customize menu,
+2. the tab strip's inspector and console buttons — **pixel-identical** to two of
+   the title bar's, a few inches away,
+3. the sidebar header's `⋯` menu (four checkboxes),
+4. the rail's Preferences mode (seven switches, zoom, reset),
+5. Settings → Layout and Appearance.
+
+Apple's guidance calls a nav bar, toolbar and tab bar competing on one view the
+anti-pattern; five copies of one control set is the same failure spread wider.
+The cheapest two cuts are (2) and (3) — neither owns anything the title bar does
+not — which would take it to three surfaces: the toolbar, the rail, and Settings.
+
+### 3.9 The Overview repeats the status bar · ~1 hour
+*Running now* and *Open alerts* are two of the four tiles on the Overview, and
+both are already in the status strip at all times, on every view. Dashboard
+guidance is five to eight primary visuals and no duplicated readouts; dropping
+those two would leave *Sequences analysed* and *AMR threats* — the pair that is
+genuinely the workspace's story — with twice the room.
+
 ---
 
 ## Milestone 4 — accessibility and polish

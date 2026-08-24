@@ -107,7 +107,6 @@ interface LayoutState {
   panelTab: PanelTabId
   inspectorVisible: boolean
   statusBarVisible: boolean
-  contextBarVisible: boolean
   tabBarVisible: boolean
   focusMode: boolean
   zoom: number
@@ -124,7 +123,6 @@ const DEFAULT_LAYOUT: LayoutState = {
   panelTab: "log",
   inspectorVisible: true,
   statusBarVisible: true,
-  contextBarVisible: true,
   tabBarVisible: true,
   focusMode: false,
   zoom: 0,
@@ -171,7 +169,6 @@ interface WorkbenchContextValue extends LayoutState {
 
   toggleInspector: () => void
   toggleStatusBar: () => void
-  toggleContextBar: () => void
   toggleTabBar: () => void
   toggleFocusMode: () => void
 
@@ -217,8 +214,16 @@ interface ConsoleState {
   runStatus: RunStatus | null
   runHistory: RunRecord[]
   statusItems: StatusItem[]
-  /** What the open view is working on, shown in the context bar. */
+  /** What the open view is working on, shown at the end of the tab strip. */
   viewContext: string | null
+  /**
+   * A line the status bar shows for a few seconds, then drops.
+   *
+   * For telling the operator why something they just did had no effect. A toast
+   * would be a pop-up to dismiss for a non-event; the status strip is already
+   * where the bench says what it is doing.
+   */
+  notice: string | null
 }
 
 /** Every console writer. Stable for the lifetime of the provider. */
@@ -234,6 +239,8 @@ interface ConsoleActions {
   restoreRunHistory: (records: RunRecord[]) => void
   publishStatusItems: (items: StatusItem[]) => void
   publishViewContext: (detail: string | null) => void
+  /** Say something in the status bar briefly. See {@link ConsoleState.notice}. */
+  notify: (message: string) => void
 }
 
 const WorkbenchContext = React.createContext<WorkbenchContextValue | null>(null)
@@ -277,6 +284,7 @@ function ConsoleProvider({ children }: { children: React.ReactNode }) {
   // context line, so these are single slots rather than per-source maps.
   const [statusItems, setStatusItems] = React.useState<StatusItem[]>([])
   const [viewContext, setViewContext] = React.useState<string | null>(null)
+  const [notice, setNotice] = React.useState<string | null>(null)
 
   /* ---- Run log --------------------------------------------------------- */
 
@@ -467,6 +475,29 @@ function ConsoleProvider({ children }: { children: React.ReactNode }) {
     [],
   )
 
+  /**
+   * Held in a ref so `notify` keeps an empty dependency list — see the note on
+   * `actions` below. Re-notifying restarts the clock rather than stacking a
+   * second timer that would clear a message it did not set.
+   */
+  const noticeTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const notify = React.useCallback((message: string) => {
+    if (noticeTimer.current) clearTimeout(noticeTimer.current)
+    setNotice(message)
+    noticeTimer.current = setTimeout(() => {
+      noticeTimer.current = null
+      setNotice(null)
+    }, 4000)
+  }, [])
+
+  React.useEffect(
+    () => () => {
+      if (noticeTimer.current) clearTimeout(noticeTimer.current)
+    },
+    [],
+  )
+
   // Every dependency here is a `useCallback` with an empty dep list, so this
   // object is created once. That is the whole point: publishers subscribe to it
   // and never re-render because of the data they publish.
@@ -482,6 +513,7 @@ function ConsoleProvider({ children }: { children: React.ReactNode }) {
       restoreRunHistory,
       publishStatusItems,
       publishViewContext,
+      notify,
     }),
     [
       pushLog,
@@ -494,6 +526,7 @@ function ConsoleProvider({ children }: { children: React.ReactNode }) {
       restoreRunHistory,
       publishStatusItems,
       publishViewContext,
+      notify,
     ],
   )
 
@@ -525,8 +558,8 @@ function ConsoleProvider({ children }: { children: React.ReactNode }) {
   }, [logs])
 
   const state = React.useMemo<ConsoleState>(
-    () => ({ logs, alerts, runStatus, runHistory, statusItems, viewContext }),
-    [logs, alerts, runStatus, runHistory, statusItems, viewContext],
+    () => ({ logs, alerts, runStatus, runHistory, statusItems, viewContext, notice }),
+    [logs, alerts, runStatus, runHistory, statusItems, viewContext, notice],
   )
 
   /* ---- Tab signals ----------------------------------------------------- */
@@ -568,6 +601,9 @@ function ConsoleProvider({ children }: { children: React.ReactNode }) {
 function LayoutProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
+  // Safe to read here: this provider is rendered inside `ConsoleProvider`, and
+  // the actions object is created once, so it never re-renders the layout.
+  const { notify } = useConsoleActions()
 
   const [layout, setLayout] = React.useState<LayoutState>(DEFAULT_LAYOUT)
   const [hydrated, setHydrated] = React.useState(false)
@@ -757,7 +793,14 @@ function LayoutProvider({ children }: { children: React.ReactNode }) {
       // six of them reach this function — the tab's ×, middle-click, Delete in
       // the strip, Alt+W, the context menu and the palette — and a guard that
       // lives on the button is a guard middle-click walks straight past.
-      if (tabs.length <= 1) return
+      //
+      // It says so, too. Hiding the × explains nothing to someone who reaches
+      // for Alt+W instead, and a rule enforced in silence is indistinguishable
+      // from a broken control.
+      if (tabs.length <= 1) {
+        notify("The last analysis stays open")
+        return
+      }
 
       const next = layout.openTabs.filter((h) => h !== href)
       rememberClosed([href])
@@ -773,7 +816,7 @@ function LayoutProvider({ children }: { children: React.ReactNode }) {
       // exists, because the guard above refuses to close the last tab.
       router.push(next[index] ?? next[index - 1])
     },
-    [layout.openTabs, router, tabs, view],
+    [layout.openTabs, notify, rememberClosed, router, tabs, view],
   )
 
   const closeOtherTabs = React.useCallback(
@@ -906,10 +949,6 @@ function LayoutProvider({ children }: { children: React.ReactNode }) {
   }, [inspectorVisible])
   const toggleStatusBar = React.useCallback(
     () => setLayout((p) => ({ ...p, statusBarVisible: !p.statusBarVisible })),
-    [],
-  )
-  const toggleContextBar = React.useCallback(
-    () => setLayout((p) => ({ ...p, contextBarVisible: !p.contextBarVisible })),
     [],
   )
   const toggleTabBar = React.useCallback(
@@ -1092,7 +1131,6 @@ function LayoutProvider({ children }: { children: React.ReactNode }) {
       togglePanelMaximized,
       toggleInspector,
       toggleStatusBar,
-      toggleContextBar,
       toggleTabBar,
       toggleFocusMode,
       zoomIn,
@@ -1127,7 +1165,6 @@ function LayoutProvider({ children }: { children: React.ReactNode }) {
       togglePanelMaximized,
       toggleInspector,
       toggleStatusBar,
-      toggleContextBar,
       toggleTabBar,
       toggleFocusMode,
       zoomIn,

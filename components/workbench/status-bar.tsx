@@ -22,7 +22,7 @@ import { useConsole, useWorkbench } from "./workbench-provider"
  */
 export function StatusBar() {
   const { setPanelTab, panelVisible, togglePanel, openPalette } = useWorkbench()
-  const { alerts, runStatus, statusItems } = useConsole()
+  const { alerts, runStatus, statusItems, notice } = useConsole()
 
   const errors = alerts.filter((a) => a.severity === "error").length
   const warnings = alerts.filter((a) => a.severity === "warning").length
@@ -46,9 +46,12 @@ export function StatusBar() {
 
       <StatusItem
         icon={errors + warnings === 0 ? CheckCircle2 : AlertCircle}
+        // Nothing wrong is the usual case, and spelling it out put two
+        // permanent words in a strip whose job is to report change. The tick
+        // alone says it; the tooltip still gives the counts in full.
         label={
           errors + warnings === 0 ? (
-            "No alerts"
+            ""
           ) : (
             <span className="flex items-center gap-1.5 tabular">
               {errors}
@@ -80,6 +83,19 @@ export function StatusBar() {
           onClick={() => setPanelTab("log")}
         />
       )}
+
+      {/* Why something you just did had no effect. Announced as well as shown —
+          the operator who reached for Alt+W is the one who most needs telling,
+          and they were not looking at this corner of the screen. */}
+      <span
+        aria-live="polite"
+        className={cn(
+          "flex min-w-0 items-center px-2 transition-opacity duration-150",
+          notice ? "text-foreground opacity-100" : "opacity-0",
+        )}
+      >
+        <span className="truncate">{notice}</span>
+      </span>
 
       <div className="flex-1" />
 

@@ -101,11 +101,9 @@ export function SideBar() {
 function SideBarMenu() {
   const {
     tabBarVisible,
-    contextBarVisible,
     statusBarVisible,
     inspectorVisible,
     toggleTabBar,
-    toggleContextBar,
     toggleStatusBar,
     toggleInspector,
   } = useWorkbench()
@@ -125,12 +123,6 @@ function SideBarMenu() {
         <DropdownMenuLabel>Show</DropdownMenuLabel>
         <DropdownMenuCheckboxItem checked={tabBarVisible} onCheckedChange={toggleTabBar}>
           Open tabs
-        </DropdownMenuCheckboxItem>
-        <DropdownMenuCheckboxItem
-          checked={contextBarVisible}
-          onCheckedChange={toggleContextBar}
-        >
-          Context bar
         </DropdownMenuCheckboxItem>
         <DropdownMenuCheckboxItem
           checked={inspectorVisible}
@@ -545,13 +537,6 @@ function PreferencesView() {
       hint: "Switch between open analyses",
       checked: wb.tabBarVisible,
       onChange: wb.toggleTabBar,
-    },
-    {
-      icon: SlidersHorizontal,
-      label: "Context bar",
-      hint: "What the open analysis is working on",
-      checked: wb.contextBarVisible,
-      onChange: wb.toggleContextBar,
     },
     {
       icon: SlidersHorizontal,

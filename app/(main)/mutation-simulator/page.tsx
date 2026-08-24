@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  Activity,
   Download,
   FileText,
   LineChart as LineChartIcon,
@@ -577,7 +576,7 @@ export default function MutationSimulator() {
       <ViewScroll>
         <div className="flex flex-col gap-3 p-3">
           <div className="grid grid-cols-1 gap-3 @sm/bench:grid-cols-2 @4xl/bench:grid-cols-4">
-            <StatTile icon={Activity} label="Total mutations" value={totalMutations} />
+            <StatTile label="Total mutations" value={totalMutations} />
             <StatTile label="Substitutions" value={substitutions} />
             <StatTile
               label="Indels"

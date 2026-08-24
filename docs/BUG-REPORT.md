@@ -447,6 +447,50 @@ Removed the pulsing dot beside the loading text; the sweeping bar carries it.
 ### L5 · Unused imports and variables — **FIXED**
 Including `useRouter` in `AuthContext` (declared, never used).
 
+### L6 · The last tab refused to close in silence — **FIXED** *(reported)*
+`components/workbench/workbench-provider.tsx`
+
+The guard that keeps one tab open was correct and completely invisible. The ×
+simply was not rendered on the last tab, and `Alt W`, middle-click and `Delete`
+returned without a word — reported as "it's like the last tab can't be closed
+and there's no feedback telling you", which is exactly what a working guard and
+a broken control look like from the outside.
+
+**Fixed:** the tab's tooltip now reads `… — stays open, the bench always has a
+view`, and every refused close puts "The last analysis stays open" in the status
+bar for four seconds, announced via `aria-live`. Both come off the single guard
+in `closeTab`, so no close path can refuse quietly. Verified in the browser
+across `Alt W`, middle-click and the context menu.
+
+### L7 · The toast wore a colour it did not need — **FIXED** *(your request)*
+`components/ui/toast.tsx`
+
+Every severity painted a 2px rule down the leading edge — `before:bg-success`
+being the green on each routine "finished". `Toaster` already draws a
+per-severity icon, so the rule was a second mark saying the same thing, and it
+made the most-repeated notification in the app its most colourful element.
+
+**Fixed:** one neutral surface for every variant. `variant` stays in the API —
+it selects the icon. Verified: a "stopped" toast renders with
+`::before` content `none`, a neutral `rgb(26,26,26)` panel, and its amber
+warning icon intact.
+
+### L8 · Four horizontal bars, one of them redundant — **FIXED**
+`components/workbench/tab-bar.tsx`, `components/workbench/workbench.tsx`
+
+The context bar was a 28px band under the tabs drawing the view's icon, its
+name, its group, and what it was working on. The active tab already carried the
+icon and name, the sidebar carried the group, and `VIEWS` is flat — so three of
+its four parts were repeats stacked on a bench that already had a title bar, a
+tab strip and a status strip.
+
+**Fixed:** the band is gone; the one line only it carried rides at the end of
+the tab strip, hidden by a container query when the bench is too narrow for it.
+`contextBarVisible` and its toggle came out of all six places that carried them
+(provider, title-bar menu, sidebar menu, sidebar Preferences, Settings → Layout,
+the palette) plus the diagnostics snapshot. A layout persisted by an older build
+still holds the key; it is ignored, so no migration was needed.
+
 ---
 
 ## Open — kept deliberately, at your direction

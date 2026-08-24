@@ -17,17 +17,16 @@ them. Only signing in talks to a server.
 ┌────────────────────────────────────────────────────────────┐
 │  HelixMind   [ search…  Ctrl K ]        🔔  ▤ ▤ ▤  ⚙       │  title bar
 ├────┬───────────────┬───────────────────────────────────────┤
-│ 🔬 │               │  Overview × │ DNA Scanner ● ×         │  tabs
-│ ▶  │   sidebar     ├───────────────────────────────────────┤
-│ 🧬 │               │  context: what this view is working on│
-│    │               ├───────────────────────────┬───────────┤
+│ 🔬 │               │ Overview │ DNA Scanner ● × │ sample.fa │  tabs
+│ ▶  │   sidebar     ├───────────────────────────┬───────────┤
+│ 🧬 │               │                           │           │
 │    │               │                           │           │
 │ ?  │               │        the bench          │ inspector │
 │ 👤 │               │                           │           │
 │ ⚙  │               ├───────────────────────────┴───────────┤
 │    │               │  Alerts │ Run log │ History           │  console
 ├────┴───────────────┴───────────────────────────────────────┤
-│ HelixMind Lab │ No alerts │ 1 sequence │ 2 AMR threats     │  status bar
+│ HelixMind Lab │ ✓ │ 1 sequence │ 2 AMR threats            │  status bar
 └────────────────────────────────────────────────────────────┘
 ```
 
@@ -35,8 +34,7 @@ them. Only signing in talks to a server.
 |---|---|
 | **Rail** (far left) | Switches what the sidebar shows. Help, account and preferences at the bottom. |
 | **Sidebar** | Analyses, run state, or the gene library. |
-| **Tabs** | Every analysis you have opened. |
-| **Context bar** | What the open analysis is currently working on. |
+| **Tabs** | Every analysis you have opened — and, at the far end of the strip, what the open one is working on. |
 | **Bench** | The analysis itself. |
 | **Inspector** (right) | That analysis's inputs and parameters. |
 | **Console** | Alerts, the run log, and finished runs. |
@@ -114,9 +112,10 @@ actions.
 **The last analysis open cannot be closed.** The bench always has a view on
 screen, so a strip that said "nothing open" would be describing something that
 isn't true — the last tab keeps no close button, and `Alt W`, middle-click and
-`Delete` all leave it alone. *Close all* is the way to clear the deck: it closes
-everything and lands you on a single Overview tab, with `Alt Shift T` still
-holding the rest.
+`Delete` all leave it alone. Hovering it says so, and each of those keys answers
+with a line in the status bar rather than appearing to do nothing. *Close all*
+is the way to clear the deck: it closes everything and lands you on a single
+Overview tab, with `Alt Shift T` still holding the rest.
 
 > A run **ends when you leave the analysis that started it.** You will get a
 > toast saying so. This is a known limitation, not a crash.

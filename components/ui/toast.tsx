@@ -33,10 +33,17 @@ const ToastViewport = React.forwardRef<
 ToastViewport.displayName = ToastPrimitives.Viewport.displayName
 
 /**
- * Severity is carried by a left accent rule and the icon, not by a saturated
- * fill. A solid red panel — which is what the stock `destructive` variant drew
- * — is louder than anything else in this interface, and the panel reserves
- * colour for state rather than for chrome.
+ * One neutral surface for every severity.
+ *
+ * The stock `destructive` variant drew a solid red panel, louder than anything
+ * else in this interface. That was replaced by a coloured rule down the leading
+ * edge — quieter, but still a second mark saying what the icon already says,
+ * and the green edge on every routine "done" was the most repeated splash of
+ * colour in the app. `Toaster` renders a per-severity icon, which carries the
+ * meaning without tinting the container; a toast should read as a message, not
+ * as a status light.
+ *
+ * `variant` stays in the API — it still selects that icon.
  */
 const toastVariants = cva(
   cn(
@@ -47,17 +54,17 @@ const toastVariants = cva(
     'data-[state=open]:animate-in data-[state=open]:slide-in-from-bottom-2 data-[state=open]:fade-in-0',
     'data-[state=closed]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full',
     'data-[swipe=end]:animate-out',
-    // The accent rule down the leading edge; colour is set per variant.
-    'before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:content-[""]',
   ),
   {
     variants: {
+      // `destructive` keeps its marker class: ToastAction and ToastClose style
+      // themselves off it via `group-[.destructive]`.
       variant: {
-        default: 'before:bg-transparent',
-        success: 'before:bg-success',
-        warning: 'before:bg-warning',
-        destructive: 'destructive before:bg-destructive',
-        info: 'before:bg-info',
+        default: '',
+        success: '',
+        warning: '',
+        destructive: 'destructive',
+        info: '',
       },
     },
     defaultVariants: {

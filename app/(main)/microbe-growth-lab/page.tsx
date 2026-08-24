@@ -621,19 +621,16 @@ export default function MicrobeGrowthLab() {
         <div className="flex flex-col gap-3 p-3">
           <div className="grid grid-cols-1 gap-3 @sm/bench:grid-cols-2 @4xl/bench:grid-cols-4">
             <StatTile
-              icon={Clock}
               label="Time steps"
               value={state.timeStep}
               hint={isRunning ? "running · 300ms/step" : "paused"}
             />
             <StatTile
-              icon={Activity}
               label="Population"
               value={state.population.toLocaleString()}
               hint={`peak ${peakPopulation.toLocaleString()}`}
             />
             <StatTile
-              icon={Pill}
               label="Resistance"
               value={`${state.resistanceLevel}%`}
               tone={
@@ -646,7 +643,6 @@ export default function MicrobeGrowthLab() {
               hint={antibioticOn ? "under selection (50 µg/mL)" : "no antibiotic"}
             />
             <StatTile
-              icon={DnaIcon}
               label="Strain"
               value={
                 <span className="text-base leading-tight">{currentStrain.name}</span>
@@ -682,7 +678,7 @@ export default function MicrobeGrowthLab() {
                   <PopulationChart data={chartData} />
                 </div>
               ) : (
-                <div className="bg-grid flex h-72 flex-col items-center justify-center gap-2 text-center">
+                <div className="flex h-72 flex-col items-center justify-center gap-2 text-center">
                   <LineChartIcon className="size-5 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground">
                     Start the simulation to plot population growth

@@ -261,7 +261,6 @@ export function CommandPalette() {
     { icon: PanelBottom, label: "Toggle console", shortcut: "Ctrl J", action: wb.togglePanel },
     { icon: PanelRight, label: "Toggle inspector", shortcut: "Ctrl Alt B", action: wb.toggleInspector },
     { icon: LayoutGrid, label: "Toggle open tabs", action: wb.toggleTabBar },
-    { icon: LayoutGrid, label: "Toggle context bar", action: wb.toggleContextBar },
     { icon: LayoutGrid, label: "Toggle status bar", action: wb.toggleStatusBar },
     { icon: Eye, label: "Toggle focus mode", shortcut: "Esc to exit", action: wb.toggleFocusMode },
     { icon: Maximize2, label: "Maximize console", action: wb.togglePanelMaximized },

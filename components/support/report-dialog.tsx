@@ -84,7 +84,6 @@ export function ReportDialog({
           panelTab: workbench.panelTab,
           inspectorVisible: workbench.inspectorVisible,
           statusBarVisible: workbench.statusBarVisible,
-          contextBarVisible: workbench.contextBarVisible,
           tabBarVisible: workbench.tabBarVisible,
           focusMode: workbench.focusMode,
           zoom: workbench.zoom,

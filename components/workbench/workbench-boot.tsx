@@ -71,7 +71,7 @@ export function WorkbenchBoot() {
             <Skeleton className="h-2.5 w-24" delay={320} />
           </div>
 
-          <div className="bg-grid flex flex-1 flex-col items-center justify-center gap-4 p-6">
+          <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6">
             <div className="flex items-center text-sm text-muted-foreground">
               <span>{STEPS[step]}</span>
             </div>
