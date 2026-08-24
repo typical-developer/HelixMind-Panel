@@ -277,8 +277,8 @@
   --animate-accordion-up: accordion-up 0.2s var(--ease-standard);
   /* Radix Collapsible exposes its own height variable, so side-bar sections
      need a separate pair from the accordion's. */
-  --animate-collapsible-down: collapsible-down 0.16s var(--ease-standard);
-  --animate-collapsible-up: collapsible-up 0.16s var(--ease-standard);
+  --animate-collapsible-down: collapsible-down 0.2s var(--ease-out-quint);
+  --animate-collapsible-up: collapsible-up 0.2s var(--ease-out-quint);
 
   @keyframes accordion-down {
     from {
@@ -510,7 +510,28 @@
   }
 
   /* ---- Grid backdrop for empty states ---------------------------------- */
+  /* Decorative grid backdrop.
+
+     The grid and its fade live on a pseudo-element, never on the element
+     itself. `mask-image` applies to an element *and everything inside it*, so
+     painting this directly on the container faded the real content sitting on
+     top of it — the "Try again" button on the error screen sat far enough from
+     the mask's centre to come out visibly dimmed. Decoration behind, content in
+     front, at full opacity. */
   .bg-grid {
+    position: relative;
+    /* Own stacking context, so the negative-z pseudo below stays behind this
+       element's content without escaping behind the page itself — and without
+       needing a z-index rule on children, which would fight their own
+       positioning utilities. */
+    isolation: isolate;
+  }
+  .bg-grid::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
     background-image: linear-gradient(var(--alpha-100) 1px, transparent 1px),
       linear-gradient(90deg, var(--alpha-100) 1px, transparent 1px);
     background-size: 32px 32px;
@@ -529,8 +550,12 @@
       );
   }
 
+  /* A subtle top-to-bottom sheen on display headings. The end stop stays high:
+     at the previous #ffffffbf the last line of a three-line headline was
+     rendering at 75% white over a near-black hero that also carries a vignette,
+     and the two fades compounded into a genuinely hard-to-read bottom line. */
   .text-gradient {
-    background: linear-gradient(180deg, var(--foreground), #ffffffbf);
+    background: linear-gradient(180deg, var(--foreground), #ffffffe0);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
@@ -540,17 +565,21 @@
 
   /* Route transition, replayed by app/(main)/template.tsx on each navigation.
      Compositor-only, and shorter than before so navigating feels instant. */
+  /* Replayed on every navigation.
+     Deliberately a short opacity fade with no travel. It used to rise 4px over
+     220ms, which on a tab switch reads as the view "settling" — and a thing
+     that settles feels slower than a thing that is simply there. Switching
+     between open analyses is the most repeated action in the app, so this
+     stays close to instant while still covering the content swap. */
   .animate-page-in {
-    animation: page-in 0.22s var(--ease-out-quint) both;
+    animation: page-in 0.12s var(--ease-standard) both;
   }
   @keyframes page-in {
     from {
       opacity: 0;
-      transform: translateY(4px);
     }
     to {
       opacity: 1;
-      transform: none;
     }
   }
 

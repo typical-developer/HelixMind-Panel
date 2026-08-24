@@ -2,31 +2,9 @@
 
 import * as React from "react"
 import Image from "next/image"
-import { useRouter } from "next/navigation"
-import {
-  ChevronDown,
-  LayoutGrid,
-  PanelBottom,
-  PanelLeft,
-  PanelRight,
-  Search,
-} from "lucide-react"
+import { ChevronDown, LayoutGrid, PanelBottom, PanelLeft, PanelRight, Search } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { useAuth } from "@/contexts/AuthContext"
-import {
-  Menubar,
-  MenubarCheckboxItem,
-  MenubarContent,
-  MenubarItem,
-  MenubarMenu,
-  MenubarSeparator,
-  MenubarShortcut,
-  MenubarSub,
-  MenubarSubContent,
-  MenubarSubTrigger,
-  MenubarTrigger,
-} from "@/components/ui/menubar"
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -40,19 +18,22 @@ import NotificationBell from "@/components/notifications/NotificationBell"
 
 import { ToolbarButton } from "./primitives"
 import { useWorkbench } from "./workbench-provider"
-import { VIEWS } from "./registry"
 
 /**
- * The 36px title bar: menus on the left, a search field in the middle that
- * opens the command palette, and layout controls on the right. Deliberately
- * not a page header — the open analysis names itself in the tab and the
- * context bar directly below.
+ * The 36px title bar: the lab mark, a search field that opens the command
+ * palette, and the layout controls.
+ *
+ * There is deliberately no menu bar. It used to carry Lab / Go / Layout menus,
+ * and every single item in them existed somewhere else — "Go" repeated the
+ * sidebar tree and the palette verbatim, "Lab" repeated the tree plus the
+ * account menu, and "Layout" repeated the Customize control immediately to its
+ * right. Three menus, nothing of their own.
  */
 export function TitleBar() {
   const wb = useWorkbench()
 
   return (
-    <header className="relative z-20 flex h-9 shrink-0 items-center gap-1 border-b border-border bg-chrome pr-1.5 pl-2">
+    <header className="relative z-20 flex h-9 shrink-0 items-center gap-1 border-b border-border bg-chrome pr-1.5 pl-2.5">
       <div className="flex shrink-0 items-center gap-2">
         <Image
           src="/logo_white.png"
@@ -62,7 +43,9 @@ export function TitleBar() {
           className="size-4 shrink-0"
           unoptimized
         />
-        <WorkbenchMenus />
+        <span className="hidden text-sm font-medium text-foreground/85 sm:inline">
+          HelixMind
+        </span>
       </div>
 
       <QuickInput />
@@ -122,172 +105,6 @@ function QuickInput() {
     </div>
   )
 }
-
-/* ============================================================================
-   Menu bar
-   ========================================================================= */
-
-function WorkbenchMenus() {
-  const wb = useWorkbench()
-  const router = useRouter()
-  const { signOut } = useAuth()
-
-  const handleSignOut = async () => {
-    await signOut()
-    router.push("/signin")
-  }
-
-  return (
-    <Menubar className="h-auto gap-0 border-0 bg-transparent p-0 shadow-none">
-      <MenubarMenu>
-        <MenubarTrigger className={MENU_TRIGGER}>Lab</MenubarTrigger>
-        <MenubarContent align="start" className="w-60">
-          <MenubarItem onClick={() => wb.openTab("/dna-scanner")}>
-            New DNA scan
-          </MenubarItem>
-          <MenubarItem onClick={() => wb.openTab("/mutation-simulator")}>
-            New mutation simulation
-          </MenubarItem>
-          <MenubarItem onClick={() => wb.openTab("/microbe-growth-lab")}>
-            New growth experiment
-          </MenubarItem>
-          <MenubarItem
-            onClick={() => wb.openTab("/amr-analysis-engine/resistance-predictor")}
-          >
-            New resistance prediction
-          </MenubarItem>
-          <MenubarSeparator />
-          <MenubarItem onClick={() => wb.openTab("/settings")}>
-            Settings
-            <MenubarShortcut>Ctrl ,</MenubarShortcut>
-          </MenubarItem>
-          <MenubarSeparator />
-          <MenubarItem onClick={handleSignOut} variant="destructive">
-            Sign out
-          </MenubarItem>
-        </MenubarContent>
-      </MenubarMenu>
-
-      <MenubarMenu>
-        <MenubarTrigger className={MENU_TRIGGER}>Go</MenubarTrigger>
-        <MenubarContent align="start" className="w-64">
-          <MenubarItem onClick={() => wb.openPalette()}>
-            Go to analysis
-            <MenubarShortcut>Ctrl K</MenubarShortcut>
-          </MenubarItem>
-          <MenubarItem onClick={() => wb.openPalette(">")}>
-            Run a command
-            <MenubarShortcut>Ctrl Shift P</MenubarShortcut>
-          </MenubarItem>
-          <MenubarSeparator />
-          {VIEWS.map((v) => (
-            <MenubarItem key={v.href} onClick={() => wb.openTab(v.href)}>
-              <v.icon className="size-3.5" />
-              {v.label}
-              {v.chord && <MenubarShortcut>Ctrl {v.chord}</MenubarShortcut>}
-            </MenubarItem>
-          ))}
-        </MenubarContent>
-      </MenubarMenu>
-
-      <MenubarMenu>
-        <MenubarTrigger className={MENU_TRIGGER}>Layout</MenubarTrigger>
-        <MenubarContent align="start" className="w-64">
-          <MenubarSub>
-            <MenubarSubTrigger>Sidebar</MenubarSubTrigger>
-            <MenubarSubContent className="w-56">
-              <MenubarItem onClick={() => wb.setActivity("analyses")}>
-                Analyses
-              </MenubarItem>
-              <MenubarItem onClick={() => wb.setActivity("search")}>Search</MenubarItem>
-              <MenubarItem onClick={() => wb.setActivity("runs")}>Runs</MenubarItem>
-              <MenubarItem onClick={() => wb.setActivity("genes")}>
-                Gene library
-              </MenubarItem>
-            </MenubarSubContent>
-          </MenubarSub>
-          <MenubarSub>
-            <MenubarSubTrigger>Console</MenubarSubTrigger>
-            <MenubarSubContent className="w-56">
-              <MenubarItem onClick={() => wb.setPanelTab("alerts")}>Alerts</MenubarItem>
-              <MenubarItem onClick={() => wb.setPanelTab("log")}>
-                Run log
-                <MenubarShortcut>Ctrl `</MenubarShortcut>
-              </MenubarItem>
-              <MenubarItem onClick={() => wb.setPanelTab("history")}>
-                History
-              </MenubarItem>
-            </MenubarSubContent>
-          </MenubarSub>
-          <MenubarSeparator />
-          <MenubarCheckboxItem
-            checked={wb.sidebarVisible}
-            onCheckedChange={wb.toggleSidebar}
-          >
-            Sidebar
-            <MenubarShortcut>Ctrl B</MenubarShortcut>
-          </MenubarCheckboxItem>
-          <MenubarCheckboxItem
-            checked={wb.panelVisible}
-            onCheckedChange={wb.togglePanel}
-          >
-            Console
-            <MenubarShortcut>Ctrl J</MenubarShortcut>
-          </MenubarCheckboxItem>
-          <MenubarCheckboxItem
-            checked={wb.inspectorVisible}
-            onCheckedChange={wb.toggleInspector}
-          >
-            Inspector
-            <MenubarShortcut>Ctrl Alt B</MenubarShortcut>
-          </MenubarCheckboxItem>
-          <MenubarCheckboxItem
-            checked={wb.tabBarVisible}
-            onCheckedChange={wb.toggleTabBar}
-          >
-            Open tabs
-          </MenubarCheckboxItem>
-          <MenubarCheckboxItem
-            checked={wb.contextBarVisible}
-            onCheckedChange={wb.toggleContextBar}
-          >
-            Context bar
-          </MenubarCheckboxItem>
-          <MenubarCheckboxItem
-            checked={wb.statusBarVisible}
-            onCheckedChange={wb.toggleStatusBar}
-          >
-            Status bar
-          </MenubarCheckboxItem>
-          <MenubarSeparator />
-          <MenubarCheckboxItem
-            checked={wb.focusMode}
-            onCheckedChange={wb.toggleFocusMode}
-          >
-            Focus mode
-            <MenubarShortcut>Esc</MenubarShortcut>
-          </MenubarCheckboxItem>
-          <MenubarSeparator />
-          <MenubarItem onClick={wb.zoomIn}>
-            Larger
-            <MenubarShortcut>Ctrl Alt +</MenubarShortcut>
-          </MenubarItem>
-          <MenubarItem onClick={wb.zoomOut}>
-            Smaller
-            <MenubarShortcut>Ctrl Alt -</MenubarShortcut>
-          </MenubarItem>
-          <MenubarItem onClick={wb.zoomReset}>
-            Reset scale
-            <MenubarShortcut>Ctrl Alt 0</MenubarShortcut>
-          </MenubarItem>
-        </MenubarContent>
-      </MenubarMenu>
-    </Menubar>
-  )
-}
-
-const MENU_TRIGGER =
-  "h-6 cursor-pointer rounded-sm px-2 text-xs font-normal text-muted-foreground data-[state=open]:bg-[var(--wb-active)] data-[state=open]:text-foreground hover:bg-[var(--wb-hover)] hover:text-foreground focus:bg-[var(--wb-hover)] focus:text-foreground"
 
 /* ============================================================================
    Customize layout

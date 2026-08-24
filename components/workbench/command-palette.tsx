@@ -24,6 +24,7 @@ import {
 } from "lucide-react"
 
 import { useAuth } from "@/contexts/AuthContext"
+import { AMR_RECORDS } from "@/lib/amr-records"
 import {
   CommandDialog,
   CommandEmpty,
@@ -55,6 +56,19 @@ export function CommandPalette() {
   // Ctrl+Shift+P opens straight into it by seeding the `>`.
   const commandMode = query.startsWith(">")
   const term = commandMode ? query.slice(1) : query
+
+  // The palette is now the app's only search surface, so it searches the gene
+  // library too. Matching happens here rather than through cmdk's scorer so the
+  // list can be capped — the library is long enough to swamp everything else.
+  const geneMatches = React.useMemo(() => {
+    const needle = term.trim().toLowerCase()
+    if (commandMode || !needle) return []
+    return AMR_RECORDS.filter((r) =>
+      [r.gene, r.antibiotic, r.organism, r.drugClass, r.mechanism].some((f) =>
+        f.toLowerCase().includes(needle),
+      ),
+    )
+  }, [commandMode, term])
 
   // Re-seed on open so Ctrl+K and Ctrl+Shift+P land in the right mode, and a
   // stale query from last time never lingers.
@@ -137,7 +151,6 @@ export function CommandPalette() {
       label: "Sidebar: Analyses",
       action: () => wb.setActivity("analyses"),
     },
-    { icon: Search, label: "Sidebar: Search", action: () => wb.setActivity("search") },
     {
       icon: PlayCircle,
       label: "Sidebar: Runs",
@@ -187,7 +200,7 @@ export function CommandPalette() {
         placeholder={
           commandMode
             ? "Run a command…"
-            : "Search analyses, or type > to run a command…"
+            : "Search analyses and genes, or type > to run a command…"
         }
       />
 
@@ -239,6 +252,35 @@ export function CommandPalette() {
               </CommandItem>
             ))}
           </CommandGroup>
+        )}
+
+        {/* Genes are searchable from here so the palette is the single search
+            surface. They only appear once you type — listing the whole library
+            unprompted would bury the analyses above them. */}
+        {!commandMode && term.trim().length > 0 && geneMatches.length > 0 && (
+          <>
+            <CommandSeparator />
+            <CommandGroup heading={`Genes · ${geneMatches.length}`}>
+              {geneMatches.slice(0, 8).map((r) => (
+                <CommandItem
+                  key={r.id}
+                  value={`${r.gene} ${r.organism} ${r.antibiotic} ${r.drugClass} ${r.mechanism}`}
+                  onSelect={() =>
+                    run(() => wb.openTab(`/amr-analysis-engine/gene-database?q=${encodeURIComponent(r.gene)}`))
+                  }
+                >
+                  <Dna className="text-success" />
+                  <span className="flex min-w-0 flex-col">
+                    <span className="truncate font-mono">{r.gene}</span>
+                    <span className="truncate text-xs text-muted-foreground">
+                      {r.organism} · {r.antibiotic}
+                    </span>
+                  </span>
+                  <CommandShortcut>Gene library</CommandShortcut>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </>
         )}
 
         {!commandMode && <CommandSeparator />}

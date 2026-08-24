@@ -4,12 +4,10 @@ import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
-  Bell,
   Dna,
   LogOut,
   Microscope,
   PlayCircle,
-  Search,
   Settings,
   User,
   type LucideIcon,
@@ -27,8 +25,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
-import { useNotifications } from "@/components/notifications/notifications-provider"
-
 import { useWorkbench, type ActivityId } from "./workbench-provider"
 
 interface ActivityItem {
@@ -42,7 +38,6 @@ interface ActivityItem {
 
 const PRIMARY: ActivityItem[] = [
   { id: "analyses", icon: Microscope, label: "Analyses" },
-  { id: "search", icon: Search, label: "Search" },
   { id: "runs", icon: PlayCircle, label: "Runs" },
   { id: "genes", icon: Dna, label: "Gene library" },
 ]
@@ -53,7 +48,7 @@ const PRIMARY: ActivityItem[] = [
  * the sidebar and hands the width back to the bench.
  */
 export function ActivityBar() {
-  const { activity, sidebarVisible, setActivity, unreadCount } = useActivityState()
+  const { activity, sidebarVisible, setActivity } = useWorkbench()
 
   return (
     <nav
@@ -71,17 +66,10 @@ export function ActivityBar() {
 
       <div className="flex-1" />
 
-      <NotificationsButton count={unreadCount} />
       <AccountButton />
       <PreferencesButton />
     </nav>
   )
-}
-
-function useActivityState() {
-  const { activity, sidebarVisible, setActivity } = useWorkbench()
-  const { unreadCount } = useNotifications()
-  return { activity, sidebarVisible, setActivity, unreadCount }
 }
 
 function ActivityButton({
@@ -131,29 +119,6 @@ function ActivityButton({
   )
 }
 
-function NotificationsButton({ count }: { count: number }) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Link
-          href="/notifications"
-          aria-label="Notifications"
-          className="relative flex size-12 shrink-0 items-center justify-center text-muted-foreground transition-colors duration-100 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none focus-visible:ring-inset"
-        >
-          <Bell className="size-5" />
-          {count > 0 && (
-            <span className="absolute top-2.5 right-2.5 flex size-4 items-center justify-center rounded-full bg-brand text-2xs font-semibold text-brand-foreground tabular">
-              {count > 9 ? "9+" : count}
-            </span>
-          )}
-        </Link>
-      </TooltipTrigger>
-      <TooltipContent side="right" sideOffset={6}>
-        Notifications
-      </TooltipContent>
-    </Tooltip>
-  )
-}
 
 function AccountButton() {
   const { user, signOut } = useAuth()

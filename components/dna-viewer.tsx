@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import * as React from "react"
 import { Check, Copy, Dna } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -11,7 +11,15 @@ const DNA_SEQUENCE =
 
 const HIGHLIGHT_START = 15
 const HIGHLIGHT_END = 25
-const BASES_PER_ROW = 60
+
+/** Width of the position gutter (`w-16`) plus its right padding. */
+const GUTTER_PX = 64 + 14
+/** Trailing padding after the last base. */
+const TRAIL_PX = 16
+/** Row lengths stay on a round multiple so position numbers read cleanly. */
+const STEP = 10
+const MIN_BASES = 10
+const FALLBACK_BASES = 60
 
 /** Per-base tint. Low-chroma by design — see the token notes in globals.css. */
 const BASE_CLASS: Record<string, string> = {
@@ -23,19 +31,52 @@ const BASE_CLASS: Record<string, string> = {
 }
 
 /**
- * Sequence readout: a position gutter down the left, fixed-width rows of bases
- * coloured by nucleotide, and a highlighted variant hotspot.
+ * Sequence readout: a position gutter down the left, rows of bases coloured by
+ * nucleotide, and a highlighted variant hotspot.
+ *
+ * How many bases sit on a row is measured from the pane rather than fixed. It
+ * used to be a hard-coded 60, which is why the readout left a band of dead
+ * space down its right-hand side on any pane wider than those 60 glyphs — and
+ * why it clipped on any pane narrower.
  */
 export function DNAViewer() {
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied] = React.useState(false)
+  const scrollRef = React.useRef<HTMLDivElement>(null)
+  const probeRef = React.useRef<HTMLSpanElement>(null)
+  const [basesPerRow, setBasesPerRow] = React.useState(FALLBACK_BASES)
 
-  const rows = useMemo(() => {
+  /* Measure the real advance of one base cell (glyph + the 1px gap between
+     cells) off a hidden probe, then fit as many whole cells as the pane allows.
+     Measuring beats hard-coding a character width: the mono face, the zoom
+     level and the tracking can all change it. */
+  React.useLayoutEffect(() => {
+    const scroller = scrollRef.current
+    const probe = probeRef.current
+    if (!scroller || !probe) return
+
+    const fit = () => {
+      const sample = probe.getBoundingClientRect().width
+      if (!sample) return
+      const cell = sample / 20 + 1 // 20 probe glyphs, plus the gap-px per cell
+      const usable = scroller.clientWidth - GUTTER_PX - TRAIL_PX
+      const raw = Math.floor(usable / cell)
+      const snapped = Math.max(MIN_BASES, Math.floor(raw / STEP) * STEP)
+      setBasesPerRow((prev) => (prev === snapped ? prev : snapped))
+    }
+
+    fit()
+    const observer = new ResizeObserver(fit)
+    observer.observe(scroller)
+    return () => observer.disconnect()
+  }, [])
+
+  const rows = React.useMemo(() => {
     const out: Array<{ start: number; bases: string[] }> = []
-    for (let i = 0; i < DNA_SEQUENCE.length; i += BASES_PER_ROW) {
-      out.push({ start: i, bases: DNA_SEQUENCE.slice(i, i + BASES_PER_ROW).split("") })
+    for (let i = 0; i < DNA_SEQUENCE.length; i += basesPerRow) {
+      out.push({ start: i, bases: DNA_SEQUENCE.slice(i, i + basesPerRow).split("") })
     }
     return out
-  }, [])
+  }, [basesPerRow])
 
   const copyToClipboard = async () => {
     try {
@@ -55,7 +96,9 @@ export function DNAViewer() {
         subtitle={`${DNA_SEQUENCE.length} bp · reference strand`}
         actions={
           <>
-            <Chip tone="info">hotspot {HIGHLIGHT_START}–{HIGHLIGHT_END}</Chip>
+            <Chip tone="info">
+              hotspot {HIGHLIGHT_START}–{HIGHLIGHT_END}
+            </Chip>
             <ToolbarButton
               icon={copied ? Check : Copy}
               label={copied ? "Copied" : "Copy sequence"}
@@ -66,7 +109,19 @@ export function DNAViewer() {
         }
       />
 
-      <div className="seq-scroll min-h-0 flex-1 overflow-auto bg-[var(--wb-inset)] py-2.5 font-mono text-xs leading-[1.6] tracking-normal">
+      <div
+        ref={scrollRef}
+        className="seq-scroll min-h-0 flex-1 overflow-auto bg-[var(--wb-inset)] py-2.5 font-mono text-xs leading-[1.6] tracking-normal"
+      >
+        {/* Off-screen probe used only to measure a base cell's advance. */}
+        <span
+          ref={probeRef}
+          aria-hidden
+          className="pointer-events-none absolute -top-[9999px] left-0 tracking-wider whitespace-pre"
+        >
+          AAAAAAAAAAAAAAAAAAAA
+        </span>
+
         {rows.map((row) => (
           <div key={row.start} className="flex hover:bg-[var(--wb-hover)]">
             <span className="gutter-num sticky left-0 w-16 shrink-0 bg-[var(--wb-inset)] pr-3.5">

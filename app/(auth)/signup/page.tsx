@@ -86,7 +86,10 @@ export default function signupPage() {
       {/* Left — branded hero */}
       <div className="bg-grid relative hidden w-1/2 flex-col justify-between overflow-hidden border-r border-border p-12 lg:flex">
         <div className="aurora pointer-events-none absolute inset-0" />
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
+        {/* Vignette anchored to the bottom edge only. Spanning the full height put
+            its darkest band right across the headline and feature list, costing
+            contrast on the very copy the hero exists to show. */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-background/80 to-transparent" />
 
         <div className="relative flex items-center gap-3 text-lg font-semibold">
           <Logo />
@@ -119,7 +122,7 @@ export default function signupPage() {
           </ul>
         </div>
 
-        <p className="relative text-sm text-muted-foreground">
+        <p className="relative text-sm text-foreground/70">
           © 2025 HelixMind. All rights reserved.
         </p>
       </div>

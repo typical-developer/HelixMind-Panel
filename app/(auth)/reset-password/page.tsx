@@ -14,7 +14,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { toast } from "sonner";
 
 export default function ResetPasswordPage() {
   const [email, setEmail] = useState("");
@@ -36,25 +35,35 @@ export default function ResetPasswordPage() {
   ];
   const allRequirementsMet = passwordRequirements.every((r) => r.met);
 
+  /*
+   * This flow is not connected to a backend.
+   *
+   * `api/auth.ts` exposes signup, login and checkAuth — there is no
+   * reset-password endpoint. The handlers below used to paper over that: the
+   * first claimed "Verification code sent to your email" without sending one,
+   * the second accepted any non-empty string as a valid code, and the third
+   * announced "Password reset successfully!" and redirected to sign-in. A user
+   * walked away believing their password had changed when nothing had happened
+   * — the worst possible outcome for an account-recovery screen.
+   *
+   * The form is left intact so wiring it up is a matter of filling in these
+   * three calls, but it no longer claims to have done anything it hasn't.
+   */
+  const RESET_UNAVAILABLE =
+    "Password reset isn't available yet — this step needs an endpoint that the API doesn't expose. Contact support to recover your account.";
+
   const handleNext = async () => {
     setError("");
     if (!email.trim()) {
       setError("Email is required");
       return;
     }
-    // TODO: send email with verification code
-    toast.success("Verification code sent to your email");
-    setStep("verify");
+    setError(RESET_UNAVAILABLE);
   };
 
   const handleVerify = async () => {
     setError("");
-    if (!code.trim()) {
-      setError("Verification code is required");
-      return;
-    }
-    // TODO: verify code
-    setStep("reset");
+    setError(RESET_UNAVAILABLE);
   };
 
   const handleReset = async () => {
@@ -67,9 +76,7 @@ export default function ResetPasswordPage() {
       setError("Passwords do not match");
       return;
     }
-    // TODO: call API to reset password
-    toast.success("Password reset successfully!");
-    setTimeout(() => window.location.assign("/signin"), 500);
+    setError(RESET_UNAVAILABLE);
   };
 
   return (

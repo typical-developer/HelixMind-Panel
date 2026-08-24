@@ -21,7 +21,6 @@ export async function simulate_mutation(fasta_file: File, params: {
         method: "POST"
     });
 
-    console.log(response);
 
     return response;
 }

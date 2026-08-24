@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { ArrowUpRight, Bell } from "lucide-react"
+import { ArrowUpRight, Bell, CheckCheck } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import {
@@ -19,7 +19,7 @@ import { useNotifications } from "./notifications-provider"
  * Notifications view uses, at popover density.
  */
 export default function NotificationBell() {
-  const { notifications, unreadCount, markAsRead, deleteNotification } =
+  const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification } =
     useNotifications()
 
   return (
@@ -43,15 +43,25 @@ export default function NotificationBell() {
       </PopoverTrigger>
 
       <PopoverContent align="end" sideOffset={6} className="w-88 overflow-hidden p-0">
-        <div className="flex h-8 items-center gap-2 border-b border-border px-3">
-          <h3 className="text-sm font-medium text-foreground/90">
-            Notifications
-          </h3>
-          {unreadCount > 0 && (
-            <Chip tone="info" className="ml-auto">
-              {unreadCount} new
-            </Chip>
-          )}
+        <div className="flex h-9 items-center gap-2 border-b border-border pr-1.5 pl-3">
+          <h3 className="text-sm font-medium text-foreground/90">Notifications</h3>
+          {unreadCount > 0 && <Chip tone="info">{unreadCount} new</Chip>}
+          {/* Clearing the badge is the reason most people open this, so it does
+              not require a trip to the full view first. */}
+          <button
+            type="button"
+            onClick={markAllAsRead}
+            disabled={unreadCount === 0}
+            className={cn(
+              "ml-auto flex cursor-pointer items-center gap-1 rounded-sm px-1.5 py-1 text-xs",
+              "text-muted-foreground transition-colors hover:bg-[var(--wb-hover)] hover:text-foreground",
+              "focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none",
+              "disabled:pointer-events-none disabled:opacity-40",
+            )}
+          >
+            <CheckCheck className="size-3.5" />
+            Mark all read
+          </button>
         </div>
 
         <div className="seq-scroll max-h-72 overflow-y-auto">

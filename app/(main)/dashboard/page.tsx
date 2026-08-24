@@ -5,14 +5,12 @@ import dynamic from "next/dynamic"
 import {
   Activity,
   AlertCircle,
-  ArrowUpRight,
   Clock,
   Dna,
   FlaskConical,
   Gauge,
   Play,
   ScanLine,
-  Shield,
   Split,
 } from "lucide-react"
 
@@ -31,7 +29,6 @@ import {
   StatTile,
   useStatusItems,
   useViewContext,
-  useWorkbench,
 } from "@/components/workbench"
 
 // Below the fold and pulls in recharts, so it loads on the client after the
@@ -58,13 +55,6 @@ const ACTIVITY = [
   { icon: AlertCircle, label: "blaOXA-48 detected", time: "1h ago", tone: "danger" },
   { icon: FlaskConical, label: "E. coli growth curve exported", time: "3h ago", tone: "neutral" },
   { icon: Dna, label: "Reference genome indexed", time: "yesterday", tone: "success" },
-] as const
-
-const QUICK_ACTIONS = [
-  { href: "/dna-scanner", icon: ScanLine, label: "Run DNA scan" },
-  { href: "/mutation-simulator", icon: Split, label: "New mutation run" },
-  { href: "/microbe-growth-lab", icon: FlaskConical, label: "New growth experiment" },
-  { href: "/amr-analysis-engine/resistance-predictor", icon: Shield, label: "Predict resistance" },
 ] as const
 
 export default function Dashboard() {
@@ -131,29 +121,15 @@ export default function Dashboard() {
   )
 }
 
+/**
+ * There is no "Quick actions" pane here any more. It was a fourth copy of the
+ * same four links already in the sidebar tree, the palette and the Runs panel.
+ * What belongs in the Overview's inspector is state you cannot get elsewhere:
+ * what just happened, and how the workspace is doing.
+ */
 function OverviewInspector() {
-  const { openTab } = useWorkbench()
-
   return (
     <InspectorScroll>
-      <Pane>
-        <PaneHeader icon={Play} title="Quick actions" />
-        <div className="p-1.5">
-          {QUICK_ACTIONS.map((action) => (
-            <button
-              key={action.href}
-              type="button"
-              onClick={() => openTab(action.href)}
-              className="row-hover group flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
-            >
-              <action.icon className="size-3.5 shrink-0" />
-              <span className="min-w-0 flex-1 truncate">{action.label}</span>
-              <ArrowUpRight className="size-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-70" />
-            </button>
-          ))}
-        </div>
-      </Pane>
-
       <Pane>
         <PaneHeader icon={Clock} title="Recent activity" />
         <div className="divide-y divide-border/60">

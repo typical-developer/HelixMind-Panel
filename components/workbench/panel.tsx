@@ -135,7 +135,10 @@ export function BottomPanel() {
         </div>
       </header>
 
-      <div className="min-h-0 flex-1">
+      {/* Keyed on the tab so switching fades the new body in, matching how the
+          sidebar swaps modes. Without it the console was the one region that
+          changed content with no transition at all, which read as a flicker. */}
+      <div key={panelTab} className="animate-fade-in min-h-0 flex-1">
         {panelTab === "alerts" && <AlertsView />}
         {panelTab === "log" && <RunLogView />}
         {panelTab === "history" && <HistoryView />}

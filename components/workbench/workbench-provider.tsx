@@ -10,7 +10,7 @@ import { VIEWS, viewForPath, type WorkbenchView } from "./registry"
    ========================================================================= */
 
 /** The sidebar's modes, in rail order. */
-export type ActivityId = "analyses" | "search" | "runs" | "genes" | "preferences"
+export type ActivityId = "analyses" | "runs" | "genes" | "preferences"
 
 /** The console's tabs. */
 export type PanelTabId = "alerts" | "log" | "history"
@@ -105,13 +105,7 @@ const DEFAULT_LAYOUT: LayoutState = {
 
 const STORAGE_KEY = "helixmind.workbench.v2"
 
-const ACTIVITY_IDS: ActivityId[] = [
-  "analyses",
-  "search",
-  "runs",
-  "genes",
-  "preferences",
-]
+const ACTIVITY_IDS: ActivityId[] = ["analyses", "runs", "genes", "preferences"]
 const PANEL_TAB_IDS: PanelTabId[] = ["alerts", "log", "history"]
 
 /** Zoom step → root font size. Index 3 (16px) is 100%. */

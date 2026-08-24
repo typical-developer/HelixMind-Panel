@@ -15,7 +15,6 @@ export async function parse_fasta(fasta_file: File) {
         method: "POST"
     });
 
-    console.log(response);
 
     return response;
 };
@@ -29,7 +28,6 @@ export async function previouslyReadFastas() {
         },
     });
 
-    console.log(response);
 
     return response;
 }

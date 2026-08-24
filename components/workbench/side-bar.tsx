@@ -19,7 +19,6 @@ import {
   PanelLeft,
   PanelRight,
   Pill,
-  Play,
   RotateCcw,
   Search,
   SlidersHorizontal,
@@ -43,17 +42,21 @@ import {
 
 import { SideSection, ToolbarButton, TreeRow, WBInput, Chip } from "./primitives"
 import { useConsole, useWorkbench } from "./workbench-provider"
-import { RUNNABLE_VIEWS, VIEWS, WORKBENCH_GROUPS } from "./registry"
+import { VIEWS, WORKBENCH_GROUPS } from "./registry"
 
 const TITLES: Record<string, string> = {
   analyses: "Analyses",
-  search: "Search",
   runs: "Runs",
   genes: "Gene library",
   preferences: "Preferences",
 }
 
 const GENE_LIBRARY_HREF = "/amr-analysis-engine/gene-database"
+
+/** The gene library, pre-filtered to a gene or a drug class. */
+function geneLibraryHref(query: string) {
+  return `${GENE_LIBRARY_HREF}?q=${encodeURIComponent(query)}`
+}
 
 /**
  * The sidebar. Its header stays fixed while the body swaps between modes, so
@@ -78,7 +81,6 @@ export function SideBar() {
       <div className="seq-scroll min-h-0 flex-1 overflow-y-auto pb-4">
         <div key={activity} className="animate-fade-in">
           {activity === "analyses" && <AnalysesView />}
-          {activity === "search" && <SearchView />}
           {activity === "runs" && <RunsView />}
           {activity === "genes" && <GenesView />}
           {activity === "preferences" && <PreferencesView />}
@@ -141,39 +143,23 @@ function SideBarMenu() {
 }
 
 /* ============================================================================
-   Analyses — everything the lab can do, plus what is currently open
+   Analyses — the one place that lists everything the lab can do
    ========================================================================= */
 
+/**
+ * The browse path.
+ *
+ * There is no "Open" section here any more. It listed exactly what the tab bar
+ * already shows, with the same close affordance — a second copy of the open set
+ * two inches from the first. Switching between open analyses belongs to the
+ * tabs and their overflow list; this tree is for reaching things that are *not*
+ * open yet.
+ */
 function AnalysesView() {
-  const { view, tabs, openTab, closeTab } = useWorkbench()
+  const { view, openTab } = useWorkbench()
 
   return (
     <div className="space-y-1">
-      {tabs.length > 0 && (
-        <SideSection title="Open" defaultOpen={false}>
-          {tabs.map((tab) => (
-            <div key={tab.href} className="group/row relative">
-              <TreeRow
-                icon={tab.icon}
-                label={tab.label}
-                active={view?.href === tab.href}
-                level={1}
-                onClick={() => openTab(tab.href)}
-                className="pr-7"
-              />
-              <button
-                type="button"
-                aria-label={`Close ${tab.label}`}
-                onClick={() => closeTab(tab.href)}
-                className="absolute top-1/2 right-1.5 flex size-4 -translate-y-1/2 cursor-pointer items-center justify-center rounded-xs text-muted-foreground opacity-0 transition-opacity hover:bg-[var(--wb-active)] hover:text-foreground group-hover/row:opacity-100 focus-visible:opacity-100"
-              >
-                <X className="size-3" />
-              </button>
-            </div>
-          ))}
-        </SideSection>
-      )}
-
       <SideSection title="HelixMind Lab">
         {WORKBENCH_GROUPS.map((group) => (
           <AnalysisGroup key={group.id} label={group.label}>
@@ -220,105 +206,18 @@ function AnalysisGroup({
 }
 
 /* ============================================================================
-   Search
+   Runs — what is running, what has finished, what needs attention
    ========================================================================= */
 
-function SearchView() {
-  const { openTab, view } = useWorkbench()
-  const [query, setQuery] = React.useState("")
-
-  const needle = query.trim().toLowerCase()
-
-  const viewMatches = React.useMemo(() => {
-    if (!needle) return []
-    return VIEWS.filter((v) =>
-      [v.label, v.hint].some((f) => f.toLowerCase().includes(needle)),
-    )
-  }, [needle])
-
-  const geneMatches = React.useMemo(() => {
-    if (!needle) return []
-    return AMR_RECORDS.filter((r) =>
-      [r.gene, r.antibiotic, r.organism, r.drugClass, r.mechanism].some((f) =>
-        f.toLowerCase().includes(needle),
-      ),
-    )
-  }, [needle])
-
-  const total = viewMatches.length + geneMatches.length
-
-  return (
-    <div className="space-y-2">
-      <div className="px-3 pt-2">
-        <div className="relative">
-          <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-          <WBInput
-            autoFocus
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search analyses and genes"
-            className="pl-7"
-            aria-label="Search the lab"
-          />
-        </div>
-        {needle && (
-          <p className="mt-2 text-xs text-muted-foreground">
-            {total} result{total === 1 ? "" : "s"} for{" "}
-            <span className="font-mono text-foreground/80">{query}</span>
-          </p>
-        )}
-      </div>
-
-      {!needle && (
-        <p className="px-3 py-2 text-xs leading-relaxed text-muted-foreground/70">
-          Search across every analysis and the resistance gene library. Press{" "}
-          <span className="font-mono text-foreground/80">Ctrl+K</span> to search and
-          run commands from anywhere.
-        </p>
-      )}
-
-      {viewMatches.length > 0 && (
-        <SideSection title={`Analyses · ${viewMatches.length}`}>
-          {viewMatches.map((v) => (
-            <TreeRow
-              key={v.href}
-              icon={v.icon}
-              label={v.label}
-              active={view?.href === v.href}
-              level={1}
-              onClick={() => openTab(v.href)}
-              title={v.hint}
-            />
-          ))}
-        </SideSection>
-      )}
-
-      {geneMatches.length > 0 && (
-        <SideSection title={`Genes · ${geneMatches.length}`}>
-          {geneMatches.map((r) => (
-            <TreeRow
-              key={r.id}
-              icon={Dna}
-              iconClassName="text-success"
-              label={<span className="font-mono">{r.gene}</span>}
-              detail={`${r.impact}%`}
-              level={1}
-              onClick={() => openTab(GENE_LIBRARY_HREF)}
-              title={`${r.organism} · ${r.mechanism}`}
-            />
-          ))}
-        </SideSection>
-      )}
-    </div>
-  )
-}
-
-/* ============================================================================
-   Runs — what you can start, what is running, what has finished
-   ========================================================================= */
-
+/**
+ * Deliberately not a navigation list.
+ *
+ * This used to open with "Start a run" — the runnable subset of the tree two
+ * panels away, reachable by the same click. Runs is about run *state*; you
+ * start one by opening the analysis, which the tree and the palette already do.
+ */
 function RunsView() {
-  const { openTab, view, setPanelTab } = useWorkbench()
+  const { setPanelTab } = useWorkbench()
   const { runStatus, runHistory, alerts } = useConsole()
 
   const errors = alerts.filter((a) => a.severity === "error").length
@@ -326,21 +225,6 @@ function RunsView() {
 
   return (
     <div className="space-y-1">
-      <SideSection title="Start a run">
-        {RUNNABLE_VIEWS.map((v) => (
-          <TreeRow
-            key={v.href}
-            icon={Play}
-            iconClassName="text-success"
-            label={v.label}
-            active={view?.href === v.href}
-            level={1}
-            onClick={() => openTab(v.href)}
-            title={v.hint}
-          />
-        ))}
-      </SideSection>
-
       <SideSection title="In progress">
         {runStatus && runStatus.state !== "idle" ? (
           <div className="space-y-2 px-3 py-2">
@@ -501,7 +385,10 @@ function GenesView() {
             label={<span className="font-mono">{r.gene}</span>}
             detail={r.organism}
             level={1}
-            onClick={() => openTab(GENE_LIBRARY_HREF)}
+            /* Carries the gene through as a filter. Every row here used to open
+               the same unfiltered library, so picking a specific gene and
+               picking any other gene did exactly the same thing. */
+            onClick={() => openTab(geneLibraryHref(r.gene))}
             title={`${r.antibiotic} · ${r.mechanism}`}
           />
         ))}
@@ -520,7 +407,7 @@ function GenesView() {
             label={label}
             detail={count}
             level={1}
-            onClick={() => openTab(GENE_LIBRARY_HREF)}
+            onClick={() => openTab(geneLibraryHref(label))}
           />
         ))}
       </SideSection>

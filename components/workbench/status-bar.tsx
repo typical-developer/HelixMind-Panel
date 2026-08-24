@@ -1,10 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { useRouter } from "next/navigation"
 import {
   AlertCircle,
-  Bell,
   CheckCircle2,
   CircleDot,
   Loader2,
@@ -14,8 +12,6 @@ import {
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-
-import { useNotifications } from "@/components/notifications/notifications-provider"
 
 import { useConsole, useWorkbench } from "./workbench-provider"
 
@@ -27,8 +23,6 @@ import { useConsole, useWorkbench } from "./workbench-provider"
 export function StatusBar() {
   const { setPanelTab, panelVisible, togglePanel, openPalette } = useWorkbench()
   const { alerts, runStatus, statusItems } = useConsole()
-  const { unreadCount } = useNotifications()
-  const router = useRouter()
 
   const errors = alerts.filter((a) => a.severity === "error").length
   const warnings = alerts.filter((a) => a.severity === "warning").length
@@ -106,17 +100,6 @@ export function StatusBar() {
         title="Toggle console (Ctrl+J)"
         tone={panelVisible ? "info" : "default"}
         onClick={togglePanel}
-      />
-      <StatusItem
-        icon={Bell}
-        label={unreadCount > 0 ? String(unreadCount) : ""}
-        title={
-          unreadCount > 0
-            ? `${unreadCount} unread notification${unreadCount === 1 ? "" : "s"}`
-            : "Notifications"
-        }
-        tone={unreadCount > 0 ? "info" : "default"}
-        onClick={() => router.push("/notifications")}
       />
     </footer>
   )

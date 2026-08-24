@@ -184,34 +184,97 @@ function Tab({
   )
 }
 
+/**
+ * The list of everything currently open — the one place that owns the open set,
+ * now that the sidebar no longer keeps a second copy of it.
+ *
+ * Modelled on VS Code's "Open Editors": every open analysis, the active one
+ * marked, each row closable in place, and a count on the trigger so you can see
+ * how much is open without opening the menu. It earns its keep when tabs
+ * overflow the strip and some are scrolled out of sight.
+ */
 function TabOverflowMenu() {
-  const { tabs, view, openTab, closeAllTabs, resetLayout } = useWorkbench()
+  const { tabs, view, openTab, closeTab, closeAllTabs } = useWorkbench()
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          aria-label="Open analyses"
-          className="inline-flex size-6 cursor-pointer items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-[var(--wb-hover)] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
+          aria-label={`Open analyses (${tabs.length})`}
+          className="inline-flex h-6 min-w-6 cursor-pointer items-center justify-center gap-1 rounded-sm px-1 text-muted-foreground transition-colors hover:bg-[var(--wb-hover)] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
         >
           <MoreHorizontal className="size-3.5" />
+          {tabs.length > 0 && (
+            <span className="text-2xs font-medium tabular">{tabs.length}</span>
+          )}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-60">
-        {tabs.map((tab) => (
-          <DropdownMenuItem
-            key={tab.href}
-            onClick={() => openTab(tab.href)}
-            className={cn("gap-2", view?.href === tab.href && "bg-[var(--wb-active)]")}
-          >
-            <tab.icon className="size-3.5" />
-            <span className="truncate">{tab.label}</span>
-          </DropdownMenuItem>
-        ))}
-        {tabs.length > 0 && <DropdownMenuSeparator />}
-        <DropdownMenuItem onClick={closeAllTabs}>Close all</DropdownMenuItem>
-        <DropdownMenuItem onClick={resetLayout}>Reset layout</DropdownMenuItem>
+
+      <DropdownMenuContent align="end" className="w-72 p-0">
+        <div className="flex items-center justify-between px-2 py-1.5">
+          <span className="text-xs font-medium text-muted-foreground">
+            Open analyses
+          </span>
+          <span className="font-mono text-2xs text-muted-foreground/70 tabular">
+            {tabs.length}
+          </span>
+        </div>
+
+        {tabs.length === 0 ? (
+          <p className="px-2 pb-2 text-xs text-muted-foreground/70">Nothing open.</p>
+        ) : (
+          <div className="seq-scroll max-h-72 overflow-y-auto pb-1">
+            {tabs.map((tab) => {
+              const active = view?.href === tab.href
+              return (
+                <div key={tab.href} className="group/item relative px-1">
+                  <button
+                    type="button"
+                    onClick={() => openTab(tab.href)}
+                    className={cn(
+                      "row-hover flex w-full cursor-pointer items-center gap-2 rounded-sm py-1.5 pr-7 pl-2 text-left text-sm",
+                      "focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none",
+                      active
+                        ? "bg-[var(--wb-active)] text-foreground"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    <tab.icon className="size-3.5 shrink-0" />
+                    <span className="min-w-0 flex-1 truncate">{tab.label}</span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Close ${tab.label}`}
+                    onClick={(e) => {
+                      // Keep the menu open so several can be closed in a row.
+                      e.stopPropagation()
+                      closeTab(tab.href)
+                    }}
+                    className={cn(
+                      "absolute top-1/2 right-2 flex size-4 -translate-y-1/2 cursor-pointer items-center justify-center rounded-xs",
+                      "text-muted-foreground transition-opacity hover:bg-[var(--wb-selected)] hover:text-foreground",
+                      active
+                        ? "opacity-60 hover:opacity-100"
+                        : "opacity-0 group-hover/item:opacity-70 focus-visible:opacity-100",
+                    )}
+                  >
+                    <X className="size-3" />
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {tabs.length > 0 && (
+          <>
+            <DropdownMenuSeparator className="my-0" />
+            <DropdownMenuItem onClick={closeAllTabs} className="m-1 text-sm">
+              Close all
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )

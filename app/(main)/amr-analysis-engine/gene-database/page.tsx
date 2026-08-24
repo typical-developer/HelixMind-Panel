@@ -1,6 +1,7 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import { Bug, Clock, Database, Dna, Layers, Search, X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -33,14 +34,27 @@ const COLUMNS = [
 ] as const
 
 export default function GeneDatabase() {
+  const searchParams = useSearchParams()
   const [searchTerm, setSearchTerm] = useState("")
 
-  const filteredRecords = AMR_RECORDS.filter(
-    (record) =>
-      record.gene.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      record.antibiotic.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      record.organism.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  /* Arriving from a gene hit in the command palette pre-fills the filter, so
+     picking a specific gene lands on that gene rather than on the full library
+     with the search you just typed thrown away. Seeded rather than controlled:
+     once here, the field is yours to edit. */
+  const seededQuery = searchParams.get("q") ?? ""
+  useEffect(() => {
+    if (seededQuery) setSearchTerm(seededQuery)
+  }, [seededQuery])
+
+  const filteredRecords = useMemo(() => {
+    const needle = searchTerm.trim().toLowerCase()
+    if (!needle) return AMR_RECORDS
+    return AMR_RECORDS.filter((record) =>
+      [record.gene, record.antibiotic, record.organism, record.drugClass].some((f) =>
+        f.toLowerCase().includes(needle),
+      ),
+    )
+  }, [searchTerm])
 
   useStatusItems(
     useMemo(

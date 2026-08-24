@@ -18,7 +18,6 @@ const request = async function <T>(
       ...options.headers,
     };
 
-    // console.log("Headers: ", headers);
 
     const response = await fetch(BASE_URL + endpoint, {
       method: options.method ?? "GET",
@@ -27,7 +26,6 @@ const request = async function <T>(
     });
 
     const output = await response.json();
-    // console.log(JSON.stringify(output));
 
     if (response.ok != true) {
       throw new Error(
@@ -43,34 +41,12 @@ const request = async function <T>(
 
     return (output.payload || output.data) as T;
   } catch (error) {
-    console.log(error instanceof Error ? error.message : error);
+    // Surface the failure to the caller; do not log response bodies, which can
+    // carry account details, to the browser console.
     throw error instanceof Error
       ? error.message
       : "Something went wrong, try again";
   }
 };
 
-async function myRandomTests() {
-  var raw = JSON.stringify({
-    email: "langmaster_test@gmail.com",
-    password: "@Langmaster1",
-  });
-
-  var requestOptions = {
-    method: "POST",
-    body: raw,
-    // redirect: "follow",
-  };
-
-  await fetch("https://lang-learn-app-app-production.up.railway.app/v1/api/login", {
-    ...requestOptions,
-    headers: {
-      "Content-Type": "application/json",
-    },
-  })
-    .then((response) => response.text())
-    .then((result) => console.log(result))
-    .catch((error) => console.log("error", error));
-}
-
-export { request, myRandomTests };
+export { request };
