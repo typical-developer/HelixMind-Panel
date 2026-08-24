@@ -691,17 +691,16 @@
 
   /* ---- Terminal / sequence readouts ------------------------------------ */
 
-  /* The app's standard scroll container. Thinner still than the global rule,
-     and the slider fades up only while the region is hovered so a resting
-     panel shows no scrollbar furniture at all. */
+  /* The app's standard scroll container: thinner than the global rule, but the
+     slider is always visible when there is something to scroll.
+
+     An earlier revision faded it in only on hover. That looked tidy and read as
+     broken — a region with hidden content and no visible scrollbar gives the
+     reader nothing to tell them the content continues. The affordance stays;
+     it is just quiet, and brightens on hover. */
   @supports not selector(::-webkit-scrollbar) {
     .seq-scroll {
       scrollbar-width: thin;
-      scrollbar-color: transparent transparent;
-      transition: scrollbar-color 0.15s var(--ease-standard);
-    }
-    .seq-scroll:hover,
-    .seq-scroll:focus-within {
       scrollbar-color: var(--alpha-300) transparent;
     }
   }
@@ -710,16 +709,15 @@
     height: 5px;
   }
   .seq-scroll::-webkit-scrollbar-thumb {
-    background: transparent;
+    background: var(--alpha-300);
     border-radius: 999px;
     transition: background-color 0.15s var(--ease-standard);
   }
-  .seq-scroll:hover::-webkit-scrollbar-thumb,
-  .seq-scroll:focus-within::-webkit-scrollbar-thumb {
-    background: var(--alpha-300);
+  .seq-scroll:hover::-webkit-scrollbar-thumb {
+    background: var(--alpha-400);
   }
   .seq-scroll::-webkit-scrollbar-thumb:hover {
-    background: var(--alpha-500);
+    background: var(--alpha-600);
   }
 
   /* Gutter used by the sequence viewer to mimic an editor's line numbers. */

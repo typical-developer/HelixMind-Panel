@@ -577,15 +577,26 @@ function LayoutProvider({ children }: { children: React.ReactNode }) {
     [],
   )
 
-  const setActivity = React.useCallback((id: ActivityId) => {
-    // Clicking the mode you are already in collapses the sidebar and gives the
-    // width back to the bench.
-    setLayout((prev) =>
-      prev.activity === id && prev.sidebarVisible
-        ? { ...prev, sidebarVisible: false }
-        : { ...prev, activity: id, sidebarVisible: true },
-    )
-  }, [])
+  const setActivity = React.useCallback(
+    (id: ActivityId) => {
+      // Picking a mode from the rail is an explicit request to see the sidebar,
+      // so it clears the responsive fold the same way `toggleSidebar` does.
+      // Without this, effective visibility stays `preference && !forced` and on
+      // a narrow viewport clicking a rail icon set the preference but changed
+      // nothing on screen — the sidebar simply refused to open.
+      setForced((f) => (f.sidebar ? { ...f, sidebar: false } : f))
+      // Clicking the mode you are already looking at collapses the sidebar and
+      // gives the width back to the bench. That must be judged on what is
+      // actually on screen: when the fold has the sidebar hidden, clicking the
+      // active mode should open it rather than toggle it further shut.
+      setLayout((prev) =>
+        prev.activity === id && sidebarVisible
+          ? { ...prev, sidebarVisible: false }
+          : { ...prev, activity: id, sidebarVisible: true },
+      )
+    },
+    [sidebarVisible],
+  )
 
   // Toggling is always relative to what is on screen, and an explicit toggle
   // clears the responsive fold so the user can force a column open on a narrow

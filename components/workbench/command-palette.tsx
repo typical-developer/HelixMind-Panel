@@ -203,7 +203,7 @@ export function CommandPalette() {
         </div>
       )}
 
-      <CommandList className="max-h-[min(60vh,26rem)]">
+      <CommandList className="seq-scroll max-h-[min(60vh,26rem)]">
         <CommandEmpty>
           {commandMode
             ? `No command matches "${term.trim()}".`
