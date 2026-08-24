@@ -1,7 +1,13 @@
 "use client"
 
 import * as React from "react"
-import type { ImperativePanelHandle } from "react-resizable-panels"
+import {
+  useDefaultLayout,
+  usePanelRef,
+  type LayoutStorage,
+  type PanelImperativeHandle,
+  type PanelSize,
+} from "react-resizable-panels"
 
 import { cn } from "@/lib/utils"
 import {
@@ -45,8 +51,8 @@ export function Workbench({ children }: { children: React.ReactNode }) {
     contextBarVisible,
   } = useWorkbench()
 
-  const sidebarRef = React.useRef<ImperativePanelHandle>(null)
-  const panelRef = React.useRef<ImperativePanelHandle>(null)
+  const sidebarRef = usePanelRef()
+  const panelRef = usePanelRef()
   const restored = React.useRef(false)
 
   useBootLog()
@@ -60,7 +66,7 @@ export function Workbench({ children }: { children: React.ReactNode }) {
     else sidebarRef.current?.collapse()
     if (panelVisible) panelRef.current?.resize(panelSize)
     else panelRef.current?.collapse()
-  }, [hydrated, panelSize, panelVisible, sidebarSize, sidebarVisible])
+  }, [hydrated, panelRef, panelSize, panelVisible, sidebarRef, sidebarSize, sidebarVisible])
 
   /* Keep the imperative panels in step with the toggles and keybindings.
      The assertion is repeated on the next frame because a visibility change can
@@ -70,12 +76,12 @@ export function Workbench({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     if (!hydrated) return
     return syncPanel(sidebarRef, sidebarVisible)
-  }, [hydrated, sidebarVisible])
+  }, [hydrated, sidebarRef, sidebarVisible])
 
   React.useEffect(() => {
     if (!hydrated) return
     return syncPanel(panelRef, panelVisible)
-  }, [hydrated, panelVisible])
+  }, [hydrated, panelRef, panelVisible])
 
   // Maximizing hands almost the whole column to the console, and restoring puts
   // it back at the size the user last dragged it to.
@@ -96,34 +102,31 @@ export function Workbench({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-0 flex-1">
         {!focusMode && <ActivityBar />}
 
-        <ResizablePanelGroup direction="horizontal" className="min-w-0 flex-1">
+        <ResizablePanelGroup orientation="horizontal" className="min-w-0 flex-1">
           <ResizablePanel
             id="wb-sidebar"
-            order={1}
-            ref={sidebarRef}
+            panelRef={sidebarRef}
             collapsible
             collapsedSize={0}
             defaultSize={18}
             minSize={12}
             maxSize={36}
-            onCollapse={() => setSidebarVisible(false)}
-            onExpand={() => setSidebarVisible(true)}
-            onResize={(size) => {
-              if (size > 0) setSidebarSize(size)
-            }}
+            /* v4 dropped onCollapse/onExpand — collapse is now just "resized to
+               zero", so both edges are derived from the one resize callback. */
+            onResize={(size) => reportSize(size, setSidebarVisible, setSidebarSize)}
             className={cn(focusMode && "hidden")}
           >
             <SideBar />
           </ResizablePanel>
 
           <ResizableHandle
-            className={cn("wb-resize-handle w-px", focusMode && "hidden")}
+            className={cn("wb-resize-handle", focusMode && "hidden")}
             aria-label="Resize sidebar"
           />
 
-          <ResizablePanel id="wb-bench" order={2} minSize={30}>
-            <ResizablePanelGroup direction="vertical">
-              <ResizablePanel id="wb-content" order={1} minSize={8}>
+          <ResizablePanel id="wb-bench" minSize={30}>
+            <ResizablePanelGroup orientation="vertical">
+              <ResizablePanel id="wb-content" minSize={8}>
                 <div className="flex h-full min-h-0 flex-col bg-surface">
                   {!focusMode && tabBarVisible && <TabBar />}
                   {!focusMode && contextBarVisible && <ContextBar />}
@@ -132,23 +135,26 @@ export function Workbench({ children }: { children: React.ReactNode }) {
               </ResizablePanel>
 
               <ResizableHandle
-                className="wb-resize-handle h-px"
+                className="wb-resize-handle"
                 aria-label="Resize console"
               />
 
               <ResizablePanel
                 id="wb-panel"
-                order={2}
-                ref={panelRef}
+                panelRef={panelRef}
                 collapsible
                 collapsedSize={0}
                 defaultSize={0}
                 minSize={10}
-                onCollapse={() => setPanelVisible(false)}
-                onExpand={() => setPanelVisible(true)}
-                onResize={(size) => {
-                  if (size > 0 && !panelMaximized) setPanelSize(size)
-                }}
+                onResize={(size) =>
+                  reportSize(
+                    size,
+                    setPanelVisible,
+                    // While maximized the panel is at 92% by our own doing, not
+                    // the user's, so that size must not overwrite their choice.
+                    panelMaximized ? undefined : setPanelSize,
+                  )
+                }
               >
                 <BottomPanel />
               </ResizablePanel>
@@ -166,18 +172,69 @@ export function Workbench({ children }: { children: React.ReactNode }) {
 }
 
 /**
+ * Storage for the remembered inspector widths.
+ *
+ * `useDefaultLayout` reads storage *during render*, which includes the server
+ * render — where `localStorage` does not exist. Handing it a guarded shim is
+ * required; passing `window.localStorage` directly throws on every route that
+ * has an inspector. Writes are wrapped too, so a quota error or private-mode
+ * restriction degrades to "layout not remembered" rather than a crash.
+ */
+const LAYOUT_STORAGE: LayoutStorage = {
+  getItem: (key) => {
+    if (typeof window === "undefined") return null
+    try {
+      return window.localStorage.getItem(key)
+    } catch {
+      return null
+    }
+  },
+  setItem: (key, value) => {
+    if (typeof window === "undefined") return
+    try {
+      window.localStorage.setItem(key, value)
+    } catch {
+      /* Quota or private-mode failures are not worth surfacing. */
+    }
+  },
+}
+
+/**
+ * Translate a v4 resize event into the two things the workbench tracks:
+ * whether the region is on screen, and how big the user last made it.
+ *
+ * A collapsed panel reports 0%, which is how visibility is derived now that
+ * v4 no longer fires separate collapse/expand callbacks.
+ */
+function reportSize(
+  size: PanelSize,
+  setVisible: (v: boolean) => void,
+  setSize?: (n: number) => void,
+) {
+  const percentage = size.asPercentage
+  setVisible(percentage > 0)
+  if (percentage > 0) setSize?.(percentage)
+}
+
+/**
  * Drive a collapsible panel to `visible`, then re-assert once on the next
  * frame. Returns a cleanup that cancels the pending frame.
+ *
+ * The re-assert matters because a visibility change can arrive in the same tick
+ * as a container resize (crossing the responsive breakpoint does exactly that),
+ * and the group re-measures afterwards — a collapse issued before the
+ * re-measure would be undone by it.
  */
 function syncPanel(
-  ref: React.RefObject<ImperativePanelHandle | null>,
+  ref: React.RefObject<PanelImperativeHandle | null>,
   visible: boolean,
 ) {
   const assert = () => {
     const panel = ref.current
     if (!panel) return
+    // v4 exposes only `isCollapsed()`; "expanded" is its negation.
     if (visible && panel.isCollapsed()) panel.expand()
-    if (!visible && panel.isExpanded()) panel.collapse()
+    if (!visible && !panel.isCollapsed()) panel.collapse()
   }
 
   assert()
@@ -237,7 +294,19 @@ export function ViewLayout({
   maxInspectorSize?: number
 }) {
   const { inspectorVisible } = useWorkbench()
-  const inspectorRef = React.useRef<ImperativePanelHandle>(null)
+  const inspectorRef = usePanelRef()
+
+  const mainId = `${inspectorId}-main`
+  const panelId = `${inspectorId}-inspector`
+
+  // v4 replaced `autoSaveId` with an explicit hook, which is the better shape
+  // anyway: the remembered layout is a value we hand to the group rather than
+  // a side effect it performs behind our back.
+  const defaultLayout = useDefaultLayout({
+    id: `helixmind.inspector.${inspectorId}`,
+    panelIds: [mainId, panelId],
+    storage: LAYOUT_STORAGE,
+  })
 
   // Hiding the inspector collapses its panel rather than unmounting the group.
   // Swapping the tree would remount the main region on every toggle and throw
@@ -246,8 +315,8 @@ export function ViewLayout({
     const panel = inspectorRef.current
     if (!panel) return
     if (inspectorVisible && panel.isCollapsed()) panel.expand()
-    if (!inspectorVisible && panel.isExpanded()) panel.collapse()
-  }, [inspectorVisible])
+    if (!inspectorVisible && !panel.isCollapsed()) panel.collapse()
+  }, [inspectorRef, inspectorVisible])
 
   // Views with no inspector at all keep a plain container — that branch is
   // fixed per view, so it never causes a remount.
@@ -257,23 +326,22 @@ export function ViewLayout({
 
   return (
     <ResizablePanelGroup
-      direction="horizontal"
-      autoSaveId={`helixmind.inspector.${inspectorId}`}
+      orientation="horizontal"
       className="h-full min-h-0"
+      {...defaultLayout}
     >
-      <ResizablePanel id={`${inspectorId}-main`} order={1} minSize={35}>
+      <ResizablePanel id={mainId} minSize={35}>
         {children}
       </ResizablePanel>
 
       <ResizableHandle
-        className={cn("wb-resize-handle w-px", !inspectorVisible && "hidden")}
+        className={cn("wb-resize-handle", !inspectorVisible && "hidden")}
         aria-label="Resize inspector"
       />
 
       <ResizablePanel
-        id={`${inspectorId}-inspector`}
-        order={2}
-        ref={inspectorRef}
+        id={panelId}
+        panelRef={inspectorRef}
         collapsible
         collapsedSize={0}
         defaultSize={defaultInspectorSize}
@@ -298,7 +366,14 @@ export function ViewScroll({
 }: React.ComponentProps<"div">) {
   return (
     <div
-      className={cn("seq-scroll h-full min-h-0 overflow-y-auto", className)}
+      className={cn(
+        // A query container named `bench`, so a view's grids can respond to the
+        // width they actually have rather than the viewport's. The two diverge
+        // constantly here: opening the inspector or dragging the sidebar
+        // changes the bench width without the window changing at all.
+        "@container/bench seq-scroll h-full min-h-0 overflow-y-auto",
+        className,
+      )}
       {...props}
     />
   )

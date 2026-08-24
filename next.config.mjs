@@ -6,9 +6,9 @@ const nextConfig = {
   turbopack: {
     root: import.meta.dirname,
   },
-  typescript: {
-    ignoreBuildErrors: true,
-  },
+  // Type errors fail the build. This was previously disabled because the
+  // unimported `New Helix/` reference material does not typecheck; that folder
+  // is now excluded in tsconfig instead, so the app's own types are enforced.
   images: {
     unoptimized: true,
   },

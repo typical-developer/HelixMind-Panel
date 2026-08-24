@@ -22,6 +22,7 @@ import {
   ViewLayout,
   ViewScroll,
   EmptyState,
+  InspectorScroll,
   Pane,
   PaneHeader,
   Rule,
@@ -394,7 +395,7 @@ function StatsView({
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 @sm/bench:grid-cols-2 @4xl/bench:grid-cols-4">
         <StatTile label="Length (bp)" value={stats.length.toLocaleString()} />
         <StatTile label="GC content" value={`${stats.gcContent.toFixed(1)}%`} />
         <StatTile
@@ -413,7 +414,7 @@ function StatsView({
           <div className="relative h-2 overflow-hidden rounded-full bg-[var(--wb-active)]">
             <div className="absolute inset-y-0 left-[40%] w-[20%] bg-[var(--alpha-200)]" />
             <div
-              className="absolute inset-y-0 w-0.5 rounded-full bg-brand-bright"
+              className="absolute inset-y-0 w-0.5 rounded-full bg-foreground/70"
               style={{ left: `${Math.min(100, Math.max(0, stats.gcContent))}%` }}
             />
           </div>
@@ -479,7 +480,7 @@ function MutationsView({
 
   return (
     <div className="seq-scroll h-full min-h-0 overflow-auto">
-      <table className="w-full text-sm">
+      <table className="w-full min-w-[26rem] text-sm">
         <thead className="sticky top-0 z-10 bg-surface">
           <tr className="border-b border-border">
             {["Position", "Reference", "Mutation", "Type"].map((h) => (
@@ -557,10 +558,10 @@ function SequenceView({
         </div>
       </div>
 
-      <div className="seq-scroll min-h-0 flex-1 overflow-auto bg-[hsl(0_0%_2%)] py-2 font-mono text-xs leading-5">
+      <div className="seq-scroll min-h-0 flex-1 overflow-auto bg-[var(--wb-inset)] py-2 font-mono text-xs leading-5">
         {rows.map((row) => (
           <div key={row.start} className="flex hover:bg-[var(--wb-hover)]">
-            <span className="gutter-num sticky left-0 w-20 shrink-0 bg-[hsl(0_0%_2%)] pr-3">
+            <span className="gutter-num sticky left-0 w-20 shrink-0 bg-[var(--wb-inset)] pr-3">
               {row.start + 1}
             </span>
             <span className="pr-4 tracking-wider whitespace-pre text-foreground/80">
@@ -610,7 +611,7 @@ function ScannerInspector({
   onSelectTarget: (id: string) => void
 }) {
   return (
-    <div className="seq-scroll flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+    <InspectorScroll>
       <Pane>
         <PaneHeader icon={Upload} title="Inputs" />
         <div className="space-y-3 p-3">
@@ -676,7 +677,7 @@ function ScannerInspector({
           </p>
         </div>
       </Pane>
-    </div>
+    </InspectorScroll>
   )
 }
 
@@ -725,7 +726,7 @@ function DropZone({
         <Upload
           className={cn(
             "size-3.5 shrink-0 text-muted-foreground transition-transform duration-150",
-            dragging ? "text-brand-bright" : "group-hover:-translate-y-0.5",
+            dragging ? "text-foreground" : "group-hover:-translate-y-0.5",
           )}
         />
         <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
@@ -750,7 +751,7 @@ function DropZone({
           rounding a 400-byte sequence to "0 KB". */}
       {file && (
         <div className="mt-1 flex items-center gap-1.5 rounded-sm border border-border bg-[var(--wb-raised)] px-2 py-1 text-xs">
-          <FileText className="size-3 shrink-0 text-brand-bright" />
+          <FileText className="size-3 shrink-0 text-muted-foreground" />
           <span className="min-w-0 flex-1 truncate font-mono text-foreground/85">
             {file.name}
           </span>

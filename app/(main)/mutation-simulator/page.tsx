@@ -589,7 +589,7 @@ export default function MutationSimulator() {
     >
       <ViewScroll>
         <div className="flex flex-col gap-3 p-3">
-          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 @sm/bench:grid-cols-2 @4xl/bench:grid-cols-4">
             <StatTile icon={Activity} label="Total mutations" value={totalMutations} />
             <StatTile label="Substitutions" value={substitutions} />
             <StatTile label="Insertions" value={insertions} />
@@ -761,7 +761,7 @@ function SimulatorInspector({
 
             {queryFastaFile && (
               <div className="flex items-center gap-1.5 rounded-sm border border-border bg-[var(--wb-raised)] px-2 py-1 text-xs">
-                <FileText className="size-3 shrink-0 text-brand-bright" />
+                <FileText className="size-3 shrink-0 text-muted-foreground" />
                 <span className="min-w-0 flex-1 truncate font-mono text-foreground/85">
                   {queryFastaFile.name}
                 </span>

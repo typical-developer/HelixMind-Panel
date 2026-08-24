@@ -25,6 +25,7 @@ export {
   PaneBody,
   PaneHeader,
   Rule,
+  InspectorScroll,
   SideSection,
   StatTile,
   Toolbar,

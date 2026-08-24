@@ -157,7 +157,7 @@ const SEVERITY_ICON = {
 const SEVERITY_CLASS = {
   error: "text-destructive",
   warning: "text-warning",
-  info: "text-brand-bright",
+  info: "text-info",
 } as const
 
 function AlertsView() {

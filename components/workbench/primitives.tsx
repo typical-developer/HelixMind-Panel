@@ -35,7 +35,11 @@ export function Pane({
     <section
       data-slot="pane"
       className={cn(
-        "flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-surface",
+        // `@container` lets a pane's contents respond to the pane's own width.
+        // Viewport breakpoints are the wrong signal here: panes sit inside
+        // resizable columns, so a pane can be narrow on a wide screen (a
+        // dragged-in inspector) or wide on a small one.
+        "@container flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-surface",
         className,
       )}
       {...props}
@@ -68,11 +72,20 @@ export function PaneHeader({
       {...props}
     >
       {Icon && <Icon className="size-3.5 shrink-0 text-muted-foreground" />}
-      <h2 className="truncate text-sm font-medium text-foreground/90">{title}</h2>
-      {subtitle && (
-        <span className="truncate text-xs text-muted-foreground">{subtitle}</span>
+      {/* `truncate` only takes effect on a flex child that is allowed to shrink
+          below its content, hence `min-w-0` on the text group. The subtitle
+          gives way before the title does, and the actions never shrink. */}
+      <div className="flex min-w-0 flex-1 items-baseline gap-2">
+        <h2 className="truncate text-sm font-medium text-foreground/90">{title}</h2>
+        {subtitle && (
+          <span className="hidden min-w-0 truncate text-xs text-muted-foreground @xs:inline">
+            {subtitle}
+          </span>
+        )}
+      </div>
+      {actions && (
+        <div className="ml-auto flex shrink-0 items-center gap-0.5">{actions}</div>
       )}
-      {actions && <div className="ml-auto flex items-center gap-0.5">{actions}</div>}
     </header>
   )
 }
@@ -88,6 +101,33 @@ export function PaneBody({
       className={cn(
         "min-h-0 flex-1 p-3",
         scroll && "seq-scroll overflow-auto",
+        className,
+      )}
+      {...props}
+    />
+  )
+}
+
+/**
+ * The scrolling column an inspector's panes stack down.
+ *
+ * `[&>*]:shrink-0` is the point of this component. A `<Pane>` is a flex column
+ * with `min-h-0` and `overflow-hidden` so that panes which *own* a height can
+ * scroll internally — but that same rule makes a pane in a flex stack shrink
+ * below its content and silently clip it, with no scrollbar anywhere, instead
+ * of growing the column. Pinning children at their natural height hands the
+ * overflow to this container, which is the one that actually scrolls.
+ */
+export function InspectorScroll({
+  className,
+  ...props
+}: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="inspector-scroll"
+      className={cn(
+        "seq-scroll flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3",
+        "[&>*]:shrink-0",
         className,
       )}
       {...props}
@@ -242,7 +282,7 @@ export function TreeRow({
       {...props}
     >
       {Icon && <Icon className={cn("size-3.5 shrink-0", iconClassName)} />}
-      <span className="truncate">{label}</span>
+      <span className="min-w-0 flex-1 truncate">{label}</span>
       {detail && (
         <span className="ml-auto shrink-0 pl-2 text-xs text-muted-foreground/70 tabular">
           {detail}
@@ -296,15 +336,27 @@ export function StatTile({
   return (
     <div
       className={cn(
-        "card-hover flex flex-col gap-2 rounded-lg border border-border bg-surface p-3.5",
+        // `min-w-0` so a tile in a grid can shrink below its content instead of
+        // forcing the whole row wider than its column.
+        "card-hover @container flex min-w-0 flex-col gap-2 rounded-lg border border-border bg-surface p-3.5",
         className,
       )}
     >
-      <div className="flex items-center gap-1.5">
+      <div className="flex min-w-0 items-center gap-1.5">
         {Icon && <Icon className={cn("size-3.5 shrink-0", toneHint)} />}
-        <p className="truncate text-xs font-medium text-muted-foreground">{label}</p>
+        <p className="min-w-0 truncate text-xs font-medium text-muted-foreground">
+          {label}
+        </p>
       </div>
-      <p className={cn("text-2xl leading-none font-semibold tabular", toneText)}>
+      {/* The value steps down a size in a narrow tile rather than overflowing
+          or wrapping a long figure onto two lines. */}
+      <p
+        className={cn(
+          "truncate text-xl leading-none font-semibold tabular @2xs:text-2xl",
+          toneText,
+        )}
+        title={typeof value === "string" || typeof value === "number" ? String(value) : undefined}
+      >
         {value}
       </p>
       {hint && <p className={cn("truncate text-xs", toneHint)}>{hint}</p>}
@@ -488,7 +540,7 @@ export function Chip({
 }) {
   const tones = {
     neutral: "border-border bg-raised text-muted-foreground",
-    info: "border-brand/35 bg-brand/12 text-brand-bright",
+    info: "border-info/30 bg-info/10 text-info",
     success: "border-success/30 bg-success/10 text-success",
     warning: "border-warning/30 bg-warning/10 text-warning",
     danger: "border-destructive/35 bg-destructive/12 text-destructive",

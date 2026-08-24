@@ -31,7 +31,7 @@ function glyphFor(title: string) {
   if (t.includes("fail") || t.includes("error") || t.includes("alert"))
     return { Icon: AlertTriangle, className: "text-destructive" }
   if (t.includes("simulation") || t.includes("scan"))
-    return { Icon: Info, className: "text-brand-bright" }
+    return { Icon: Info, className: "text-info" }
   return { Icon: Bell, className: "text-muted-foreground" }
 }
 

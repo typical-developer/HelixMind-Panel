@@ -229,7 +229,7 @@ export default function Settings() {
                     </Chip>
                   </div>
 
-                  <div className="grid gap-3 p-3 sm:grid-cols-2">
+                  <div className="grid gap-3 p-3 @md:grid-cols-2">
                     <label className="space-y-1.5">
                       <span className="text-xs font-medium text-foreground/80">
                         Full name

@@ -22,6 +22,7 @@ import { MutationTable } from "@/components/mutation-table"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Chip,
+  InspectorScroll,
   ViewLayout,
   ViewScroll,
   Pane,
@@ -83,7 +84,10 @@ export default function Dashboard() {
     <ViewLayout inspectorId="overview" inspector={<OverviewInspector />}>
       <ViewScroll>
         <div className="flex flex-col gap-3 p-3">
-          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+          {/* Keyed to the bench's width, not the window's: with the inspector
+              open a "wide" viewport can still leave a narrow bench, and four
+              metric tiles across it would be unreadable. */}
+          <div className="grid grid-cols-1 gap-3 @sm/bench:grid-cols-2 @4xl/bench:grid-cols-4">
             <StatTile
               icon={Activity}
               label="Sequences analysed"
@@ -112,9 +116,10 @@ export default function Dashboard() {
             />
           </div>
 
-          {/* Sequence buffer and mutation grid sit side by side on wide screens,
-              so a sequence and the calls made against it read together. */}
-          <div className="grid gap-3 xl:grid-cols-[1.35fr_1fr]">
+          {/* Sequence readout and mutation grid sit side by side once the bench
+              is wide enough, so a sequence and the calls made against it read
+              together; below that they stack rather than both being squeezed. */}
+          <div className="grid gap-3 @5xl/bench:grid-cols-[1.35fr_1fr]">
             <DNAViewer />
             <MutationTable />
           </div>
@@ -130,7 +135,7 @@ function OverviewInspector() {
   const { openTab } = useWorkbench()
 
   return (
-    <div className="seq-scroll flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+    <InspectorScroll>
       <Pane>
         <PaneHeader icon={Play} title="Quick actions" />
         <div className="p-1.5">
@@ -161,7 +166,7 @@ function OverviewInspector() {
                     : item.tone === "success"
                       ? "mt-0.5 size-3.5 shrink-0 text-success"
                       : item.tone === "info"
-                        ? "mt-0.5 size-3.5 shrink-0 text-brand-bright"
+                        ? "mt-0.5 size-3.5 shrink-0 text-info"
                         : "mt-0.5 size-3.5 shrink-0 text-muted-foreground"
                 }
               />
@@ -203,6 +208,6 @@ function OverviewInspector() {
           </div>
         </div>
       </Pane>
-    </div>
+    </InspectorScroll>
   )
 }

@@ -10,6 +10,7 @@ import {
   ViewLayout,
   ViewScroll,
   EmptyState,
+  InspectorScroll,
   Pane,
   PaneHeader,
   StatTile,
@@ -96,8 +97,12 @@ export default function GeneDatabase() {
           />
         ) : (
           <ViewScroll>
-            {/* Desktop grid */}
-            <table className="hidden w-full text-sm lg:table">
+            {/* Desktop grid. Seven columns need real width, so below the
+                min-width the grid scrolls sideways inside its own container
+                rather than crushing every column — the bench can be narrow at
+                any viewport size once the inspector is open. */}
+            <div className="seq-scroll hidden overflow-x-auto lg:block">
+              <table className="w-full min-w-[52rem] text-sm">
               <thead className="sticky top-0 z-10 bg-surface">
                 <tr className="border-b border-border">
                   {COLUMNS.map((h) => (
@@ -148,8 +153,9 @@ export default function GeneDatabase() {
                     </td>
                   </tr>
                 ))}
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+            </div>
 
             {/* Compact cards below the grid breakpoint */}
             <div className="grid gap-2 p-3 lg:hidden">
@@ -204,7 +210,7 @@ function DatabaseInspector() {
   }, [])
 
   return (
-    <div className="seq-scroll flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+    <InspectorScroll>
       <div className="grid grid-cols-2 gap-2">
         {AMR_DATABASE_STATS.map((stat, i) => {
           const Icon = STAT_ICONS[i]
@@ -240,6 +246,6 @@ function DatabaseInspector() {
           ))}
         </div>
       </Pane>
-    </div>
+    </InspectorScroll>
   )
 }

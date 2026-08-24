@@ -7,7 +7,7 @@
    HelixMind Lab — design tokens
 
    Palette is derived from Vercel's Geist dark scale (near-black surfaces,
-   alpha-white hairlines, #ededed foreground, blue-700 focus). The structure
+   alpha-white hairlines, #ededed foreground, alpha-white focus). The structure
    tokens describe the lab bench's own regions — rail, sidebar, bench, console,
    status strip — at the density a data tool needs.
    ========================================================================= */
@@ -40,11 +40,23 @@
   --alpha-500: #ffffff3d;
   --alpha-600: #ffffff82;
 
-  /* ---- Accents --------------------------------------------------------- */
-  --blue-600: hsl(206 100% 50%);
-  --blue-700: hsl(212 100% 48%);
-  --blue-800: hsl(212 100% 41%);
-  --blue-900: hsl(210 100% 66%);
+  /* ---- Accent ----------------------------------------------------------
+     The accent is white, not a hue.
+
+     This mirrors what the Vercel dashboard actually does: its palette carries
+     blues, but the surfaces you touch all day — the focus ring, the active nav
+     item, the primary button — are alpha-white, raised grey and white-on-black
+     respectively. Its own `--ds-focus-border` is literally
+     `0 0 0 1px #ffffff82, 0 0 0 4px #ffffff3d`.
+
+     Keeping the accent achromatic leaves every hue below free to mean exactly
+     one thing, which is what makes a status colour legible at a glance. */
+  --accent-strong: hsl(0 0% 93%); /* the "brand" surface: white */
+  --accent-muted: var(--alpha-600); /* #ffffff82 — focus ring line */
+  --accent-halo: var(--alpha-500); /* #ffffff3d — focus ring halo */
+
+  /* ---- Semantic hues ---------------------------------------------------
+     Reserved for state. Nothing decorative may use these. */
   --red-700: hsl(358 75% 59%);
   --red-900: hsl(358 100% 69%);
   --amber-700: hsl(39 100% 57%);
@@ -52,6 +64,7 @@
   --green-900: hsl(131 43% 57%);
   --purple-700: hsl(272 51% 54%);
   --teal-700: hsl(173 80% 36%);
+  --blue-900: hsl(210 100% 66%); /* charts + "informational" only */
 
   /* ---- shadcn contract ------------------------------------------------- */
   /* Elevation ladder: chrome (#000) → surface (#0a0a0a) → raised (#141414). */
@@ -83,7 +96,9 @@
 
   --border: var(--alpha-200);
   --input: hsl(0 0% 7%);
-  --ring: var(--blue-700);
+  /* Full-strength so the `/60` and `/25` ring modifiers used across the app
+     land near Vercel's own focus line (#ffffff82) rather than a faint smudge. */
+  --ring: var(--accent-strong);
 
   --radius: 0.375rem;
 
@@ -98,7 +113,7 @@
 
   --wb-border: var(--alpha-200);
   --wb-border-strong: var(--alpha-400);
-  --wb-focus: var(--blue-700);
+  --wb-focus: var(--accent-muted);
 
   --wb-rail-width: 3rem; /* 48px */
   --wb-titlebar-height: 2.25rem; /* 36px */
@@ -147,7 +162,7 @@
   --sidebar-accent: hsl(0 0% 12%);
   --sidebar-accent-foreground: var(--gray-1000);
   --sidebar-border: var(--alpha-200);
-  --sidebar-ring: var(--blue-700);
+  --sidebar-ring: var(--accent-muted);
 
   /* ---- Motion ---------------------------------------------------------- */
   /* Geist's "swift" curve — a touch of overshoot, used for overlays/menus. */
@@ -242,8 +257,12 @@
   --color-chrome: var(--wb-chrome);
   --color-surface: var(--wb-surface);
   --color-raised: var(--wb-raised);
-  --color-brand: var(--blue-700);
-  --color-brand-bright: var(--blue-900);
+  /* The accent surface and what sits legibly on top of it. Because the accent
+     is white, anything placed on it must be near-black — never white. */
+  --color-brand: var(--accent-strong);
+  --color-brand-foreground: hsl(0 0% 4%);
+  /* Status hues. `info` is genuinely informational — it is not the accent. */
+  --color-info: var(--blue-900);
   --color-success: var(--green-900);
   --color-warning: var(--amber-700);
 
@@ -320,18 +339,30 @@
   }
 
   ::selection {
-    background: color-mix(in oklab, var(--blue-700) 45%, transparent);
-    color: #fff;
+    background: var(--alpha-300);
+    color: var(--foreground);
   }
 
-  /* VS Code-style overlay scrollbars: invisible track, translucent slider. */
-  * {
-    scrollbar-width: thin;
-    scrollbar-color: var(--alpha-300) transparent;
+  /* Overlay scrollbars: no track, a hairline slider that only asserts itself
+     on hover. Deliberately narrow — a wide scrollbar is the loudest unstyled
+     element on an otherwise restrained dark panel, and this app has a scroll
+     container in nearly every region.
+
+     The `@supports` guard matters. Chrome now implements the standard
+     `scrollbar-width` property, and when it is set it *overrides* the width
+     given to `::-webkit-scrollbar` — so declaring both unconditionally pins
+     Chrome at its own ~10px "thin" instead of the 5–6px below. Scoping the
+     standard property to engines without the WebKit pseudo-element (Firefox)
+     lets each browser take the rule that actually goes narrowest. */
+  @supports not selector(::-webkit-scrollbar) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: var(--alpha-300) transparent;
+    }
   }
   ::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 6px;
+    height: 6px;
   }
   ::-webkit-scrollbar-track,
   ::-webkit-scrollbar-corner {
@@ -340,12 +371,17 @@
   ::-webkit-scrollbar-thumb {
     background: var(--alpha-300);
     background-clip: padding-box;
-    border: 2px solid transparent;
-    border-radius: 8px;
+    border: 1px solid transparent;
+    border-radius: 999px;
   }
   ::-webkit-scrollbar-thumb:hover {
     background: var(--alpha-500);
     background-clip: padding-box;
+  }
+  /* Corner where two scrollbars meet, and the resizer nub Chrome adds to
+     textareas — both are unstyleable chrome otherwise. */
+  ::-webkit-resizer {
+    background: transparent;
   }
 
   /* Native range inputs, restyled to match the workbench. */
@@ -380,7 +416,7 @@
   }
   input[type="range"]:active::-webkit-slider-thumb {
     transform: scale(0.95);
-    box-shadow: 0 0 0 4px color-mix(in oklab, var(--blue-700) 30%, transparent);
+    box-shadow: 0 0 0 4px var(--accent-halo);
   }
   input[type="range"]::-moz-range-thumb {
     height: 13px;
@@ -488,7 +524,7 @@
       radial-gradient(55% 45% at 18% 12%, rgba(255, 255, 255, 0.055), transparent 62%),
       radial-gradient(
         48% 38% at 88% 88%,
-        color-mix(in oklab, var(--blue-700) 14%, transparent),
+        rgba(255, 255, 255, 0.05),
         transparent 62%
       );
   }
@@ -655,20 +691,35 @@
 
   /* ---- Terminal / sequence readouts ------------------------------------ */
 
-  /* Slimmer scrollbar for dense monospace regions. */
+  /* The app's standard scroll container. Thinner still than the global rule,
+     and the slider fades up only while the region is hovered so a resting
+     panel shows no scrollbar furniture at all. */
+  @supports not selector(::-webkit-scrollbar) {
+    .seq-scroll {
+      scrollbar-width: thin;
+      scrollbar-color: transparent transparent;
+      transition: scrollbar-color 0.15s var(--ease-standard);
+    }
+    .seq-scroll:hover,
+    .seq-scroll:focus-within {
+      scrollbar-color: var(--alpha-300) transparent;
+    }
+  }
   .seq-scroll::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 5px;
+    height: 5px;
   }
   .seq-scroll::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 999px;
+    transition: background-color 0.15s var(--ease-standard);
+  }
+  .seq-scroll:hover::-webkit-scrollbar-thumb,
+  .seq-scroll:focus-within::-webkit-scrollbar-thumb {
     background: var(--alpha-300);
-    background-clip: padding-box;
-    border: 2px solid transparent;
-    border-radius: 8px;
   }
   .seq-scroll::-webkit-scrollbar-thumb:hover {
     background: var(--alpha-500);
-    background-clip: padding-box;
   }
 
   /* Gutter used by the sequence viewer to mimic an editor's line numbers. */
@@ -683,14 +734,16 @@
 @layer utilities {
   /* Resize handles: invisible until you approach them, then a VS Code focus
      line. The wide hit area lives in ::after so the visual stays 1px. */
+  /* react-resizable-panels v4 reports interaction state on `data-separator`
+     ("inactive" | "hover" | "active"); v2's `data-resize-handle-state` is gone. */
   .wb-resize-handle {
     position: relative;
     background: var(--wb-border);
     transition: background-color 0.12s var(--ease-standard) 0.1s;
   }
   .wb-resize-handle:hover,
-  .wb-resize-handle[data-resize-handle-state="drag"],
-  .wb-resize-handle[data-resize-handle-state="hover"] {
+  .wb-resize-handle[data-separator="hover"],
+  .wb-resize-handle[data-separator="active"] {
     background: var(--wb-focus);
   }
 }

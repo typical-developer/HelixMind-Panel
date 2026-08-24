@@ -142,7 +142,7 @@ function NotificationsButton({ count }: { count: number }) {
         >
           <Bell className="size-5" />
           {count > 0 && (
-            <span className="absolute top-2.5 right-2.5 flex size-4 items-center justify-center rounded-full bg-brand text-2xs font-semibold text-white tabular">
+            <span className="absolute top-2.5 right-2.5 flex size-4 items-center justify-center rounded-full bg-brand text-2xs font-semibold text-brand-foreground tabular">
               {count > 9 ? "9+" : count}
             </span>
           )}

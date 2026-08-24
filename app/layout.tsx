@@ -19,9 +19,8 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: "HelixMInd - Accelerating Biological Advancements",
+  title: "HelixMind — Accelerating Biological Advancements",
   description: "Advanced genomic analysis and mutation simulation platform",
-  generator: "v0.app",
   icons: {
     icon: [
       {

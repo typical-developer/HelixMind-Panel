@@ -29,7 +29,8 @@ export function PopulationChart({
   width,
 }: {
   data: PopulationPoint[]
-  width: number | string
+  /** recharts v3 narrowed this to a number or a percentage string literal. */
+  width: number | `${number}%`
 }) {
   return (
     <ResponsiveContainer width={width} height="100%">
@@ -44,8 +45,13 @@ export function PopulationChart({
         <YAxis {...CHART_AXIS} width={56} />
         <Tooltip
           {...CHART_TOOLTIP}
-          formatter={(v: number) => [v.toLocaleString(), "Population"]}
-          labelFormatter={(l) => `Step ${l}`}
+          // v3 widened the formatter's value to `ValueType`, so the number is
+          // narrowed here rather than assumed in the signature.
+          formatter={(value) => [
+            typeof value === "number" ? value.toLocaleString() : String(value),
+            "Population",
+          ]}
+          labelFormatter={(label) => `Step ${label}`}
         />
         <Line
           type="monotone"

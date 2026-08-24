@@ -423,7 +423,7 @@ function PredictorInspector({
                     className={cn(
                       "flex size-3.5 shrink-0 items-center justify-center rounded-xs border transition-colors duration-100",
                       active
-                        ? "border-brand bg-brand text-white"
+                        ? "border-brand bg-brand text-brand-foreground"
                         : "border-border",
                     )}
                   >

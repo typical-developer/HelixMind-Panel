@@ -745,7 +745,7 @@ export default function MicrobeGrowthLab() {
     >
       <ViewScroll>
         <div className="flex flex-col gap-3 p-3">
-          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 @sm/bench:grid-cols-2 @4xl/bench:grid-cols-4">
             <StatTile
               icon={Clock}
               label="Time steps"
@@ -818,7 +818,7 @@ export default function MicrobeGrowthLab() {
             </div>
           </Pane>
 
-          <div className="grid gap-3 xl:grid-cols-2">
+          <div className="grid gap-3 @4xl/bench:grid-cols-2">
             <Pane>
               <PaneHeader icon={AlertTriangle} title="Stress monitor" />
               <div className="space-y-3 p-3">
@@ -860,7 +860,7 @@ export default function MicrobeGrowthLab() {
                   </Chip>
                 }
               />
-              <div className="seq-scroll max-h-56 min-h-40 overflow-auto bg-[hsl(0_0%_2%)] p-2 font-mono text-xs leading-5">
+              <div className="seq-scroll max-h-56 min-h-40 overflow-auto bg-[var(--wb-inset)] p-2 font-mono text-xs leading-5">
                 {state.adaptationLog.length === 0 ? (
                   <p className="px-1 text-[var(--log-dim)]">
                     Simulation not started yet.

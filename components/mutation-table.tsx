@@ -44,7 +44,7 @@ export function MutationTable() {
       />
 
       <div className="seq-scroll min-h-0 flex-1 overflow-auto">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[26rem] text-sm">
           <thead className="sticky top-0 z-10 bg-surface">
             <tr className="border-b border-border">
               {HEADERS.map((h) => (

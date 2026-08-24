@@ -86,7 +86,7 @@ export function WorkbenchBoot() {
 
       {/* Status bar */}
       <div className="flex h-6 shrink-0 items-center border-t border-border">
-        <div className="flex h-full items-center gap-1.5 bg-brand px-2 text-xs font-medium text-white">
+        <div className="flex h-full items-center gap-1.5 bg-brand px-2 text-xs font-medium text-brand-foreground">
           HelixMind Lab
         </div>
         <span className="px-2 text-xs text-muted-foreground">Starting the lab…</span>

@@ -36,14 +36,15 @@ export function StatusBar() {
   return (
     <footer
       aria-label="Status bar"
-      className="relative flex h-6 shrink-0 items-stretch gap-0 border-t border-border bg-chrome pr-1 pl-0 text-xs text-muted-foreground select-none"
+      className="relative flex h-6 shrink-0 items-stretch gap-0 overflow-hidden border-t border-border bg-chrome pr-1 pl-0 text-xs text-muted-foreground select-none"
     >
-      {/* The lab you are working in, and the way into everything it can do. */}
+      {/* The lab you are working in, and the way into everything it can do.
+          Never shrinks — it is the strip's anchor and its palette entry point. */}
       <button
         type="button"
         onClick={() => openPalette()}
         title="Search and run commands (Ctrl+K)"
-        className="flex cursor-pointer items-center gap-1.5 bg-brand px-2 font-medium text-white transition-colors hover:bg-brand/85 focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none focus-visible:ring-inset"
+        className="flex shrink-0 cursor-pointer items-center gap-1.5 bg-brand px-2 font-medium text-brand-foreground transition-colors hover:bg-brand/85 focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none focus-visible:ring-inset"
       >
         <Zap className="size-3" />
         <span className="hidden sm:inline">HelixMind Lab</span>
@@ -140,7 +141,7 @@ function StatusItem({
 }) {
   const toneClass = {
     default: "",
-    info: "text-brand-bright",
+    info: "text-foreground",
     success: "text-success",
     warning: "text-warning",
     danger: "text-destructive",
@@ -150,13 +151,15 @@ function StatusItem({
     <>
       {Icon && <Icon className="size-3 shrink-0" />}
       {label !== "" && label !== undefined && (
-        <span className="truncate">{label}</span>
+        <span className="min-w-0 truncate">{label}</span>
       )}
     </>
   )
 
   const className = cn(
-    "flex items-center gap-1.5 px-2 transition-colors duration-100",
+    // Items shrink and truncate rather than pushing the strip wider than the
+    // window. `min-w-0` is what makes the inner `truncate` actually engage.
+    "flex min-w-0 items-center gap-1.5 px-2 transition-colors duration-100",
     toneClass,
     onClick &&
       "cursor-pointer hover:bg-[var(--wb-selected)] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none focus-visible:ring-inset",
