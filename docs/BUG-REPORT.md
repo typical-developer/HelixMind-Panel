@@ -3,10 +3,10 @@
 Everything found during the production-readiness pass, with file references,
 how it showed up, and what happened to it.
 
-**Summary:** 47 issues. 41 fixed, 6 open (5 by your decision, 1 third-party).
+**Summary:** 48 issues. 42 fixed, 6 open (5 by your decision, 1 third-party).
 
 Nothing here was found by reading alone — the app was built, typechecked,
-covered with 131 unit tests, and driven in a browser end to end.
+covered with 142 unit tests, and driven in a browser end to end.
 
 ---
 
@@ -111,7 +111,7 @@ Verified in-browser: click navigates and opens the tab. Every `useStatusItems`
 call across all six views was audited — each item now has an `onClick` or an
 explanatory `title`.
 
-### C8 · "Close all" never closed everything — **FIXED**
+### C8 · "Close all" never closed everything — **FIXED, then superseded**
 `components/workbench/workbench-provider.tsx`
 
 It cleared `openTabs` then navigated to `/dashboard` — and navigating is exactly
@@ -119,6 +119,46 @@ what re-adds a tab. The strip was never actually empty.
 
 **Fixed:** a suppression ref lets that one navigation through. Verified:
 `openTabs: []`, strip reads "Nothing open".
+
+**Superseded by C8b.** Making the strip genuinely empty was the wrong target:
+see below.
+
+### C8b · An empty strip described a bench that was showing something — **FIXED**
+`components/workbench/workbench-provider.tsx`, `components/workbench/tab-bar.tsx`
+
+The fix above did what it said, and that turned out to be the bug. This is a
+routed app — a view is always on screen, because the URL always points at one.
+So "Close all" left the Overview rendered under a strip reading *Nothing open*,
+and closing the last tab did the same thing for a beat. Reported from use: *"the
+overview opens … but it shows nothing open."*
+
+An empty strip is only honest in an editor that can show a blank watermark. This
+one cannot, so the model changed rather than the mechanics:
+
+- **The last tab cannot be closed.** Guarded inside `closeTab` rather than on
+  the button, because six paths reach it — the ×, middle-click, `Delete`,
+  `Alt W`, the context menu and the palette. Guarding the button is how VS Code
+  shipped [the same bug](https://github.com/Microsoft/vscode/issues/56715) and
+  let middle-click walk past it. The last tab renders no × at all.
+- **"Close all" leaves one Overview tab**, which also retired the suppression
+  ref from C8 — with the Overview staying open, the navigation effect finds it
+  already present and does nothing.
+- **The restore path now normalises what it reads** (`lib/open-tabs.ts`):
+  unknown hrefs dropped, repeats collapsed, an empty list floored to the
+  Overview. That last rule is a migration — anyone who used "Close all" on the
+  C8 build has `openTabs: []` in localStorage right now.
+
+Covered by 11 tests in `tests/open-tabs.test.ts`, including the two states that
+are otherwise only reachable by editing storage by hand.
+
+**On duplicate tabs**, asked at the same time: they are not reachable through the
+UI, and never were. A tab is a *route*, not a document — `openTabs` holds
+registry hrefs, every insertion site guards with `.includes()`, `normalizeHref()
+` collapses query strings so `?q=mecA` and `?q=vanA` are one tab, and `VIEWS` is
+a fixed list with no "open another copy" action. Nor would they cost
+performance: only the active route is mounted. The one real exposure was the
+restore path above, where a repeat would have produced two tabs sharing a React
+key — closing either would have closed the other.
 
 ### C9 · Pause could never pause — **FIXED**
 `app/(main)/mutation-simulator/page.tsx`
@@ -509,7 +549,8 @@ Signed in against a local mock API (the real backend was unreachable), then:
 - **Overview** — went from all-zero + "Get started" to real counts, real
   sequence, real variant list, real chart
 - **AMR threat indicator** — clicked, navigated, opened the tab
-- **Close all** — `openTabs: []`, strip reads "Nothing open"
+- **Close all** — `openTabs: []`, strip reads "Nothing open" *(behaviour later
+  replaced — see C8b; "Close all" now leaves a single Overview tab)*
 - **Alt+Shift+T** — reopened the closed analysis and navigated to it
 - **Synergy rule** — gyrA alone 40%, gyrA + parC 90%, marked *synergy*
 - **Gene Library → Predictor** — marker arrives preselected

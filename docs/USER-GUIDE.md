@@ -60,6 +60,7 @@ Preferences mode, or Settings → Layout. Your arrangement is remembered.
 | `Ctrl ,` | Settings |
 | `Alt W` | Close the open analysis |
 | `Alt Shift T` | Reopen the last closed analysis |
+| `Alt Shift ←` / `→` | Move the open analysis along the strip |
 | `← →` | Move between tabs (when the strip has focus) |
 | `Home` / `End` | First / last tab |
 | `Delete` | Close the focused tab |
@@ -102,9 +103,20 @@ The dot sits where the close button goes and swaps for it on hover. The count
 badge beside the overflow button carries an amber dot if anything anywhere needs
 attention.
 
-**Right-click a tab** for Close / Close others / Close all / Reopen closed. The
-`⋯` button lists everything open, with the same actions — and *Reopen closed*
-stays available when the strip is empty, which is exactly when you want it.
+**Drag a tab** to reorder the strip; the order is remembered. `Alt Shift ←` and
+`Alt Shift →` do the same from the keyboard, and both are also on the tab's
+right-click menu as *Move left* / *Move right*.
+
+**Right-click a tab** for Close / Close others / Close all / Reopen closed, plus
+the two move commands. The `⋯` button lists everything open with the same
+actions.
+
+**The last analysis open cannot be closed.** The bench always has a view on
+screen, so a strip that said "nothing open" would be describing something that
+isn't true — the last tab keeps no close button, and `Alt W`, middle-click and
+`Delete` all leave it alone. *Close all* is the way to clear the deck: it closes
+everything and lands you on a single Overview tab, with `Alt Shift T` still
+holding the rest.
 
 > A run **ends when you leave the analysis that started it.** You will get a
 > toast saying so. This is a known limitation, not a crash.

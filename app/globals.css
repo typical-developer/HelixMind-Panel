@@ -20,17 +20,26 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  /* ---- Geist grayscale (dark) ------------------------------------------ */
-  --gray-100: hsl(0 0% 10%);
-  --gray-200: hsl(0 0% 12%);
-  --gray-300: hsl(0 0% 16%);
-  --gray-400: hsl(0 0% 18%);
-  --gray-500: hsl(0 0% 27%);
+  /* ---- Geist grayscale (dark) ------------------------------------------
+     Pulled off the extremes. Geist's own scale bottoms out at pure black and
+     tops out at #ededed, which on a bench this dark puts body text at 16.9:1 —
+     past the point where the glyphs start to bloom against the background over
+     a long session. The floor comes up and the ceiling comes down, landing at
+     14.2:1: still far above AA, and still three clearly separate regions.
+
+     The mid greys (600–900) deliberately do NOT move. They carry the muted
+     text, so holding them while the ceiling drops narrows the loud/quiet gap
+     from 30 points to 25 — which is itself part of what reads as calmer. */
+  --gray-100: hsl(0 0% 13%);
+  --gray-200: hsl(0 0% 15%);
+  --gray-300: hsl(0 0% 19%);
+  --gray-400: hsl(0 0% 21%);
+  --gray-500: hsl(0 0% 30%);
   --gray-600: hsl(0 0% 53%);
   --gray-700: hsl(0 0% 56%);
   --gray-800: hsl(0 0% 49%);
   --gray-900: hsl(0 0% 63%);
-  --gray-1000: hsl(0 0% 93%);
+  --gray-1000: hsl(0 0% 88%);
 
   /* Alpha hairlines — the Geist border language. */
   --alpha-100: #ffffff0f;
@@ -51,7 +60,7 @@
 
      Keeping the accent achromatic leaves every hue below free to mean exactly
      one thing, which is what makes a status colour legible at a glance. */
-  --accent-strong: hsl(0 0% 93%); /* the "brand" surface: white */
+  --accent-strong: hsl(0 0% 88%); /* the "brand" surface: white */
   --accent-muted: var(--alpha-600); /* #ffffff82 — focus ring line */
   --accent-halo: var(--alpha-500); /* #ffffff3d — focus ring halo */
 
@@ -67,35 +76,37 @@
   --blue-900: hsl(210 100% 66%); /* charts + "informational" only */
 
   /* ---- shadcn contract ------------------------------------------------- */
-  /* Elevation ladder: chrome (#000) → surface (#0a0a0a) → raised (#141414). */
-  --background: hsl(0 0% 4%);
+  /* Elevation ladder: chrome (#080808) → surface (#121212) → raised (#1d1d1d).
+     Lifted as a set, with slightly wider gaps than the old near-black ladder —
+     softer overall contrast, but the regions read *more* distinctly, not less. */
+  --background: hsl(0 0% 7%);
   --foreground: var(--gray-1000);
 
-  --card: hsl(0 0% 4%);
+  --card: hsl(0 0% 7%);
   --card-foreground: var(--gray-1000);
 
-  --popover: hsl(0 0% 7%);
+  --popover: hsl(0 0% 10%);
   --popover-foreground: var(--gray-1000);
 
   /* Vercel's primary action is white-on-black, not a brand hue. */
-  --primary: hsl(0 0% 93%);
-  --primary-foreground: hsl(0 0% 4%);
+  --primary: hsl(0 0% 88%);
+  --primary-foreground: hsl(0 0% 7%);
 
-  --secondary: hsl(0 0% 12%);
+  --secondary: hsl(0 0% 15%);
   --secondary-foreground: var(--gray-1000);
 
-  --muted: hsl(0 0% 12%);
+  --muted: hsl(0 0% 15%);
   --muted-foreground: var(--gray-900);
 
   /* `accent` in the shadcn contract is the hover surface, not a brand colour. */
-  --accent: hsl(0 0% 14%);
+  --accent: hsl(0 0% 17%);
   --accent-foreground: var(--gray-1000);
 
   --destructive: var(--red-700);
   --destructive-foreground: hsl(0 0% 100%);
 
   --border: var(--alpha-200);
-  --input: hsl(0 0% 7%);
+  --input: hsl(0 0% 10%);
   /* Full-strength so the `/60` and `/25` ring modifiers used across the app
      land near Vercel's own focus line (#ffffff82) rather than a faint smudge. */
   --ring: var(--accent-strong);
@@ -103,13 +114,14 @@
   --radius: 0.375rem;
 
   /* ---- Bench structure -------------------------------------------------- */
-  --wb-chrome: hsl(0 0% 0%); /* title bar, rail, status strip */
-  --wb-surface: hsl(0 0% 4%); /* sidebar, bench, console body */
-  --wb-raised: hsl(0 0% 8%); /* menus, inputs, hovered rows */
-  --wb-overlay: hsl(0 0% 7%); /* command palette, popovers */
-  /* Inset wells sit just below the surface. Going much darker than this turns
-     the well into a hole and drives contrast against its own contents up. */
-  --wb-inset: hsl(0 0% 5.5%);
+  --wb-chrome: hsl(0 0% 3%); /* title bar, rail, status strip */
+  --wb-surface: hsl(0 0% 7%); /* sidebar, bench, console body */
+  --wb-raised: hsl(0 0% 11.5%); /* menus, inputs, hovered rows */
+  --wb-overlay: hsl(0 0% 10%); /* command palette, popovers */
+  /* Inset wells sit a shade off the surface rather than below it. Cutting a
+     genuinely darker hole here would drive contrast against the well's own
+     contents — log lines, sequence readouts — straight back up. */
+  --wb-inset: hsl(0 0% 8.5%);
 
   --wb-border: var(--alpha-200);
   --wb-border-strong: var(--alpha-400);
@@ -131,7 +143,9 @@
      source tag in particular appears on every single line, so it is a tinted
      grey rather than a colour. */
   --log-fg: #c2c2c2;
-  --log-dim: #7a7a7a;
+  /* Lifted with the surface beneath it — at #7a7a7a on the new bench the
+     timestamp column fell just under 4.5:1. */
+  --log-dim: #858585;
   --log-error: #df7373;
   --log-success: #6cbb95;
   --log-warn: #d0ab6f;
@@ -155,11 +169,11 @@
   --chart-5: var(--red-900);
 
   /* ---- Sidebar contract (used by components/ui/sidebar.tsx) ------------- */
-  --sidebar: hsl(0 0% 4%);
+  --sidebar: hsl(0 0% 7%);
   --sidebar-foreground: var(--gray-1000);
-  --sidebar-primary: hsl(0 0% 93%);
-  --sidebar-primary-foreground: hsl(0 0% 4%);
-  --sidebar-accent: hsl(0 0% 12%);
+  --sidebar-primary: hsl(0 0% 88%);
+  --sidebar-primary-foreground: hsl(0 0% 7%);
+  --sidebar-accent: hsl(0 0% 15%);
   --sidebar-accent-foreground: var(--gray-1000);
   --sidebar-border: var(--alpha-200);
   --sidebar-ring: var(--accent-muted);
@@ -260,7 +274,7 @@
   /* The accent surface and what sits legibly on top of it. Because the accent
      is white, anything placed on it must be near-black — never white. */
   --color-brand: var(--accent-strong);
-  --color-brand-foreground: hsl(0 0% 4%);
+  --color-brand-foreground: hsl(0 0% 7%);
   /* Status hues. `info` is genuinely informational — it is not the accent. */
   --color-info: var(--blue-900);
   --color-success: var(--green-900);

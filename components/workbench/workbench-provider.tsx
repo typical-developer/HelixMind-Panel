@@ -4,6 +4,7 @@ import * as React from "react"
 import { usePathname, useRouter } from "next/navigation"
 
 import { STORAGE_KEYS, readJSON, writeJSON } from "@/lib/storage"
+import { normalizeOpenTabs } from "@/lib/open-tabs"
 import { toast } from "@/hooks/use-toast"
 
 import { VIEWS, normalizeHref, viewForPath, type WorkbenchView } from "./registry"
@@ -132,6 +133,17 @@ const DEFAULT_LAYOUT: LayoutState = {
 
 const STORAGE_KEY = "helixmind.workbench.v2"
 
+/**
+ * The view the bench falls back to, and the one tab the strip is guaranteed to
+ * be able to fall back on.
+ *
+ * The workbench is a routed app: a view is always on screen, because the URL
+ * always points at one. So an empty tab strip is not a state — it is the strip
+ * disagreeing with the bench it describes. Everything that removes tabs keeps
+ * at least one.
+ */
+const HOME_HREF = "/dashboard"
+
 const ACTIVITY_IDS: ActivityId[] = ["analyses", "runs", "genes", "preferences"]
 const PANEL_TAB_IDS: PanelTabId[] = ["alerts", "log", "history"]
 
@@ -169,8 +181,17 @@ interface WorkbenchContextValue extends LayoutState {
 
   openTab: (href: string) => void
   closeTab: (href: string) => void
+  /**
+   * False when only one analysis is open. The strip describes what the bench is
+   * showing, and the bench always shows something, so the last tab stays —
+   * `closeTab` enforces it and this lets the UI drop the affordance rather than
+   * offer a button that does nothing.
+   */
+  canCloseTab: boolean
   closeOtherTabs: (href: string) => void
   closeAllTabs: () => void
+  /** Move an open analysis to a new position in the strip. */
+  moveTab: (href: string, toIndex: number) => void
   /** Put back the most recently closed analysis. Alt+Shift+T. */
   reopenClosedTab: () => void
   /** How many closes are on the undo stack, so a menu item can disable. */
@@ -582,9 +603,17 @@ function LayoutProvider({ children }: { children: React.ReactNode }) {
           panelTab: PANEL_TAB_IDS.includes(saved.panelTab as PanelTabId)
             ? (saved.panelTab as PanelTabId)
             : prev.panelTab,
-          openTabs: Array.isArray(saved.openTabs)
-            ? saved.openTabs.filter((h) => VIEWS.some((v) => v.href === h))
-            : prev.openTabs,
+          // Two guards, both for layouts written by an earlier build. The set
+          // is deduped because a `Set` of hrefs is what the open tabs have
+          // always *meant* — a duplicate entry would render two tabs sharing a
+          // React key, and closing either would act on the wrong one. And an
+          // empty list is floored: a build shipped before this one let "close
+          // all" persist `openTabs: []`, so that is sitting in storage today.
+          openTabs: normalizeOpenTabs(
+            Array.isArray(saved.openTabs) ? saved.openTabs : prev.openTabs,
+            VIEWS.map((v) => v.href),
+            HOME_HREF,
+          ),
         }))
       }
     } catch {
@@ -655,23 +684,12 @@ function LayoutProvider({ children }: { children: React.ReactNode }) {
   /* ---- Open analyses --------------------------------------------------- */
 
   /**
-   * Closing every tab has to survive the effect below.
-   *
-   * "Close all" cleared the open set and then navigated to the Overview — and
-   * navigating is exactly what re-opens a tab, so the strip was never actually
-   * empty. This records the navigation that a close initiated, so the effect
-   * can let that one through without re-adding anything.
-   */
-  const suppressOpen = React.useRef<string | null>(null)
-
-  /**
    * Recently closed analyses, newest first.
    *
-   * Closing a tab was the one destructive action in the workbench with no way
-   * back — and with "close all" now genuinely emptying the strip, losing a
-   * carefully arranged set to one mis-click was a real risk. Every editor
-   * binds this to Ctrl+Shift+T, which browsers reserve for their own tabs, so
-   * the workbench uses Alt+Shift+T instead.
+   * Closing a tab is the one destructive action in the workbench, and losing a
+   * carefully arranged set to one mis-click is a real risk. Every editor binds
+   * this to Ctrl+Shift+T, which browsers reserve for their own tabs, so the
+   * workbench uses Alt+Shift+T instead.
    */
   const [closedTabs, setClosedTabs] = React.useState<string[]>([])
 
@@ -684,10 +702,6 @@ function LayoutProvider({ children }: { children: React.ReactNode }) {
   // click away after you go and check a gene record.
   React.useEffect(() => {
     if (!view) return
-    if (suppressOpen.current === view.href) {
-      suppressOpen.current = null
-      return
-    }
     setLayout((prev) =>
       prev.openTabs.includes(view.href)
         ? prev
@@ -723,10 +737,27 @@ function LayoutProvider({ children }: { children: React.ReactNode }) {
     [router],
   )
 
+  /**
+   * False when the strip is down to its last tab, which cannot be closed.
+   *
+   * Counted off `tabs` rather than `openTabs` deliberately. The two only differ
+   * if an href in the open set names no view — which nothing should now be able
+   * to produce — but if one ever did, counting the raw set would let the last
+   * *rendered* tab be closed and put the strip right back to reading "nothing
+   * open" under a bench that is showing something.
+   */
+  const canCloseTab = tabs.length > 1
+
   const closeTab = React.useCallback(
     (href: string) => {
       const index = layout.openTabs.indexOf(href)
       if (index === -1) return
+
+      // The last tab stays. Guarded here rather than at the call sites because
+      // six of them reach this function — the tab's ×, middle-click, Delete in
+      // the strip, Alt+W, the context menu and the palette — and a guard that
+      // lives on the button is a guard middle-click walks straight past.
+      if (tabs.length <= 1) return
 
       const next = layout.openTabs.filter((h) => h !== href)
       rememberClosed([href])
@@ -738,16 +769,11 @@ function LayoutProvider({ children }: { children: React.ReactNode }) {
       if (view?.href !== href) return
 
       // Closing the open view hands the bench to its neighbour: the tab that
-      // slid into this position, else the one before it. With nothing left,
-      // the Overview opens as a fresh tab — the bench cannot show nothing.
-      const successor = next[index] ?? next[index - 1]
-      if (successor) {
-        router.push(successor)
-      } else {
-        router.push("/dashboard")
-      }
+      // slid into this position, else the one before it. One of the two always
+      // exists, because the guard above refuses to close the last tab.
+      router.push(next[index] ?? next[index - 1])
     },
-    [layout.openTabs, router, view],
+    [layout.openTabs, router, tabs, view],
   )
 
   const closeOtherTabs = React.useCallback(
@@ -760,22 +786,46 @@ function LayoutProvider({ children }: { children: React.ReactNode }) {
   )
 
   /**
-   * Empty the strip.
+   * Clear the deck: close everything and land back on the Overview.
    *
-   * The bench still has to render something, so this navigates to the Overview
-   * while telling the open-tab effect to let that navigation pass — otherwise
-   * the Overview is immediately re-added and "close all" leaves one tab behind,
-   * which is what it used to do.
+   * An earlier pass had this genuinely empty the strip, which is what an editor
+   * does — but an editor can show a blank watermark and this bench cannot. It
+   * left the Overview rendered under a strip that read "Nothing open". Leaving
+   * the one tab is both honest and the more useful action; Alt+Shift+T brings
+   * the rest back one at a time.
    */
   const closeAllTabs = React.useCallback(() => {
-    // Only arm the suppression when the navigation will actually happen.
-    // Setting it while already on the Overview would leave it armed and eat
-    // the *next* genuine visit instead.
-    suppressOpen.current = view?.href === "/dashboard" ? null : "/dashboard"
-    rememberClosed(layout.openTabs)
-    setLayout((prev) => (prev.openTabs.length === 0 ? prev : { ...prev, openTabs: [] }))
-    if (view?.href !== "/dashboard") router.push("/dashboard")
+    // The Overview survives, so it is not something to undo.
+    rememberClosed(layout.openTabs.filter((h) => h !== HOME_HREF))
+    setLayout((prev) =>
+      prev.openTabs.length === 1 && prev.openTabs[0] === HOME_HREF
+        ? prev
+        : { ...prev, openTabs: [HOME_HREF] },
+    )
+    if (view?.href !== HOME_HREF) router.push(HOME_HREF)
   }, [layout.openTabs, rememberClosed, router, view])
+
+  /**
+   * Move an open analysis to a new position in the strip — the drag, and
+   * Alt+Shift+Arrow, both land here.
+   *
+   * Order is part of `layout`, so a rearranged strip is persisted with
+   * everything else and survives a reload without any extra machinery.
+   */
+  const moveTab = React.useCallback((href: string, toIndex: number) => {
+    setLayout((prev) => {
+      const from = prev.openTabs.indexOf(href)
+      if (from === -1) return prev
+
+      const to = Math.max(0, Math.min(prev.openTabs.length - 1, toIndex))
+      if (from === to) return prev
+
+      const next = [...prev.openTabs]
+      next.splice(from, 1)
+      next.splice(to, 0, href)
+      return { ...prev, openTabs: next }
+    })
+  }, [])
 
   /**
    * Put back the most recently closed analysis.
@@ -926,6 +976,17 @@ function LayoutProvider({ children }: { children: React.ReactNode }) {
           reopenClosedTab()
           return
         }
+        // Alt+Shift+Arrow moves the open analysis along the strip. Dragging is
+        // the discoverable way to reorder, but native HTML5 drag is mouse-only,
+        // so without this the feature simply does not exist for anyone working
+        // from the keyboard.
+        if (e.shiftKey && view && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+          e.preventDefault()
+          const from = layout.openTabs.indexOf(view.href)
+          if (from === -1) return
+          moveTab(view.href, from + (e.key === "ArrowRight" ? 1 : -1))
+          return
+        }
       }
 
       if (!mod) return
@@ -990,6 +1051,8 @@ function LayoutProvider({ children }: { children: React.ReactNode }) {
   }, [
     closeTab,
     reopenClosedTab,
+    moveTab,
+    layout.openTabs,
     layout.panelMaximized,
     layout.focusMode,
     openPalette,
@@ -1037,8 +1100,10 @@ function LayoutProvider({ children }: { children: React.ReactNode }) {
       zoomReset,
       openTab,
       closeTab,
+      canCloseTab,
       closeOtherTabs,
       closeAllTabs,
+      moveTab,
       reopenClosedTab,
       closedTabCount: closedTabs.length,
       resetLayout,
@@ -1070,8 +1135,10 @@ function LayoutProvider({ children }: { children: React.ReactNode }) {
       zoomReset,
       openTab,
       closeTab,
+      canCloseTab,
       closeOtherTabs,
       closeAllTabs,
+      moveTab,
       reopenClosedTab,
       closedTabs.length,
       resetLayout,

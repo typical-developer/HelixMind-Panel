@@ -378,11 +378,16 @@ export default function MicrobeGrowthLab() {
     // Capture rendered size before touching the clone
     const rect = svg.getBoundingClientRect();
 
-    // Dark background rect so the PNG isn't transparent
+    // Dark background rect so the PNG isn't transparent.
+    //
+    // The export bakes literal hex — a detached SVG has no stylesheet, so the
+    // `var(--…)` the chart normally draws with resolves to nothing. These
+    // mirror `--wb-surface`, `--gray-1000` and `--gray-500`, and have to be
+    // moved by hand when those move.
     const bg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
     bg.setAttribute("width", "100%");
     bg.setAttribute("height", "100%");
-    bg.setAttribute("fill", "#0a0a0a");
+    bg.setAttribute("fill", "#121212");
     cloned.insertBefore(bg, cloned.firstChild);
 
     // Bake computed styles — without this the blob SVG loses all colour
@@ -400,16 +405,16 @@ export default function MicrobeGrowthLab() {
 
     // Force text to be visible on the dark background
     cloned.querySelectorAll("text, tspan").forEach((el) => {
-      (el as SVGElement).style.fill = "#FBFBFB";
-      (el as SVGElement).setAttribute("fill", "#FBFBFB");
+      (el as SVGElement).style.fill = "#e0e0e0";
+      (el as SVGElement).setAttribute("fill", "#e0e0e0");
     });
 
     // Axis lines
     cloned
       .querySelectorAll(".recharts-cartesian-axis-line, .recharts-cartesian-axis-tick-line")
       .forEach((el) => {
-        (el as SVGElement).style.stroke = "#FBFBFB";
-        (el as SVGElement).setAttribute("stroke", "#FBFBFB");
+        (el as SVGElement).style.stroke = "#e0e0e0";
+        (el as SVGElement).setAttribute("stroke", "#e0e0e0");
       });
 
     // Subtle grid lines
@@ -418,16 +423,16 @@ export default function MicrobeGrowthLab() {
         ".recharts-cartesian-grid-horizontal line, .recharts-cartesian-grid-vertical line"
       )
       .forEach((el) => {
-        (el as SVGElement).style.stroke = "#404040";
-        (el as SVGElement).setAttribute("stroke", "#404040");
+        (el as SVGElement).style.stroke = "#4d4d4d";
+        (el as SVGElement).setAttribute("stroke", "#4d4d4d");
       });
 
     // Data line — white, no fill flood
     cloned.querySelectorAll(".recharts-line-curve").forEach((el) => {
-      (el as SVGElement).style.stroke = "#FBFBFB";
+      (el as SVGElement).style.stroke = "#e0e0e0";
       (el as SVGElement).style.strokeWidth = "2";
       (el as SVGElement).style.fill = "none";
-      (el as SVGElement).setAttribute("stroke", "#FBFBFB");
+      (el as SVGElement).setAttribute("stroke", "#e0e0e0");
       (el as SVGElement).setAttribute("fill", "none");
     });
 
@@ -446,7 +451,7 @@ export default function MicrobeGrowthLab() {
       canvas.height = (rect.height + padding) * scale;
 
       const ctx = canvas.getContext("2d")!;
-      ctx.fillStyle = "#0a0a0a";
+      ctx.fillStyle = "#121212";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.scale(scale, scale);
       ctx.drawImage(img, padding / 2, padding / 2);

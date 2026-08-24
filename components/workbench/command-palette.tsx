@@ -200,19 +200,21 @@ export function CommandPalette() {
       icon: X,
       label: "Close the open analysis",
       shortcut: "Alt W",
-      disabled: !wb.view,
+      // The last analysis open cannot be closed — the bench always has a view
+      // on screen, so the strip describing it is never empty.
+      disabled: !wb.view || !wb.canCloseTab,
       action: () => wb.view && wb.closeTab(wb.view.href),
     },
     {
       icon: XSquare,
       label: "Close other analyses",
-      disabled: !wb.view || wb.tabs.length < 2,
+      disabled: !wb.view || !wb.canCloseTab,
       action: () => wb.view && wb.closeOtherTabs(wb.view.href),
     },
     {
       icon: XSquare,
       label: "Close all analyses",
-      disabled: wb.tabs.length === 0,
+      disabled: !wb.canCloseTab,
       action: wb.closeAllTabs,
     },
     {

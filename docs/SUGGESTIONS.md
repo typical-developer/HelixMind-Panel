@@ -117,8 +117,23 @@ The activity log holds 200 events and only the last 12 are shown. A filterable
 timeline — by engine, by kind, by date — would make it useful rather than
 decorative.
 
-### 3.5 Drag to reorder tabs · ~3 hours
-Standard in every editor; conspicuously missing here.
+### 3.5 Drag to reorder tabs · **DONE**
+Native HTML5 drag, plus `Alt Shift ←/→` and *Move left* / *Move right* on the
+tab's right-click menu — the drag alone would have been mouse-only. Order lives
+in `openTabs`, so it persists with the rest of the layout.
+
+### 3.6 Pinned tabs · ~half a day
+The natural generalisation of "the last tab cannot be closed": let the user
+choose which tabs get that protection instead of it always falling to whichever
+one is left. Pin from the right-click menu, pinned tabs shrink to their icon and
+sort to the front, and *Close all* / *Close others* skip them — the contract
+Chrome and VS Code both use, so it needs no explaining.
+
+### 3.7 A section menu on the sidebar's "HelixMind Lab" header · ~1 hour
+The header carries one action, *Collapse all groups*. The tree already marks
+which views are open, so the actions that complete it are the ones the tab strip
+owns: *Close all analyses* and *Reopen closed*. A `⋯` menu beside the collapse
+button, the way VS Code's Explorer carries its overflow.
 
 ---
 
