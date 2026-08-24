@@ -1,6 +1,7 @@
 "use client"
 
-import React, { useMemo, useState } from "react"
+import React, { useEffect, useMemo, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import {
   AlertTriangle,
   Check,
@@ -27,6 +28,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { toast } from "@/hooks/use-toast"
+import { recordActivity } from "@/lib/activity-store"
+import { savePredictionSnapshot } from "@/lib/lab-snapshot"
+import { downloadJSON, fileStamp } from "@/lib/download"
+import { AMR_ORGANISMS, AMR_RECORDS, AMR_BY_GENE } from "@/lib/amr-records"
+import {
+  SYNERGY_RULES,
+  predictResistance,
+  type PredictionResult,
+  type ResistanceCall,
+} from "@/lib/amr-model"
 import {
   Chip,
   ViewLayout,
@@ -38,38 +50,64 @@ import {
   ToolbarButton,
   useLogStream,
   useAlerts,
+  useRunStatus,
+  useWorkbench,
   useStatusItems,
   useViewContext,
   type WorkbenchAlert,
 } from "@/components/workbench"
 
-const amrDatabase = {
-  "blaCTX-M": { antibiotic: "Ceftriaxone", drugClass: "Cephalosporins", mechanism: "ESBL", impact: 0.95 },
-  "blaOXA-48": { antibiotic: "Meropenem", drugClass: "Carbapenems", mechanism: "Carbapenemase", impact: 0.98 },
-  mecA: { antibiotic: "Oxacillin", drugClass: "Beta-lactams", mechanism: "PBP2a", impact: 0.99 },
-  vanA: { antibiotic: "Vancomycin", drugClass: "Glycopeptides", mechanism: "Cell wall remodeling", impact: 0.99 },
-  gyrA: { antibiotic: "Ciprofloxacin", drugClass: "Fluoroquinolones", mechanism: "DNA Gyrase mutation", impact: 0.4 },
-  parC: { antibiotic: "Ciprofloxacin", drugClass: "Fluoroquinolones", mechanism: "Topoisomerase IV mutation", impact: 0.4 },
-  tetM: { antibiotic: "Tetracycline", drugClass: "Tetracyclines", mechanism: "Ribosomal protection", impact: 0.7 },
-}
-
-const DETECTED_GENES = ["blaCTX-M", "blaOXA-48", "gyrA", "mecA", "parC", "tetM", "vanA"]
+/**
+ * The markers this view offers.
+ *
+ * There used to be a private `amrDatabase` here holding seven genes, while
+ * `lib/amr-records.ts` — whose own docstring called itself the single source
+ * of truth — held a different five. Two of the seven were absent from the
+ * library entirely, so `vanA` could be scored here and then found nowhere in
+ * the Gene Library or the command palette. Both tables are merged into the
+ * library now, and this list is derived from it.
+ */
+const DETECTED_GENES = AMR_RECORDS.map((record) => record.gene)
 
 export default function ResistancePredictorPage() {
+  const searchParams = useSearchParams()
   const [selectedOrganism, setSelectedOrganism] = useState("E. coli")
   const [selectedGenes, setSelectedGenes] = useState<string[]>([])
-  const [results, setResults] = useState<any>(null)
-  const [loading, setLoading] = useState(false)
+
+  /**
+   * Arrive with markers already picked.
+   *
+   * The Gene Library listed nine resistance markers and this view scored them,
+   * and there was no way to get from one to the other — you read a gene in the
+   * library, then came here and hunted for it in a checklist. A row in the
+   * library now links straight through with the gene selected.
+   */
+  const seededGenes = searchParams.get("genes")
+  useEffect(() => {
+    if (!seededGenes) return
+    const genes = seededGenes
+      .split(",")
+      .map((g) => g.trim())
+      .filter((g) => AMR_BY_GENE.has(g))
+    if (genes.length === 0) return
+    setSelectedGenes(genes)
+    // Pick an organism the markers are actually reported in, so the advisory
+    // does not fire on a selection the link itself created.
+    const first = AMR_BY_GENE.get(genes[0])
+    if (first) setSelectedOrganism(first.organism)
+  }, [seededGenes])
+  const [results, setResults] = useState<PredictionResult | null>(null)
   const [error, setError] = useState("")
+  const { setPanelTab } = useWorkbench()
 
-  const organisms = ["E. coli", "K. pneumoniae", "S. aureus", "Enterococcus faecium"]
+  /** High-confidence calls — what the Overview counts as a threat. */
+  const highCount = useMemo(
+    () =>
+      results?.calls.filter((call) => call.confidence.level === "High").length ?? 0,
+    [results],
+  )
 
-  const synergyRules = [
-    {
-      genesRequired: ["gyrA", "parC"],
-      result: { drugClass: "Fluoroquinolones", boostedImpact: 0.9, note: "Dual mutations in gyrA and parC confer high-level resistance." },
-    },
-  ]
+  const organisms = AMR_ORGANISMS
 
   const toggleGene = (label: string) => {
     setSelectedGenes((prev) =>
@@ -79,90 +117,90 @@ export default function ResistancePredictorPage() {
 
   const analyzeResistance = () => {
     if (!selectedGenes.length) {
-      setError("Please select at least one gene")
+      setError("Select at least one marker to analyse")
+      toast({
+        variant: "warning",
+        title: "No markers selected",
+        description: "Pick at least one detected gene before running the analysis.",
+      })
       return
     }
 
-    setLoading(true)
     setError("")
 
-    try {
-      const report: any = {}
+    // Scoring lives in lib/amr-model.ts so it can be tested without rendering
+    // anything. It was previously inline, untyped (`report: any`) and wrapped
+    // in a try/catch around code that cannot throw, behind a `loading` flag
+    // that was set and cleared within the same synchronous tick.
+    const result = predictResistance(selectedGenes, selectedOrganism)
+    setResults(result)
 
-      selectedGenes.forEach((geneName) => {
-        const entry = amrDatabase[geneName as keyof typeof amrDatabase]
-        if (!entry) return
+    savePredictionSnapshot({
+      organism: result.organism,
+      calls: result.calls.map((call) => ({
+        drugClass: call.drugClass,
+        score: call.confidence.score,
+        genes: call.genes,
+        isSynergistic: call.isSynergistic,
+      })),
+    })
 
-        const drugClass = entry.drugClass
+    const high = result.calls.filter((c) => c.confidence.level === "High")
 
-        if (!report[drugClass]) {
-          report[drugClass] = { class: drugClass, maxImpact: 0, detectedMarkers: [], mechanisms: [] }
-        }
+    recordActivity({
+      kind: "prediction.completed",
+      engine: "amr",
+      label: `Resistance profile · ${result.organism}`,
+      detail: `${result.selectedGenes.length} marker${result.selectedGenes.length === 1 ? "" : "s"} · ${result.calls.length} drug class${result.calls.length === 1 ? "" : "es"}`,
+      href: "/amr-analysis-engine/resistance-predictor",
+      severity: high.length > 0 ? "danger" : "success",
+    })
 
-        report[drugClass].detectedMarkers.push(geneName)
-        report[drugClass].mechanisms.push(entry.mechanism)
-
-        if (entry.impact > report[drugClass].maxImpact) {
-          report[drugClass].maxImpact = entry.impact
-        }
+    if (high.length > 0) {
+      recordActivity({
+        kind: "threat.detected",
+        engine: "amr",
+        label: `${high.length} high-confidence resistance call${high.length === 1 ? "" : "s"}`,
+        detail: high.map((c) => c.drugClass).join(", "),
+        href: "/amr-analysis-engine/resistance-predictor",
+        severity: "danger",
+        value: high.length,
       })
-
-      synergyRules.forEach((rule) => {
-        const hasAll = rule.genesRequired.every((g) => selectedGenes.includes(g))
-        if (hasAll && report[rule.result.drugClass]) {
-          report[rule.result.drugClass].maxImpact = rule.result.boostedImpact
-          report[rule.result.drugClass].isSynergistic = true
-        }
-      })
-
-      const resistanceProfile = Object.values(report).map((item: any) => ({
-        antibiotic: item.class,
-        confidence: {
-          level: item.maxImpact >= 0.9 ? "High" : item.maxImpact >= 0.7 ? "Medium" : "Low",
-          score: item.maxImpact,
-        },
-        genes: item.detectedMarkers,
-        mechanisms: item.mechanisms,
-        isSynergistic: item.isSynergistic || false,
-      }))
-
-      setResults({
-        organism: selectedOrganism,
-        selectedGenes,
-        resistanceProfile,
-        timestamp: new Date().toLocaleString(),
-      })
-    } catch (err: any) {
-      setError("Error analyzing resistance profile: " + err.message)
-    } finally {
-      setLoading(false)
     }
+
+    toast({
+      variant: high.length > 0 ? "warning" : "success",
+      title: "Analysis complete",
+      description:
+        high.length > 0
+          ? `${high.length} high-confidence call${high.length === 1 ? "" : "s"}: ${high.map((c) => c.drugClass).join(", ")}.`
+          : `${result.calls.length} drug class${result.calls.length === 1 ? "" : "es"} implicated, none at high confidence.`,
+    })
   }
 
   const exportReport = () => {
     if (!results) return
 
-    const report = {
-      metadata: {
-        organism: results.organism,
-        timestamp: results.timestamp,
-        disclaimer: "Research tool only. Not for clinical use.",
-        modelType: "Rule-based (Synergy-aware)",
+    downloadJSON(
+      {
+        metadata: {
+          organism: results.organism,
+          timestamp: results.timestamp,
+          disclaimer: "Research tool only. Not for clinical use.",
+          modelType: "Rule-based (synergy-aware)",
+          note: "The selected organism is recorded and used only to flag unexpected markers; it does not affect scoring.",
+        },
+        detectedResistance: results.calls,
+        genesAnalyzed: results.selectedGenes,
+        unknownGenes: results.unknownGenes,
+        unexpectedForOrganism: results.unexpectedForOrganism,
       },
-      detectedResistance: results.resistanceProfile,
-      genesAnalyzed: results.selectedGenes,
-    }
-
-    const element = document.createElement("a")
-    element.setAttribute(
-      "href",
-      "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(report, null, 2))
+      {
+        filename: `amr-report-${fileStamp()}.json`,
+        engine: "amr",
+        description: `${results.calls.length} drug class${results.calls.length === 1 ? "" : "es"} for ${results.organism}.`,
+      },
     )
-    element.setAttribute("download", `amr_report_${Date.now()}.json`)
-    element.style.display = "none"
-    document.body.appendChild(element)
-    element.click()
-    document.body.removeChild(element)
   }
 
   const getConfidenceTone = (score: number) => {
@@ -181,15 +219,34 @@ export default function ResistancePredictorPage() {
         list.push({ source: "amr-engine", severity: "error", message: error })
       }
       if (results) {
-        for (const item of results.resistanceProfile) {
-          if (item.confidence.score >= 0.9) {
+        for (const call of results.calls) {
+          if (call.confidence.level === "High") {
             list.push({
               source: "amr-engine",
               severity: "warning",
-              message: `High-confidence resistance predicted for ${item.antibiotic} (${item.genes.join(", ")})`,
+              message: `High-confidence resistance predicted for ${call.drugClass} (${call.genes.join(", ")})`,
               at: results.organism,
             })
           }
+        }
+        // The organism picker had no effect of any kind before this: markers
+        // that are not reported in the chosen organism scored identically to
+        // ones that are. It still does not change the score — see
+        // docs/BUG-REPORT.md — but it no longer passes in silence.
+        for (const gene of results.unexpectedForOrganism) {
+          list.push({
+            source: "amr-engine",
+            severity: "info",
+            message: `${gene} is not normally reported in ${results.organism}. Scoring is unaffected.`,
+            at: results.organism,
+          })
+        }
+        for (const gene of results.unknownGenes) {
+          list.push({
+            source: "amr-engine",
+            severity: "warning",
+            message: `${gene} is not in the gene library and was skipped.`,
+          })
         }
       }
       return list
@@ -203,10 +260,10 @@ export default function ResistancePredictorPage() {
         results
           ? [
               `analysed ${results.selectedGenes.length} marker(s) for ${results.organism}`,
-              `${results.resistanceProfile.length} drug class(es) implicated`,
-              ...results.resistanceProfile.map(
-                (i: any) =>
-                  `${i.antibiotic}: ${i.confidence.level} (${Math.round(i.confidence.score * 100)}%)${i.isSynergistic ? " · synergy applied" : ""}`,
+              `${results.calls.length} drug class(es) implicated`,
+              ...results.calls.map(
+                (call) =>
+                  `${call.drugClass}: ${call.confidence.level} (${Math.round(call.confidence.score * 100)}%)${call.isSynergistic ? " · synergy applied" : ""}`,
               ),
             ]
           : [],
@@ -214,17 +271,49 @@ export default function ResistancePredictorPage() {
     ),
   )
 
+  useRunStatus(
+    useMemo(
+      () =>
+        results
+          ? {
+              label: "Resistance analysis",
+              source: "amr-engine",
+              state: "done" as const,
+              detail: `${results.calls.length} drug class${results.calls.length === 1 ? "" : "es"} for ${results.organism}`,
+            }
+          : null,
+      [results],
+    ),
+  )
+
   useStatusItems(
     useMemo(
       () => [
-        { id: "organism", label: selectedOrganism },
+        {
+          id: "organism",
+          label: selectedOrganism,
+          title:
+            "Organism selected for the report. It flags unexpected markers but does not change scoring.",
+        },
         {
           id: "genes",
           label: `${selectedGenes.length} marker${selectedGenes.length === 1 ? "" : "s"}`,
+          title: "Resistance markers selected in the inspector",
           tone: selectedGenes.length ? ("info" as const) : ("default" as const),
         },
+        ...(highCount > 0
+          ? [
+              {
+                id: "high",
+                label: `${highCount} high`,
+                title: "High-confidence resistance calls — open the console's Alerts tab",
+                tone: "danger" as const,
+                onClick: () => setPanelTab("alerts"),
+              },
+            ]
+          : []),
       ],
-      [selectedOrganism, selectedGenes.length],
+      [selectedOrganism, selectedGenes.length, highCount, setPanelTab],
     ),
   )
 
@@ -246,7 +335,6 @@ export default function ResistancePredictorPage() {
           selectedGenes={selectedGenes}
           toggleGene={toggleGene}
           error={error}
-          loading={loading}
           onAnalyze={analyzeResistance}
         />
       }
@@ -258,7 +346,7 @@ export default function ResistancePredictorPage() {
               <PaneHeader
                 icon={Sparkles}
                 title="Analysis results"
-                subtitle={results.timestamp}
+                subtitle={new Date(results.timestamp).toLocaleString()}
                 actions={
                   <ToolbarButton
                     icon={DownloadIcon}
@@ -272,7 +360,7 @@ export default function ResistancePredictorPage() {
                 {[
                   ["Organism", results.organism],
                   ["Markers", results.selectedGenes.length],
-                  ["Drug classes", results.resistanceProfile.length],
+                  ["Drug classes", results.calls.length],
                 ].map(([label, value]) => (
                   <div key={label as string} className="px-3 py-2">
                     <p className="text-xs text-muted-foreground">
@@ -286,7 +374,7 @@ export default function ResistancePredictorPage() {
               </div>
 
               <Accordion type="multiple" className="divide-y divide-border">
-                {results.resistanceProfile.map((item: any, idx: number) => (
+                {results.calls.map((item: ResistanceCall, idx: number) => (
                   <AccordionItem
                     key={idx}
                     value={`item-${idx}`}
@@ -296,7 +384,7 @@ export default function ResistancePredictorPage() {
                       <div className="flex w-full items-center justify-between gap-3 pr-2">
                         <div className="min-w-0 text-left">
                           <p className="flex items-center gap-1.5 truncate text-sm font-medium text-foreground">
-                            {item.antibiotic}
+                            {item.drugClass}
                             {item.isSynergistic && <Chip tone="info">synergy</Chip>}
                           </p>
                           <span className="font-mono text-xs text-muted-foreground">
@@ -333,9 +421,16 @@ export default function ResistancePredictorPage() {
                         {item.genes.join(", ")}
                       </p>
                       <p>
+                        <span className="text-foreground/70">drugs:</span>{" "}
+                        {item.antibiotics.join(", ")}
+                      </p>
+                      <p>
                         <span className="text-foreground/70">mechanisms:</span>{" "}
                         {item.mechanisms.join(", ")}
                       </p>
+                      {item.synergyNote && (
+                        <p className="text-info">{item.synergyNote}</p>
+                      )}
                     </AccordionContent>
                   </AccordionItem>
                 ))}
@@ -365,7 +460,6 @@ function PredictorInspector({
   selectedGenes,
   toggleGene,
   error,
-  loading,
   onAnalyze,
 }: {
   organisms: string[]
@@ -374,7 +468,6 @@ function PredictorInspector({
   selectedGenes: string[]
   toggleGene: (g: string) => void
   error: string
-  loading: boolean
   onAnalyze: () => void
 }) {
   return (
@@ -407,7 +500,7 @@ function PredictorInspector({
           <div className="p-1.5">
             {DETECTED_GENES.map((label) => {
               const active = selectedGenes.includes(label)
-              const entry = amrDatabase[label as keyof typeof amrDatabase]
+              const entry = AMR_BY_GENE.get(label)
               return (
                 <button
                   key={label}
@@ -443,7 +536,7 @@ function PredictorInspector({
                     </span>
                   </span>
                   <span className="shrink-0 font-mono text-xs text-muted-foreground/70 tabular">
-                    {Math.round((entry?.impact ?? 0) * 100)}%
+                    {Math.round((entry?.confidence ?? 0) * 100)}%
                   </span>
                 </button>
               )
@@ -467,8 +560,20 @@ function PredictorInspector({
             </p>
             <Rule label="Notes" />
             <ul className="list-disc space-y-1 pl-4">
-              <li>Impact scoring is literature-based; individual variation occurs</li>
-              <li>Synergy rules apply only for specific marker combinations</li>
+              <li>Confidence is literature-based; individual isolates vary</li>
+              <li>
+                The organism is recorded and used to flag unexpected markers, but
+                does not change the score
+              </li>
+              {SYNERGY_RULES.map((rule) => (
+                <li key={rule.drugClass + rule.genes.join()}>
+                  <span className="font-mono text-foreground/70">
+                    {rule.genes.join(" + ")}
+                  </span>{" "}
+                  raises {rule.drugClass} to{" "}
+                  {Math.round(rule.boostedConfidence * 100)}%
+                </li>
+              ))}
             </ul>
           </div>
         </Pane>
@@ -477,11 +582,11 @@ function PredictorInspector({
       <div className="shrink-0 border-t border-border p-3">
         <Button
           onClick={onAnalyze}
-          disabled={loading || selectedGenes.length === 0}
+          disabled={selectedGenes.length === 0}
           className="h-8 w-full"
         >
           <FlaskConical className="size-3.5" />
-          {loading ? "Analyzing…" : "Analyze resistance profile"}
+          Analyse resistance profile
         </Button>
       </div>
     </div>

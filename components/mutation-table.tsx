@@ -1,50 +1,96 @@
 "use client"
 
-import { Activity } from "lucide-react"
+import { Activity, ScanLine } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { Chip, Pane, PaneHeader } from "@/components/workbench"
+import { useLabSnapshot, PREVIEW_MUTATIONS } from "@/lib/lab-snapshot"
+import {
+  Chip,
+  EmptyState,
+  Pane,
+  PaneHeader,
+  useWorkbench,
+} from "@/components/workbench"
 
-export interface Mutation {
-  generation: number
-  position: number
-  change: string
-  impact: "High Risk" | "Neutral" | "Low Risk"
-}
+const HEADERS = ["Position", "Change", "Class"] as const
 
-const SAMPLE_MUTATIONS: Mutation[] = [
-  { generation: 1, position: 42, change: "A→T", impact: "High Risk" },
-  { generation: 2, position: 156, change: "G→C", impact: "Neutral" },
-  { generation: 3, position: 89, change: "C→G", impact: "Low Risk" },
-  { generation: 4, position: 203, change: "T→A", impact: "High Risk" },
-  { generation: 5, position: 127, change: "A→G", impact: "Neutral" },
-]
-
-const IMPACT_TONE = {
-  "High Risk": "danger",
-  Neutral: "neutral",
-  "Low Risk": "success",
-} as const
-
-const HEADERS = ["Gen", "Position", "Change", "Impact"] as const
-
-/** Detected variants, rendered as a dense data grid rather than a card table. */
+/**
+ * Variants called by the most recent scan.
+ *
+ * The five rows here used to be a `SAMPLE_MUTATIONS` literal — generations 1–5
+ * at positions 42, 156, 89, 203 and 127, each with a hand-assigned "High Risk"
+ * or "Neutral" label that no rule produced. The rows are real calls now, and
+ * the classification is the one the caller actually makes: whether the
+ * substitution is a transition or a transversion.
+ */
 export function MutationTable() {
-  const highRisk = SAMPLE_MUTATIONS.filter((m) => m.impact === "High Risk").length
+  const { scan } = useLabSnapshot()
+  const { openTab } = useWorkbench()
+
+  if (!scan) {
+    return (
+      <Pane className="min-h-0">
+        <PaneHeader icon={Activity} title="Mutation log" />
+        <EmptyState
+          icon={ScanLine}
+          title="No variants called"
+          description="Scan a target against a reference in the DNA Scanner and the calls appear here."
+          action={
+            <button
+              type="button"
+              onClick={() => openTab("/dna-scanner")}
+              className="cursor-pointer rounded-sm border border-border px-2 py-1 text-xs text-foreground/85 transition-colors hover:bg-[var(--wb-active)] focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
+            >
+              Open the DNA Scanner
+            </button>
+          }
+        />
+      </Pane>
+    )
+  }
+
+  if (scan.mutationCount === 0) {
+    return (
+      <Pane className="min-h-0">
+        <PaneHeader
+          icon={Activity}
+          title="Mutation log"
+          subtitle={scan.header}
+        />
+        <EmptyState
+          icon={Activity}
+          title="No differences found"
+          description={
+            scan.referenceHeader
+              ? `${scan.header} matches ${scan.referenceHeader} at every compared position.`
+              : "No reference was supplied on the last scan, so no calls were made."
+          }
+        />
+      </Pane>
+    )
+  }
+
+  const transversions = scan.mutations.filter(
+    (m) => m.substitution === "transversion",
+  ).length
 
   return (
     <Pane className="min-h-0">
       <PaneHeader
         icon={Activity}
         title="Mutation log"
-        subtitle={`${SAMPLE_MUTATIONS.length} variants`}
+        subtitle={`${scan.mutationCount.toLocaleString()} variant${
+          scan.mutationCount === 1 ? "" : "s"
+        }${scan.referenceHeader ? ` vs ${scan.referenceHeader}` : ""}`}
         actions={
-          highRisk > 0 ? <Chip tone="danger">{highRisk} high risk</Chip> : null
+          transversions > 0 ? (
+            <Chip tone="warning">{transversions} transversion</Chip>
+          ) : null
         }
       />
 
       <div className="seq-scroll min-h-0 flex-1 overflow-auto">
-        <table className="w-full min-w-[26rem] text-sm">
+        <table className="w-full min-w-[22rem] text-sm">
           <thead className="sticky top-0 z-10 bg-surface">
             <tr className="border-b border-border">
               {HEADERS.map((h) => (
@@ -58,35 +104,47 @@ export function MutationTable() {
             </tr>
           </thead>
           <tbody>
-            {SAMPLE_MUTATIONS.map((mutation, idx) => (
+            {scan.mutations.map((mutation) => (
               <tr
-                key={idx}
+                key={mutation.position}
                 className="row-hover border-b border-border/50 last:border-0"
               >
-                <td className="px-3 py-2 font-mono text-muted-foreground">
-                  #{mutation.generation}
-                </td>
-                <td className="px-3 py-2 font-mono text-foreground">
-                  {mutation.position}
+                <td className="px-3 py-2 font-mono text-foreground tabular">
+                  {mutation.position.toLocaleString()}
                 </td>
                 <td
                   className={cn(
                     "px-3 py-2 font-mono font-medium",
-                    mutation.impact === "High Risk"
-                      ? "text-destructive"
+                    mutation.substitution === "transversion"
+                      ? "text-warning"
                       : "text-foreground",
                   )}
                 >
-                  {mutation.change}
+                  {mutation.refBase}→{mutation.varBase}
                 </td>
                 <td className="px-3 py-2">
-                  <Chip tone={IMPACT_TONE[mutation.impact]}>{mutation.impact}</Chip>
+                  <Chip
+                    tone={
+                      mutation.substitution === "transversion"
+                        ? "warning"
+                        : "neutral"
+                    }
+                  >
+                    {mutation.substitution}
+                  </Chip>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {scan.mutationCount > scan.mutations.length && (
+        <footer className="shrink-0 border-t border-border px-3 py-2 text-xs text-muted-foreground/70">
+          Showing the first {PREVIEW_MUTATIONS} of{" "}
+          {scan.mutationCount.toLocaleString()}. The DNA Scanner lists them all.
+        </footer>
+      )}
     </Pane>
   )
 }

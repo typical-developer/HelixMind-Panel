@@ -5,7 +5,12 @@ import { Bell, BellOff, CheckCheck, Trash2 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import NotificationItem from "@/components/notifications/NotificationItem"
+import { ToastAction } from "@/components/ui/toast"
+import { toast } from "@/hooks/use-toast"
+import { useRelativeClock } from "@/lib/activity-store"
+import NotificationItem, {
+  type Notification,
+} from "@/components/notifications/NotificationItem"
 import { useNotifications } from "@/components/notifications/notifications-provider"
 import {
   Chip,
@@ -15,6 +20,7 @@ import {
   PaneHeader,
   useStatusItems,
   useViewContext,
+  useWorkbench,
 } from "@/components/workbench"
 
 type Filter = "all" | "unread"
@@ -27,13 +33,47 @@ export default function NotificationsPage() {
     markAllAsRead,
     deleteNotification,
     clearAll,
+    restore,
+    snapshot,
   } = useNotifications()
+  const { openTab, setPanelTab } = useWorkbench()
   const [filter, setFilter] = useState<Filter>("all")
+  const now = useRelativeClock()
 
   const visible = useMemo(
     () => (filter === "unread" ? notifications.filter((n) => !n.read) : notifications),
     [filter, notifications],
   )
+
+  /**
+   * Every destructive action here is undoable.
+   *
+   * Dismissing and clearing were both silent and irreversible: one click and a
+   * list of finished runs was gone with no confirmation, no feedback and no way
+   * back. Because the feed is derived from the activity log, undo is just
+   * restoring the dismissed set.
+   */
+  const withUndo = (
+    run: () => void,
+    title: string,
+    description?: string,
+  ) => {
+    const previous = snapshot()
+    run()
+    toast({
+      title,
+      description,
+      action: (
+        <ToastAction altText="Undo" onClick={() => restore(previous)}>
+          Undo
+        </ToastAction>
+      ),
+    })
+  }
+
+  const openNotification = (notification: Notification) => {
+    if (notification.href) openTab(notification.href)
+  }
 
   useStatusItems(
     useMemo(
@@ -41,10 +81,15 @@ export default function NotificationsPage() {
         {
           id: "unread",
           label: `${unreadCount} unread`,
+          title:
+            unreadCount > 0
+              ? "Unread notifications — the console keeps the full run history"
+              : "Everything has been read",
           tone: unreadCount > 0 ? ("info" as const) : ("default" as const),
+          onClick: () => setPanelTab("history"),
         },
       ],
-      [unreadCount],
+      [unreadCount, setPanelTab],
     ),
   )
 
@@ -69,7 +114,13 @@ export default function NotificationsPage() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={markAllAsRead}
+                  onClick={() =>
+                    withUndo(
+                      markAllAsRead,
+                      "Marked all as read",
+                      `${unreadCount} notification${unreadCount === 1 ? "" : "s"}.`,
+                    )
+                  }
                   disabled={unreadCount === 0}
                   className="h-6 px-2 text-xs"
                 >
@@ -79,7 +130,13 @@ export default function NotificationsPage() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={clearAll}
+                  onClick={() =>
+                    withUndo(
+                      clearAll,
+                      "Notifications cleared",
+                      `${notifications.length} dismissed. The runs themselves are kept in the console's History tab.`,
+                    )
+                  }
                   disabled={notifications.length === 0}
                   className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive"
                 >
@@ -131,7 +188,7 @@ export default function NotificationsPage() {
               description={
                 filter === "unread"
                   ? "Every notification in this workspace has been read."
-                  : "Activity from scans, uploads and simulation runs lands here."
+                  : "Finished scans, simulations and predictions land here."
               }
             />
           ) : (
@@ -140,8 +197,12 @@ export default function NotificationsPage() {
                 <NotificationItem
                   key={n.id}
                   data={n}
+                  now={now}
                   onRead={markAsRead}
-                  onDelete={deleteNotification}
+                  onDelete={(id) =>
+                    withUndo(() => deleteNotification(id), "Notification dismissed")
+                  }
+                  onOpen={openNotification}
                 />
               ))}
             </div>

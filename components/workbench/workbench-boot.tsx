@@ -72,8 +72,7 @@ export function WorkbenchBoot() {
           </div>
 
           <div className="bg-grid flex flex-1 flex-col items-center justify-center gap-4 p-6">
-            <div className="flex items-center gap-2.5 text-sm text-muted-foreground">
-              <span className="inline-flex size-1.5 animate-soft-pulse rounded-full bg-brand" />
+            <div className="flex items-center text-sm text-muted-foreground">
               <span>{STEPS[step]}</span>
             </div>
 

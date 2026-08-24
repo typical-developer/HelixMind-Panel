@@ -15,8 +15,6 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable"
-import { Toaster } from "@/components/ui/toaster"
-
 import { ActivityBar } from "./activity-bar"
 import { BottomPanel } from "./panel"
 import { CommandPalette } from "./command-palette"
@@ -181,7 +179,6 @@ export function Workbench({ children }: { children: React.ReactNode }) {
       {!focusMode && statusBarVisible && <StatusBar />}
 
       <CommandPalette />
-      <Toaster />
     </div>
   )
 }

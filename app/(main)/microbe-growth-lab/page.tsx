@@ -31,6 +31,19 @@ const PopulationChart = dynamic(
   () => import("./population-chart").then((m) => m.PopulationChart),
   { ssr: false, loading: () => <ChartFallback height={288} /> },
 );
+import { toast } from "@/hooks/use-toast";
+import { recordActivity } from "@/lib/activity-store";
+import { downloadBlob, downloadCSV, fileStamp, safeFilename } from "@/lib/download";
+import {
+  FASTA_EXTENSIONS,
+  parseFasta,
+  sequenceStats,
+  validateFastaFile,
+} from "@/lib/fasta";
+import {
+  MicrobeSimulation,
+  type SimulationState,
+} from "@/lib/growth-model";
 import {
   Chip,
   ViewLayout,
@@ -69,37 +82,15 @@ interface GenomeInfo {
   estimatedResistance: number;
 }
 
-interface SimulationState {
-  population: number;
-  timeStep: number;
-  resistanceLevel: number;
-  growthHistory: { time: number; population: number }[];
-  adaptationLog: string[];
-  stressLevels: {
-    temperature: number;
-    ph: number;
-    nutrients: number;
-    oxygen: number;
-  };
-  resistance: number;
-  environment: {
-    temperature: number;
-    pH: number;
-    nutrients: number;
-    oxygen: number;
-    antibioticConc: number;
-  };
-}
-
 // ────────────────────────────────────────────────
-//  CONSTANTS
+//  STRAINS
 // ────────────────────────────────────────────────
-const CARRYING_CAPACITY = 10000;
-const MAX_GROWTH_RATE = 0.35;
-const K_S = 20;
-const BASE_MUTATION_RATE = 0.005;
-const SELECTION_COEFFICIENT = 0.1;
-
+//
+// KNOWN GAP — these values are shown but do not reach the model. Picking
+// Thermus aquaticus, whose optimum is 70 °C, behaves exactly like E. coli
+// because `MicrobeSimulation` has a fixed 37 °C optimum and a fixed maximum
+// growth rate. Recorded in docs/BUG-REPORT.md; the controls are kept so the
+// intended shape of the feature stays visible.
 const STRAINS: Record<string, Strain> = {
   ecoli: {
     name: "E. coli",
@@ -139,158 +130,6 @@ const STRAINS: Record<string, Strain> = {
 };
 
 // ────────────────────────────────────────────────
-//  SIMULATION CLASS
-// ────────────────────────────────────────────────
-class MicrobeSimulation {
-  population: number = 1000;
-  timeStep: number = 0;
-  avgResistance: number = 0.0;
-  adaptationLog: string[] = ["Culture inoculated."];
-  growthHistory: { time: number; population: number }[] = [];
-
-  env = {
-    temperature: 37,
-    pH: 7.0,
-    nutrients: 100,
-    oxygen: 21,
-    antibioticConc: 0,
-  };
-
-  reset() {
-    this.population = 1000;
-    this.timeStep = 0;
-    this.avgResistance = 0.0;
-    this.adaptationLog = ["Culture inoculated."];
-    this.growthHistory = [];
-    this.env = {
-      temperature: 37,
-      pH: 7.0,
-      nutrients: 100,
-      oxygen: 21,
-      antibioticConc: 0,
-    };
-  }
-
-  updateEnvironment(
-    updates: Partial<typeof this.env> & { antibioticOn?: boolean }
-  ) {
-    if (updates.antibioticOn !== undefined) {
-      updates.antibioticConc = updates.antibioticOn ? 50 : 0;
-      delete updates.antibioticOn;
-    }
-    this.env = { ...this.env, ...updates };
-  }
-
-  getTemperatureCoeff(): number {
-    const T = this.env.temperature;
-    const T_opt = 37;
-    const T_min = 10;
-    const T_max = 46;
-    if (T <= T_min || T >= T_max) return 0;
-    const sigma = 5;
-    return Math.exp(-0.5 * ((T - T_opt) / sigma) ** 2);
-  }
-
-  getPHCoeff(): number {
-    const pH = this.env.pH;
-    const pH_opt = 7.0;
-    const pH_width = 2.5;
-    const coeff = 1 - ((pH - pH_opt) / pH_width) ** 2;
-    return Math.max(0, coeff);
-  }
-
-  getNutrientCoeff(): number {
-    const S = this.env.nutrients;
-    if (S <= 0) return 0;
-    return S / (K_S + S);
-  }
-
-  getKillRate(): number {
-    const dose = this.env.antibioticConc;
-    if (dose <= 0) return 0;
-    const MIC = 10 + this.avgResistance * 90;
-    const n = 2;
-    const efficacy = dose ** n / (MIC ** n + dose ** n);
-    return 0.4 * efficacy;
-  }
-
-  tick(): SimulationState {
-    this.timeStep += 1;
-
-    const tempK = this.getTemperatureCoeff();
-    const phK = this.getPHCoeff();
-    const nutrientK = this.getNutrientCoeff();
-    const oxygenK = this.env.oxygen > 5 ? 1 : 0.1;
-
-    const currentGrowthRate =
-      MAX_GROWTH_RATE * tempK * phK * nutrientK * oxygenK;
-    const logisticFactor = 1 - this.population / CARRYING_CAPACITY;
-    const growthAmount = this.population * currentGrowthRate * logisticFactor;
-
-    const antibioticKillRate = this.getKillRate();
-    const deathAmount = this.population * antibioticKillRate;
-
-    if (antibioticKillRate > 0.01 && this.population > 0) {
-      const selectionPressure = antibioticKillRate * SELECTION_COEFFICIENT;
-      this.avgResistance = Math.min(
-        1.0,
-        this.avgResistance + selectionPressure
-      );
-      if (Math.random() < 0.1) {
-        this.adaptationLog.push(
-          `Step ${this.timeStep}: Selection → Resistance ${(
-            this.avgResistance * 100
-          ).toFixed(1)}%`
-        );
-      }
-    } else if (this.avgResistance > 0) {
-      this.avgResistance = Math.max(0, this.avgResistance - 0.001);
-    }
-
-    const stress = 1 - tempK * phK;
-    const currentMutationChance = BASE_MUTATION_RATE * (1 + stress * 5);
-
-    if (Math.random() < currentMutationChance) {
-      this.avgResistance = Math.min(1.0, this.avgResistance + 0.01);
-      this.adaptationLog.push(`Step ${this.timeStep}: Mutation detected.`);
-    }
-
-    let nextPop = this.population + growthAmount - deathAmount;
-    const consumption = growthAmount > 0 ? growthAmount * 0.05 : 0;
-    this.env.nutrients = Math.max(0, this.env.nutrients - consumption);
-
-    this.population = Math.max(0, Math.round(nextPop));
-
-    if (this.adaptationLog.length > 10) this.adaptationLog.shift();
-
-    this.growthHistory.push({
-      time: this.timeStep,
-      population: this.population,
-    });
-
-    return this.getState();
-  }
-
-  getState(): SimulationState {
-    return {
-      population: this.population,
-      timeStep: this.timeStep,
-      resistanceLevel: Math.round(this.avgResistance * 100),
-      growthHistory: this.growthHistory,
-      adaptationLog: [...this.adaptationLog],
-      stressLevels: {
-        temperature: 1 - this.getTemperatureCoeff(),
-        ph: 1 - this.getPHCoeff(),
-        nutrients: 1 - this.getNutrientCoeff(),
-        oxygen: Math.abs(this.env.oxygen - 21) / 21,
-      },
-      resistance: this.avgResistance,
-      environment: this.env,
-    };
-  }
-}
-
-// ────────────────────────────────────────────────
 //  MAIN COMPONENT
 // ────────────────────────────────────────────────
 export default function MicrobeGrowthLab() {
@@ -307,7 +146,6 @@ export default function MicrobeGrowthLab() {
     resistance: 0.0,
   });
   const [genomeInfo, setGenomeInfo] = useState<GenomeInfo | null>(null);
-  const [chartSize, setChartSize] = useState<"99.5%" | "100%">("99.5%");
 
   const [temperature, setTemperature] = useState(37);
   const [pH, setPH] = useState(7.0);
@@ -330,17 +168,6 @@ export default function MicrobeGrowthLab() {
     sim.updateEnvironment({ temperature, pH, nutrients, oxygen, antibioticOn });
   }, [temperature, pH, nutrients, oxygen, antibioticOn, sim]);
 
-  // Chart size oscillation effect when running - more subtle
-  useEffect(() => {
-    if (!isRunning) return;
-
-    const interval = setInterval(() => {
-      setChartSize((prev) => (prev === "99.5%" ? "100%" : "99.5%"));
-    }, 1500);
-
-    return () => clearInterval(interval);
-  }, [isRunning]);
-
   // Simulation loop
   useEffect(() => {
     if (!isRunning) return;
@@ -351,80 +178,95 @@ export default function MicrobeGrowthLab() {
     return () => clearInterval(interval);
   }, [isRunning, sim]);
 
+  /**
+   * Summarise an uploaded genome.
+   *
+   * The parsing was a third private implementation — it kept every character
+   * of every non-header line, including digits and whitespace, so the reported
+   * length and GC content were both wrong for any file with line numbering.
+   * It uses the shared parser now.
+   *
+   * The resistance-marker count is a header text search, not an alignment: it
+   * looks for known gene names in the description line. That is all it has
+   * ever done, and the inspector says so.
+   */
   const analyzeFastaGenome = (fastaText: string): GenomeInfo | null => {
-    const lines = fastaText.split("\n");
-    let header = "";
-    let sequence = "";
+    const record = parseFasta(fastaText)[0];
+    if (!record) return null;
 
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (trimmed.startsWith(">")) {
-        header = trimmed.substring(1);
-      } else if (trimmed.length > 0) {
-        sequence += trimmed;
-      }
-    }
+    const stats = sequenceStats(record.sequence);
+    const haystack = `${record.header} ${record.description}`.toLowerCase();
+    const resistanceGeneCount = ["gyra", "rpob", "katg", "efflux", "beta"].filter(
+      (pattern) => haystack.includes(pattern),
+    ).length;
 
-    if (!sequence) return null;
-
-    const genomeLength = sequence.length;
-    const gcContent =
-      ((sequence.match(/[GC]/gi) || []).length / genomeLength) * 100;
-
-    const resistancePatterns = ["gyrA", "rpoB", "katG", "efflux", "beta"];
-    let resistanceGeneCount = 0;
-    for (const pattern of resistancePatterns) {
-      resistanceGeneCount += (
-        header.toLowerCase().match(new RegExp(pattern, "g")) || []
-      ).length;
-    }
-
-    const baseGrowthRate = 0.35 - (genomeLength > 5000000 ? 0.05 : 0);
+    const baseGrowthRate = 0.35 - (stats.length > 5_000_000 ? 0.05 : 0);
     const baseResistance = Math.min(
       0.8,
-      resistanceGeneCount * 0.15 + (gcContent / 100) * 0.1
+      resistanceGeneCount * 0.15 + (stats.gcContent / 100) * 0.1,
     );
 
     return {
-      header,
-      length: genomeLength,
-      gcContent: gcContent.toFixed(1),
+      header: record.header,
+      length: stats.length,
+      gcContent: stats.gcContent.toFixed(1),
       resistanceGenes: resistanceGeneCount,
       estimatedGrowthRate: Math.max(0.1, baseGrowthRate),
       estimatedResistance: baseResistance,
     };
   };
 
-  const handleFastaUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFastaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const text = event.target?.result as string;
-        const info = analyzeFastaGenome(text);
+    const check = validateFastaFile(file);
+    if (!check.ok) {
+      toast({
+        variant: "destructive",
+        title: "That file can't be read",
+        description: check.error,
+      });
+      return;
+    }
 
-        if (info) {
-          setGenomeInfo(info);
-          setCustomStrain({
-            name: info.header || "FASTA Strain",
-            description: `Genome: ${info.length} bp | GC: ${info.gcContent}% | Resistance Genes: ${info.resistanceGenes}`,
-            growthRate: info.estimatedGrowthRate,
-            tempOptimal: 37,
-            resistance: info.estimatedResistance,
-          });
-          setShowCustomStrain(true);
-          setSelectedStrain("custom");
-        } else {
-          alert("No valid sequence found in FASTA file");
-        }
-      } catch (err) {
-        alert("Error reading FASTA file");
+    try {
+      const info = analyzeFastaGenome(await file.text());
+
+      if (!info) {
+        toast({
+          variant: "destructive",
+          title: "No sequence found",
+          description: `${file.name} contains no FASTA records.`,
+        });
+        return;
       }
-    };
-    reader.onerror = () => alert("Error reading file");
-    reader.readAsText(file);
+
+      setGenomeInfo(info);
+      setCustomStrain({
+        name: info.header || "FASTA strain",
+        description: `${info.length.toLocaleString()} bp · GC ${info.gcContent}% · ${info.resistanceGenes} marker${info.resistanceGenes === 1 ? "" : "s"}`,
+        growthRate: info.estimatedGrowthRate,
+        tempOptimal: 37,
+        resistance: info.estimatedResistance,
+      });
+      setShowCustomStrain(true);
+      setSelectedStrain("custom");
+
+      toast({
+        variant: "success",
+        title: "Genome loaded",
+        description: `${info.header} · ${info.length.toLocaleString()} bp · GC ${info.gcContent}%`,
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Couldn't read the file",
+        description:
+          error instanceof Error ? error.message : "The file could not be read.",
+      });
+    }
   };
 
   const handleStrainChange = (key: string) => {
@@ -450,38 +292,60 @@ export default function MicrobeGrowthLab() {
     setNutrients(100);
     setOxygen(21);
     setAntibioticOn(false);
-    setChartSize("99.5%");
     setTempWarning("");
     setPhWarning("");
   };
 
   const handleStartPause = () => {
     if (!isRunning) {
-      setChartSize("99.5%");
+      setIsRunning(true);
+      return;
     }
-    setIsRunning(!isRunning);
+
+    setIsRunning(false);
+
+    // Pausing is how an experiment ends here — there is no fixed number of
+    // steps to reach — so this is where the run is recorded for the Overview,
+    // the notification feed and the console's history.
+    if (state.timeStep > 0) {
+      recordActivity({
+        kind: "growth.completed",
+        engine: "growth",
+        label: `Growth experiment · ${currentStrain.name}`,
+        detail: `${state.timeStep} steps · ${state.population.toLocaleString()} cells · resistance ${state.resistanceLevel}%`,
+        href: "/microbe-growth-lab",
+        severity: state.population === 0 ? "warning" : "success",
+        value: state.timeStep,
+      });
+    }
   };
 
   const handleExport = () => {
     if (state.growthHistory.length === 0) {
-      alert("Run simulation first to export data");
+      toast({
+        variant: "warning",
+        title: "Nothing to export",
+        description: "Run the experiment first — there is no growth curve yet.",
+      });
       return;
     }
 
-    const csv = [
-      "Time,Population,Resistance(%)",
-      ...state.growthHistory.map(
-        (d) => `${d.time},${d.population},${state.resistanceLevel}`
-      ),
-    ].join("\n");
-
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "microbe_growth_data.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+    // The resistance column used to repeat the *final* value against every
+    // historical row, so an exported curve claimed the culture had been fully
+    // resistant from inoculation.
+    downloadCSV(
+      ["Step", "Population", "Resistance (%)"],
+      state.growthHistory.map((point) => [
+        point.time,
+        point.population,
+        point.time === state.timeStep ? state.resistanceLevel : "",
+      ]),
+      {
+        filename: `${safeFilename(currentStrain.name)}-growth-${fileStamp()}.csv`,
+        engine: "growth",
+        description: `${state.growthHistory.length} steps of ${currentStrain.name}.`,
+      },
+    );
   };
 
   // ── PNG Export ──────────────────────────────────────────────────────────────
@@ -500,7 +364,11 @@ export default function MicrobeGrowthLab() {
   const handleExportPNG = () => {
     const svg = chartRef.current?.querySelector("svg");
     if (!svg || chartData.length === 0) {
-      alert("Run simulation first to export chart");
+      toast({
+        variant: "warning",
+        title: "Nothing to export",
+        description: "Run the experiment first — there is no chart to capture.",
+      });
       return;
     }
 
@@ -664,7 +532,7 @@ export default function MicrobeGrowthLab() {
   }, [tempWarning, phWarning, state.population, state.timeStep]);
 
   useAlerts("microbe-growth-lab", problems);
-  useLogStream("microbe-lab", state.adaptationLog);
+  useLogStream("microbe-growth-lab", state.adaptationLog);
 
   useRunStatus(
     useMemo(
@@ -672,6 +540,7 @@ export default function MicrobeGrowthLab() {
         isRunning || state.timeStep > 0
           ? {
               label: "Growth experiment",
+              source: "microbe-growth-lab",
               state: isRunning ? ("running" as const) : ("paused" as const),
               detail: `step ${state.timeStep} · ${state.population.toLocaleString()} cells`,
             }
@@ -805,7 +674,7 @@ export default function MicrobeGrowthLab() {
               {chartData.length > 0 ? (
                 // chartRef lets handleExportPNG find the SVG inside this div
                 <div className="h-72" ref={chartRef}>
-                  <PopulationChart data={chartData} width={chartSize} />
+                  <PopulationChart data={chartData} />
                 </div>
               ) : (
                 <div className="bg-grid flex h-72 flex-col items-center justify-center gap-2 text-center">
@@ -992,7 +861,7 @@ function LabInspector({
             </label>
             <input
               type="file"
-              accept=".fasta,.fa,.fna,.txt"
+              accept={FASTA_EXTENSIONS.join(",")}
               onChange={onFastaUpload}
               className={cn(
                 "w-full cursor-pointer text-xs text-muted-foreground",

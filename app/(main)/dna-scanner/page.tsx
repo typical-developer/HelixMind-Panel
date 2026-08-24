@@ -1,14 +1,14 @@
 "use client"
 
-import { useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   AlertTriangle,
-  Check,
   CheckCircle,
   Copy,
   DownloadIcon,
   FileText,
   Info,
+  Loader2,
   Play,
   ScanLine,
   Upload,
@@ -17,6 +17,23 @@ import {
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { toast } from "@/hooks/use-toast"
+import { recordActivity } from "@/lib/activity-store"
+import { saveScanSnapshot } from "@/lib/lab-snapshot"
+import { copyToClipboard, downloadCSV, downloadJSON, fileStamp } from "@/lib/download"
+import { formatBytes } from "@/lib/storage"
+import {
+  FASTA_EXTENSIONS,
+  callMutations,
+  parseFasta,
+  qualityWarnings,
+  sequenceStats,
+  validateFastaFile,
+  type CalledMutation,
+  type FastaSequence,
+  type QualityWarning,
+  type SequenceStats,
+} from "@/lib/fasta"
 import {
   Chip,
   ViewLayout,
@@ -31,184 +48,296 @@ import {
   WBSelect,
   useLogStream,
   useAlerts,
+  useRunStatus,
   useStatusItems,
   useViewContext,
   type WorkbenchAlert,
 } from "@/components/workbench"
 
-// --- Types ---
-interface FastaSequence {
-  id: string
-  header: string
-  sequence: string
+interface Analysis {
+  stats: SequenceStats
+  mutations: CalledMutation[]
+  warnings: QualityWarning[]
 }
 
-interface Mutation {
-  position: number
-  refBase: string
-  varBase: string
-  type: "SNP" | "Indel"
-}
+/**
+ * Yield so the spinner paints before a long synchronous pass.
+ *
+ * Races a frame against a timer rather than awaiting `requestAnimationFrame`
+ * alone: rAF does not fire at all while the tab is in the background, so a
+ * scan started and then left in another tab would wait on a callback that
+ * never came and sit on "Analysing…" forever. The timer guarantees the pass
+ * still runs; the frame keeps it paint-accurate when the tab is visible.
+ */
+const YIELD_TIMEOUT = 50
 
-interface SequenceStats {
-  length: number
-  gcContent: number
-  nCount: number
-  orfs: number
-}
+const nextFrame = () =>
+  new Promise<void>((resolve) => {
+    let settled = false
+    const done = () => {
+      if (settled) return
+      settled = true
+      resolve()
+    }
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(done)
+    window.setTimeout(done, YIELD_TIMEOUT)
+  })
 
 export default function DNAScanner() {
-  const [copied, setCopied] = useState(false)
+  const [activeTab, setActiveTab] = useState<"stats" | "mutations" | "sequence">(
+    "stats",
+  )
 
-  const handleCopySequence = async () => {
-    if (!activeSequence) return
-    await navigator.clipboard.writeText(activeSequence.sequence)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
-  }
+  const [fastaFile, setFastaFile] = useState<File | undefined>(undefined)
+  const [referenceFile, setReferenceFile] = useState<File | undefined>(undefined)
 
-  const [activeTab, setActiveTab] = useState<"stats" | "mutations" | "sequence">("stats")
-
-  const [fasta_file, set_fasta_file] = useState<File | undefined>(undefined)
-  const [reference_file, set_reference_file] = useState<File | undefined>(undefined)
-
-  const [targetSequences, setTargetSequences] = useState<FastaSequence[]>([])
-  const [referenceSequence, setReferenceSequence] = useState<FastaSequence | null>(null)
+  const [targets, setTargets] = useState<FastaSequence[]>([])
+  const [reference, setReference] = useState<FastaSequence | null>(null)
   const [selectedTargetId, setSelectedTargetId] = useState<string>("")
 
+  const [analysis, setAnalysis] = useState<Analysis | null>(null)
   const [hasScanned, setHasScanned] = useState(false)
+  /**
+   * What the scanner is doing right now.
+   *
+   * The whole scan used to be synchronous with no state at all: pressing "Run
+   * DNA scan" on the 3 MB genome in `test-files/` froze the tab for as long as
+   * it took, with the button still reading "Run DNA scan" and nothing on
+   * screen changing. The view is registered as `runnable` in the workbench
+   * registry, so it also never published the run status the Runs sidebar and
+   * status bar exist to show.
+   */
+  const [phase, setPhase] = useState<"idle" | "reading" | "analysing">("idle")
 
   const fastaInputRef = useRef<HTMLInputElement>(null)
   const referenceInputRef = useRef<HTMLInputElement>(null)
-
-  // --- FASTA Parser ---
-  const parseFasta = (content: string): FastaSequence[] => {
-    const parts = content.split(">")
-    const sequences: FastaSequence[] = []
-
-    parts.forEach((part, index) => {
-      if (!part.trim()) return
-      const lines = part.split("\n")
-      const header = lines[0].split(/\s+/)[0]
-      const seq = lines.slice(1).join("").toUpperCase().replace(/[^ATGCN]/g, "")
-
-      if (seq.length > 0) {
-        sequences.push({
-          id: `seq_${index}_${Date.now()}`,
-          header: header || `Sequence_${index + 1}`,
-          sequence: seq,
-        })
-      }
-    })
-
-    return sequences
-  }
-
-  /** Shared by the file picker and the drop target. */
-  const assignFile = (id: string, file: File) => {
-    if (id === "fasta_file") set_fasta_file(file)
-    if (id === "reference_file") set_reference_file(file)
-  }
-
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-
-    assignFile(event.target.id, file)
-  }
-
-  const handleRunScan = async () => {
-    if (!fasta_file) return
-
-    const fastaText = await fasta_file.text()
-    const parsedTargets = parseFasta(fastaText)
-    setTargetSequences(parsedTargets)
-    setSelectedTargetId(parsedTargets[0]?.id || "")
-
-    if (reference_file) {
-      const refText = await reference_file.text()
-      const parsedRefs = parseFasta(refText)
-      setReferenceSequence(parsedRefs[0] || null)
-    }
-
-    setHasScanned(true)
-  }
+  /** Guards against an out-of-order analysis overwriting a newer one. */
+  const analysisToken = useRef(0)
 
   const activeSequence = useMemo(
-    () => targetSequences.find((s) => s.id === selectedTargetId),
-    [targetSequences, selectedTargetId],
+    () => targets.find((s) => s.id === selectedTargetId),
+    [targets, selectedTargetId],
   )
 
-  const stats: SequenceStats | null = useMemo(() => {
-    if (!activeSequence) return null
-    const seq = activeSequence.sequence
-    const len = seq.length
-    const gc = (seq.match(/[GC]/g) || []).length
-    const n = (seq.match(/N/g) || []).length
-    const orfs = (seq.match(/ATG(?:.{3})+?(?:TAA|TAG|TGA)/g) || []).length
+  /* ---- Inputs ----------------------------------------------------------- */
 
-    return {
-      length: len,
-      gcContent: len > 0 ? (gc / len) * 100 : 0,
-      nCount: n,
-      orfs,
+  /** Shared by the file picker and the drop target. */
+  const assignFile = useCallback((id: string, file: File) => {
+    const check = validateFastaFile(file)
+    if (!check.ok) {
+      // Every upload path used to accept anything and read it as text, so a
+      // PDF produced an empty sequence list and a results pane that just said
+      // "select a target sequence".
+      toast({
+        variant: "destructive",
+        title: "That file can't be scanned",
+        description: check.error,
+      })
+      return
     }
-  }, [activeSequence])
 
-  const mutations: Mutation[] = useMemo(() => {
-    if (!activeSequence || !referenceSequence) return []
+    if (id === "fasta_file") setFastaFile(file)
+    if (id === "reference_file") setReferenceFile(file)
+    toast({
+      variant: "success",
+      title: id === "fasta_file" ? "Target loaded" : "Reference loaded",
+      description: `${file.name} · ${formatBytes(file.size)}`,
+    })
+  }, [])
 
-    const target = activeSequence.sequence
-    const ref = referenceSequence.sequence
-    const detected: Mutation[] = []
-    const limit = Math.min(target.length, ref.length)
+  const handleFileChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0]
+      if (!file) return
+      assignFile(event.target.id, file)
+      // Let the same file be chosen again after a rejection.
+      event.target.value = ""
+    },
+    [assignFile],
+  )
 
-    for (let i = 0; i < limit; i++) {
-      if (target[i] !== ref[i] && target[i] !== "N" && ref[i] !== "N") {
-        detected.push({ position: i + 1, refBase: ref[i], varBase: target[i], type: "SNP" })
+  /* ---- Analysis --------------------------------------------------------- */
+
+  const analyse = useCallback(
+    (target: FastaSequence, ref: FastaSequence | null): Analysis => {
+      const stats = sequenceStats(target.sequence)
+      const mutations = ref ? callMutations(target.sequence, ref.sequence) : []
+      return { stats, mutations, warnings: qualityWarnings(stats, target, ref) }
+    },
+    [],
+  )
+
+  const publishResult = useCallback(
+    (target: FastaSequence, ref: FastaSequence | null, result: Analysis) => {
+      saveScanSnapshot({
+        header: target.header,
+        referenceHeader: ref?.header,
+        length: target.sequence.length,
+        gcContent: result.stats.gcContent,
+        preview: target.sequence,
+        mutationCount: result.mutations.length,
+        mutations: result.mutations.map((m) => ({
+          position: m.position,
+          refBase: m.refBase,
+          varBase: m.varBase,
+          substitution: m.substitution,
+        })),
+      })
+    },
+    [],
+  )
+
+  const handleRunScan = useCallback(async () => {
+    if (!fastaFile || phase !== "idle") return
+
+    const token = ++analysisToken.current
+    setPhase("reading")
+
+    try {
+      const fastaText = await fastaFile.text()
+      const parsedTargets = parseFasta(fastaText)
+
+      if (parsedTargets.length === 0) {
+        setPhase("idle")
+        toast({
+          variant: "destructive",
+          title: "No sequences found",
+          description: `${fastaFile.name} contains no FASTA records. Check that each sequence begins with a '>' header line.`,
+        })
+        return
       }
+
+      let parsedReference: FastaSequence | null = null
+      if (referenceFile) {
+        const refText = await referenceFile.text()
+        parsedReference = parseFasta(refText)[0] ?? null
+        if (!parsedReference) {
+          toast({
+            variant: "warning",
+            title: "Reference unreadable",
+            description: `No FASTA records in ${referenceFile.name} — the scan will run without mutation calling.`,
+          })
+        }
+      }
+
+      if (token !== analysisToken.current) return
+
+      setPhase("analysing")
+      setTargets(parsedTargets)
+      setReference(parsedReference)
+      setSelectedTargetId(parsedTargets[0].id)
+      // Let the status bar and the button paint before the heavy pass.
+      await nextFrame()
+
+      const result = analyse(parsedTargets[0], parsedReference)
+      if (token !== analysisToken.current) return
+
+      setAnalysis(result)
+      setHasScanned(true)
+      setPhase("idle")
+      publishResult(parsedTargets[0], parsedReference, result)
+
+      recordActivity({
+        kind: "scan.completed",
+        engine: "scanner",
+        label: `${fastaFile.name} scanned`,
+        detail: `${parsedTargets.length} sequence${
+          parsedTargets.length === 1 ? "" : "s"
+        }${parsedReference ? ` · ${result.mutations.length} variant${result.mutations.length === 1 ? "" : "s"}` : ""}`,
+        href: "/dna-scanner",
+        severity: result.mutations.length > 0 ? "warning" : "success",
+        value: parsedTargets.length,
+      })
+    } catch (error) {
+      // `File.text()` rejects on a file that has been moved or revoked since
+      // it was picked, which nothing handled before.
+      setPhase("idle")
+      toast({
+        variant: "destructive",
+        title: "Scan failed",
+        description:
+          error instanceof Error ? error.message : "The file could not be read.",
+      })
     }
-    return detected
-  }, [activeSequence, referenceSequence])
+  }, [analyse, fastaFile, phase, publishResult, referenceFile])
 
-  const warnings = useMemo(() => {
-    const list: string[] = []
-    if (!stats) return list
-    if (stats.length < 200) list.push("Sequence is surprisingly short (<200bp).")
-    if (stats.nCount > stats.length * 0.1) list.push("High ambiguity detected (>10% 'N's).")
-    if (stats.length === 0) list.push("Sequence is empty.")
-    if (
-      referenceSequence &&
-      activeSequence &&
-      Math.abs(referenceSequence.sequence.length - activeSequence.sequence.length) > 100
-    )
-      list.push("Large length discrepancy between Target and Reference. Naive alignment may be inaccurate.")
+  /**
+   * Re-analyse when the operator picks a different sequence from the file.
+   *
+   * Kept out of a `useMemo` on purpose: on a multi-megabase record the pass
+   * takes long enough to drop frames, and a memo would run it during render
+   * with nothing on screen to say why the view had stalled.
+   */
+  useEffect(() => {
+    if (!hasScanned || !activeSequence) return
+    // The scan handler already analysed whichever sequence it selected.
+    if (analysis && analysis.stats.length === activeSequence.sequence.length) return
 
-    return list
-  }, [stats, referenceSequence, activeSequence])
+    let cancelled = false
+    const token = ++analysisToken.current
+    setPhase("analysing")
+
+    void (async () => {
+      await nextFrame()
+      if (cancelled || token !== analysisToken.current) return
+      const result = analyse(activeSequence, reference)
+      if (cancelled || token !== analysisToken.current) return
+      setAnalysis(result)
+      setPhase("idle")
+      publishResult(activeSequence, reference, result)
+    })()
+
+    return () => {
+      cancelled = true
+    }
+    // `analysis` is deliberately omitted: it is what this effect writes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSequence, analyse, hasScanned, publishResult, reference])
+
+  const stats = analysis?.stats ?? null
+  const mutations = useMemo(() => analysis?.mutations ?? [], [analysis])
+  const warnings = useMemo(() => analysis?.warnings ?? [], [analysis])
+
+  /* ---- Exports ---------------------------------------------------------- */
 
   const exportStats = () => {
     if (!stats || !activeSequence) return
-    const data = { header: activeSequence.header, ...stats, warnings }
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `${activeSequence.header.substring(0, 10)}_stats.json`
-    a.click()
+    downloadJSON(
+      {
+        sequence: activeSequence.header,
+        description: activeSequence.description,
+        reference: reference?.header ?? null,
+        statistics: stats,
+        warnings: warnings.map((w) => w.message),
+        generatedAt: new Date().toISOString(),
+      },
+      {
+        filename: `${activeSequence.header}-stats-${fileStamp()}.json`,
+        engine: "scanner",
+        description: `Statistics for ${activeSequence.header}.`,
+      },
+    )
   }
 
   const exportMutations = () => {
-    if (mutations.length === 0) return
-    const csvContent =
-      "Position,Ref,Var,Type\n" +
-      mutations.map((m) => `${m.position},${m.refBase},${m.varBase},${m.type}`).join("\n")
-    const blob = new Blob([csvContent], { type: "text/csv" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `mutations_vs_ref.csv`
-    a.click()
+    if (mutations.length === 0 || !activeSequence) return
+    downloadCSV(
+      ["Position", "Reference", "Variant", "Type", "Substitution"],
+      mutations.map((m) => [
+        m.position,
+        m.refBase,
+        m.varBase,
+        m.type,
+        m.substitution,
+      ]),
+      {
+        filename: `${activeSequence.header}-variants-${fileStamp()}.csv`,
+        engine: "scanner",
+        description: `${mutations.length} variant${
+          mutations.length === 1 ? "" : "s"
+        } against ${reference?.header ?? "reference"}.`,
+      },
+    )
   }
 
   /* ---- Bench integration -----------------------------------------------
@@ -220,10 +349,10 @@ export default function DNAScanner() {
     "dna-scanner",
     useMemo<WorkbenchAlert[]>(
       () =>
-        warnings.map((message) => ({
+        warnings.map((warning) => ({
           source: "dna-scanner",
-          severity: "warning",
-          message,
+          severity: warning.severity,
+          message: warning.message,
           at: activeSequence?.header,
         })),
       [warnings, activeSequence],
@@ -233,30 +362,83 @@ export default function DNAScanner() {
   const logLines = useMemo(() => {
     if (!hasScanned) return []
     const lines = [
-      `parsed ${targetSequences.length} target sequence(s) from ${fasta_file?.name ?? "input"}`,
+      `parsed ${targets.length} target sequence(s) from ${fastaFile?.name ?? "input"}`,
     ]
-    if (referenceSequence) {
-      lines.push(`reference loaded: ${referenceSequence.header} (${referenceSequence.sequence.length} bp)`)
+    if (activeSequence) {
+      lines.push(
+        `analysing ${activeSequence.header} (${activeSequence.sequence.length.toLocaleString()} bp)`,
+      )
+    }
+    if (reference) {
+      lines.push(
+        `reference loaded: ${reference.header} (${reference.sequence.length.toLocaleString()} bp)`,
+      )
       lines.push(`called ${mutations.length} substitution(s) against reference`)
     } else {
       lines.push("no reference supplied — mutation calling skipped")
     }
     return lines
-  }, [hasScanned, targetSequences.length, fasta_file, referenceSequence, mutations.length])
+  }, [hasScanned, targets.length, fastaFile, reference, mutations.length, activeSequence])
 
   useLogStream("dna-scanner", logLines)
+
+  useRunStatus(
+    useMemo(() => {
+      if (phase !== "idle") {
+        return {
+          label: "DNA scan",
+          state: "running" as const,
+          source: "dna-scanner",
+          detail:
+            phase === "reading"
+              ? `reading ${fastaFile?.name ?? "input"}`
+              : `analysing ${activeSequence?.header ?? "sequence"}`,
+        }
+      }
+      // A finished scan has to report `done`, not disappear. Publishing null
+      // straight from `running` looks to the provider exactly like a run whose
+      // view unmounted mid-flight, so every successful scan was filed in the
+      // history as "stopped" and raised a "runs end when you leave" warning.
+      if (!hasScanned) return null
+      return {
+        label: "DNA scan",
+        state: "done" as const,
+        source: "dna-scanner",
+        detail: activeSequence
+          ? `${activeSequence.header} · ${mutations.length} variant${
+              mutations.length === 1 ? "" : "s"
+            }`
+          : undefined,
+      }
+    }, [phase, fastaFile, activeSequence, hasScanned, mutations.length]),
+  )
 
   useStatusItems(
     useMemo(
       () =>
         stats
           ? [
-              { id: "len", label: `${stats.length.toLocaleString()} bp` },
-              { id: "gc", label: `GC ${stats.gcContent.toFixed(1)}%` },
+              {
+                id: "len",
+                label: `${stats.length.toLocaleString()} bp`,
+                title: "Length of the selected sequence",
+                onClick: () => setActiveTab("sequence"),
+              },
+              {
+                id: "gc",
+                label: `GC ${stats.gcContent.toFixed(1)}%`,
+                title: "Guanine-cytosine content",
+                onClick: () => setActiveTab("stats"),
+              },
               {
                 id: "mut",
                 label: `${mutations.length} SNP`,
+                title:
+                  mutations.length > 0
+                    ? "Substitutions called against the reference"
+                    : "No differences from the reference",
                 tone: mutations.length > 0 ? ("warning" as const) : ("default" as const),
+                onClick: () => setActiveTab("mutations"),
               },
             ]
           : [],
@@ -268,9 +450,7 @@ export default function DNAScanner() {
     activeSequence
       ? [
           activeSequence.header,
-          referenceSequence
-            ? `reference ${referenceSequence.header}`
-            : "no reference loaded",
+          reference ? `reference ${reference.header}` : "no reference loaded",
         ].join(" · ")
       : null,
   )
@@ -287,14 +467,15 @@ export default function DNAScanner() {
       defaultInspectorSize={30}
       inspector={
         <ScannerInspector
-          fastaFile={fasta_file}
-          referenceFile={reference_file}
+          fastaFile={fastaFile}
+          referenceFile={referenceFile}
           onFileChange={handleFileChange}
           onFileDrop={assignFile}
           fastaInputRef={fastaInputRef}
           referenceInputRef={referenceInputRef}
           onRun={handleRunScan}
-          targetSequences={targetSequences}
+          phase={phase}
+          targetSequences={targets}
           selectedTargetId={selectedTargetId}
           onSelectTarget={setSelectedTargetId}
         />
@@ -338,7 +519,13 @@ export default function DNAScanner() {
             </div>
           </div>
 
-          {!hasScanned ? (
+          {phase !== "idle" ? (
+            <ScanProgress
+              phase={phase}
+              filename={fastaFile?.name}
+              header={activeSequence?.header}
+            />
+          ) : !hasScanned ? (
             <EmptyState
               icon={ScanLine}
               title="No scan results yet"
@@ -353,18 +540,11 @@ export default function DNAScanner() {
               </TabsContent>
 
               <TabsContent value="mutations" className="h-full min-h-0">
-                <MutationsView
-                  referenceSequence={referenceSequence}
-                  mutations={mutations}
-                />
+                <MutationsView reference={reference} mutations={mutations} />
               </TabsContent>
 
               <TabsContent value="sequence" className="h-full min-h-0">
-                <SequenceView
-                  sequence={activeSequence}
-                  copied={copied}
-                  onCopy={handleCopySequence}
-                />
+                <SequenceView sequence={activeSequence} />
               </TabsContent>
             </div>
           )}
@@ -378,12 +558,52 @@ export default function DNAScanner() {
    Result views
    ========================================================================= */
 
+/**
+ * Shown while a scan is in flight.
+ *
+ * A megabase genome takes a second or two to parse and analyse, and the view
+ * previously showed the previous result — or an empty state — throughout, so
+ * there was no way to tell a slow scan from one that had not started.
+ */
+function ScanProgress({
+  phase,
+  filename,
+  header,
+}: {
+  phase: "reading" | "analysing"
+  filename?: string
+  header?: string
+}) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="bg-grid flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center"
+    >
+      <Loader2 className="size-5 animate-spin text-muted-foreground" />
+      <div className="space-y-1">
+        <p className="text-sm font-medium text-foreground">
+          {phase === "reading" ? "Reading the file" : "Analysing the sequence"}
+        </p>
+        <p className="max-w-sm text-xs leading-relaxed text-muted-foreground">
+          {phase === "reading"
+            ? `Parsing ${filename ?? "the uploaded file"}.`
+            : `Computing statistics and calling variants for ${header ?? "the selected sequence"}.`}
+        </p>
+      </div>
+      <div className="h-0.5 w-48 overflow-hidden rounded-full bg-[var(--wb-active)]">
+        <div className="animate-progress-sweep h-full w-full" />
+      </div>
+    </div>
+  )
+}
+
 function StatsView({
   stats,
   warnings,
 }: {
   stats: SequenceStats | null
-  warnings: string[]
+  warnings: QualityWarning[]
 }) {
   if (!stats) {
     return (
@@ -400,10 +620,10 @@ function StatsView({
         <StatTile label="GC content" value={`${stats.gcContent.toFixed(1)}%`} />
         <StatTile
           label="Ambiguous (N)"
-          value={stats.nCount}
+          value={stats.nCount.toLocaleString()}
           tone={stats.nCount > 0 ? "warning" : "default"}
         />
-        <StatTile label="Putative ORFs" value={stats.orfs} />
+        <StatTile label="Putative ORFs" value={stats.orfs.toLocaleString()} />
       </div>
 
       {/* GC content plotted against the 40–60% band most bacterial genomes sit
@@ -435,13 +655,18 @@ function StatsView({
             className="text-warning"
           />
           <ul className="divide-y divide-border/60">
-            {warnings.map((w, i) => (
+            {warnings.map((warning, i) => (
               <li
                 key={i}
-                className="flex items-start gap-2 px-3 py-2 text-sm text-warning/90"
+                className={cn(
+                  "flex items-start gap-2 px-3 py-2 text-sm",
+                  warning.severity === "error"
+                    ? "text-destructive/90"
+                    : "text-warning/90",
+                )}
               >
                 <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-                <span>{w}</span>
+                <span>{warning.message}</span>
               </li>
             ))}
           </ul>
@@ -452,13 +677,13 @@ function StatsView({
 }
 
 function MutationsView({
-  referenceSequence,
+  reference,
   mutations,
 }: {
-  referenceSequence: FastaSequence | null
-  mutations: Mutation[]
+  reference: FastaSequence | null
+  mutations: CalledMutation[]
 }) {
-  if (!referenceSequence) {
+  if (!reference) {
     return (
       <EmptyState
         icon={Upload}
@@ -473,17 +698,17 @@ function MutationsView({
       <EmptyState
         icon={CheckCircle}
         title="No mutations detected"
-        description="The target sequence matches the reference at 100% identity."
+        description="The target sequence matches the reference at every compared position."
       />
     )
   }
 
   return (
     <div className="seq-scroll h-full min-h-0 overflow-auto">
-      <table className="w-full min-w-[26rem] text-sm">
+      <table className="w-full min-w-[28rem] text-sm">
         <thead className="sticky top-0 z-10 bg-surface">
           <tr className="border-b border-border">
-            {["Position", "Reference", "Mutation", "Type"].map((h) => (
+            {["Position", "Reference", "Variant", "Type", "Substitution"].map((h) => (
               <th
                 key={h}
                 className="px-3 py-2 text-left text-xs font-medium text-muted-foreground"
@@ -494,15 +719,27 @@ function MutationsView({
           </tr>
         </thead>
         <tbody>
-          {mutations.map((m, idx) => (
-            <tr key={idx} className="row-hover border-b border-border/50 last:border-0">
-              <td className="px-3 py-2 font-mono text-foreground">{m.position}</td>
-              <td className="px-3 py-2 font-mono text-muted-foreground">{m.refBase}</td>
+          {mutations.map((m) => (
+            <tr
+              key={m.position}
+              className="row-hover border-b border-border/50 last:border-0"
+            >
+              <td className="px-3 py-2 font-mono text-foreground tabular">
+                {m.position.toLocaleString()}
+              </td>
+              <td className="px-3 py-2 font-mono text-muted-foreground">
+                {m.refBase}
+              </td>
               <td className="px-3 py-2 font-mono font-semibold text-destructive">
                 {m.varBase}
               </td>
               <td className="px-3 py-2">
                 <Chip>{m.type}</Chip>
+              </td>
+              <td className="px-3 py-2">
+                <Chip tone={m.substitution === "transversion" ? "warning" : "neutral"}>
+                  {m.substitution}
+                </Chip>
               </td>
             </tr>
           ))}
@@ -513,19 +750,12 @@ function MutationsView({
 }
 
 const SEQ_BASES_PER_ROW = 80
+const SEQ_PREVIEW_BASES = 4000
 
-function SequenceView({
-  sequence,
-  copied,
-  onCopy,
-}: {
-  sequence: FastaSequence | undefined
-  copied: boolean
-  onCopy: () => void
-}) {
+function SequenceView({ sequence }: { sequence: FastaSequence | undefined }) {
   const rows = useMemo(() => {
     if (!sequence) return []
-    const preview = sequence.sequence.slice(0, 4000)
+    const preview = sequence.sequence.slice(0, SEQ_PREVIEW_BASES)
     const out: Array<{ start: number; text: string }> = []
     for (let i = 0; i < preview.length; i += SEQ_BASES_PER_ROW) {
       out.push({ start: i, text: preview.slice(i, i + SEQ_BASES_PER_ROW) })
@@ -546,14 +776,22 @@ function SequenceView({
   return (
     <div className="relative flex h-full min-h-0 flex-col">
       <div className="flex h-8 shrink-0 items-center gap-2 border-b border-border px-3 text-xs text-muted-foreground">
-        <span className="truncate font-mono text-foreground/80">{sequence.header}</span>
-        <span className="tabular">{sequence.sequence.length.toLocaleString()} bp</span>
+        <span className="truncate font-mono text-foreground/80">
+          {sequence.header}
+        </span>
+        <span className="tabular">
+          {sequence.sequence.length.toLocaleString()} bp
+        </span>
         <div className="ml-auto">
           <ToolbarButton
-            icon={copied ? Check : Copy}
-            label={copied ? "Copied" : "Copy full sequence"}
-            onClick={onCopy}
-            className={cn(copied && "text-success")}
+            icon={Copy}
+            label="Copy full sequence"
+            onClick={() =>
+              copyToClipboard(
+                sequence.sequence,
+                `Copied ${sequence.sequence.length.toLocaleString()} bases`,
+              )
+            }
           />
         </div>
       </div>
@@ -569,12 +807,13 @@ function SequenceView({
             </span>
           </div>
         ))}
-        {sequence.sequence.length > 4000 && (
+        {sequence.sequence.length > SEQ_PREVIEW_BASES && (
           <div className="flex">
             <span className="w-20 shrink-0" />
             <span className="px-1 text-muted-foreground/70">
-              … {(sequence.sequence.length - 4000).toLocaleString()} more bases
-              truncated for preview
+              …{" "}
+              {(sequence.sequence.length - SEQ_PREVIEW_BASES).toLocaleString()} more
+              bases truncated for preview
             </span>
           </div>
         )}
@@ -595,6 +834,7 @@ function ScannerInspector({
   fastaInputRef,
   referenceInputRef,
   onRun,
+  phase,
   targetSequences,
   selectedTargetId,
   onSelectTarget,
@@ -606,10 +846,13 @@ function ScannerInspector({
   fastaInputRef: React.RefObject<HTMLInputElement | null>
   referenceInputRef: React.RefObject<HTMLInputElement | null>
   onRun: () => void
+  phase: "idle" | "reading" | "analysing"
   targetSequences: FastaSequence[]
   selectedTargetId: string
   onSelectTarget: (id: string) => void
 }) {
+  const busy = phase !== "idle"
+
   return (
     <InspectorScroll>
       <Pane>
@@ -618,12 +861,13 @@ function ScannerInspector({
           <DropZone
             id="fasta_file"
             title="Target sequence"
-            subtitle="Multi-FASTA or GenBank"
+            subtitle="FASTA — the sequence to analyse"
             required
             file={fastaFile}
             onChange={onFileChange}
             onFileDrop={onFileDrop}
             inputRef={fastaInputRef}
+            disabled={busy}
           />
           <DropZone
             id="reference_file"
@@ -633,12 +877,33 @@ function ScannerInspector({
             onChange={onFileChange}
             onFileDrop={onFileDrop}
             inputRef={referenceInputRef}
+            disabled={busy}
           />
 
-          <Button onClick={onRun} disabled={!fastaFile} className="h-8 w-full">
-            <Play className="size-3.5" />
-            Run DNA scan
+          <Button
+            onClick={onRun}
+            disabled={!fastaFile || busy}
+            className="h-8 w-full"
+          >
+            {busy ? (
+              <>
+                <Loader2 className="size-3.5 animate-spin" />
+                {phase === "reading" ? "Reading…" : "Analysing…"}
+              </>
+            ) : (
+              <>
+                <Play className="size-3.5" />
+                Run DNA scan
+              </>
+            )}
           </Button>
+
+          {!fastaFile && (
+            <p className="text-xs leading-relaxed text-muted-foreground/70">
+              A target sequence is required. A reference is optional — without
+              one the scanner reports statistics but calls no variants.
+            </p>
+          )}
         </div>
       </Pane>
 
@@ -653,10 +918,11 @@ function ScannerInspector({
               value={selectedTargetId}
               onChange={(e) => onSelectTarget(e.target.value)}
               aria-label="Active target sequence"
+              disabled={busy}
             >
               {targetSequences.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.header} · {s.sequence.length} bp
+                  {s.header} · {s.sequence.length.toLocaleString()} bp
                 </option>
               ))}
             </WBSelect>
@@ -668,12 +934,18 @@ function ScannerInspector({
         <PaneHeader icon={Info} title="About this step" />
         <div className="space-y-2 p-3 text-xs leading-relaxed text-muted-foreground">
           <p>
-            The scanner turns raw genomic files into a standardised sequence
-            object that the simulators can consume.
+            The scanner parses FASTA records, reports per-sequence statistics
+            and — given a reference — calls substitutions between the two.
           </p>
-          <Rule label="Pipeline" />
+          <Rule label="Alignment" />
+          <p>
+            Comparison is position-to-position with no gap handling, so an
+            insertion or deletion shifts every downstream call. Sequences of
+            noticeably different lengths are flagged in the console.
+          </p>
+          <Rule label="Accepts" />
           <p className="font-mono text-foreground/70">
-            Multi-FASTA / GenBank → validated JSON map
+            {FASTA_EXTENSIONS.join("  ")}
           </p>
         </div>
       </Pane>
@@ -690,6 +962,7 @@ function DropZone({
   onChange,
   onFileDrop,
   inputRef,
+  disabled,
 }: {
   id: string
   title: string
@@ -699,26 +972,31 @@ function DropZone({
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void
   onFileDrop: (id: string, file: File) => void
   inputRef: React.RefObject<HTMLInputElement | null>
+  disabled?: boolean
 }) {
   const [dragging, setDragging] = useState(false)
 
   return (
     <label
-      htmlFor={id}
+      htmlFor={disabled ? undefined : id}
       onDragOver={(e) => {
+        if (disabled) return
         e.preventDefault()
         setDragging(true)
       }}
       onDragLeave={() => setDragging(false)}
       onDrop={(e) => {
+        if (disabled) return
         e.preventDefault()
         setDragging(false)
         const dropped = e.dataTransfer.files?.[0]
         if (dropped) onFileDrop(id, dropped)
       }}
       className={cn(
-        "group flex cursor-pointer flex-col gap-1.5 rounded-md border border-dashed border-border p-3 transition-colors duration-150",
-        "hover:border-[var(--wb-border-strong)] hover:bg-[var(--wb-hover)]",
+        "group flex flex-col gap-1.5 rounded-md border border-dashed border-border p-3 transition-colors duration-150",
+        disabled
+          ? "cursor-not-allowed opacity-60"
+          : "cursor-pointer hover:border-[var(--wb-border-strong)] hover:bg-[var(--wb-hover)]",
         dragging && "border-brand bg-brand/10",
       )}
     >
@@ -743,12 +1021,12 @@ function DropZone({
         name={id}
         id={id}
         className="hidden"
+        accept={FASTA_EXTENSIONS.join(",")}
         onChange={onChange}
         ref={inputRef}
+        disabled={disabled}
       />
 
-      {/* Small FASTA files are common, so step the unit down rather than
-          rounding a 400-byte sequence to "0 KB". */}
       {file && (
         <div className="mt-1 flex items-center gap-1.5 rounded-sm border border-border bg-[var(--wb-raised)] px-2 py-1 text-xs">
           <FileText className="size-3 shrink-0 text-muted-foreground" />
@@ -762,11 +1040,4 @@ function DropZone({
       )}
     </label>
   )
-}
-
-/** Byte count in the largest unit that keeps a non-zero leading digit. */
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }

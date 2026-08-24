@@ -1,16 +1,19 @@
 "use client"
 
 import * as React from "react"
-import { Check, Copy, Dna } from "lucide-react"
+import { Copy, Dna, ScanLine } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { Pane, PaneHeader, ToolbarButton, Chip } from "@/components/workbench"
-
-const DNA_SEQUENCE =
-  "ATGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGCTAGC"
-
-const HIGHLIGHT_START = 15
-const HIGHLIGHT_END = 25
+import { copyToClipboard } from "@/lib/download"
+import { useLabSnapshot, PREVIEW_BASES } from "@/lib/lab-snapshot"
+import {
+  Chip,
+  EmptyState,
+  Pane,
+  PaneHeader,
+  ToolbarButton,
+  useWorkbench,
+} from "@/components/workbench"
 
 /** Width of the position gutter (`w-16`) plus its right padding. */
 const GUTTER_PX = 64 + 14
@@ -31,8 +34,12 @@ const BASE_CLASS: Record<string, string> = {
 }
 
 /**
- * Sequence readout: a position gutter down the left, rows of bases coloured by
- * nucleotide, and a highlighted variant hotspot.
+ * Sequence readout for the sequence most recently scanned.
+ *
+ * This used to render a 300-base literal — `ATGCTAGCTAGC…` repeating — with a
+ * hard-coded "hotspot 15–25" that corresponded to nothing. It now reads the
+ * scanner's last result, and the highlighted positions are the variants the
+ * scanner actually called.
  *
  * How many bases sit on a row is measured from the pane rather than fixed. It
  * used to be a hard-coded 60, which is why the readout left a band of dead
@@ -40,10 +47,13 @@ const BASE_CLASS: Record<string, string> = {
  * why it clipped on any pane narrower.
  */
 export function DNAViewer() {
-  const [copied, setCopied] = React.useState(false)
+  const { scan } = useLabSnapshot()
+  const { openTab } = useWorkbench()
   const scrollRef = React.useRef<HTMLDivElement>(null)
   const probeRef = React.useRef<HTMLSpanElement>(null)
   const [basesPerRow, setBasesPerRow] = React.useState(FALLBACK_BASES)
+
+  const sequence = scan?.preview ?? ""
 
   /* Measure the real advance of one base cell (glyph + the 1px gap between
      cells) off a hidden probe, then fit as many whole cells as the pane allows.
@@ -68,42 +78,67 @@ export function DNAViewer() {
     const observer = new ResizeObserver(fit)
     observer.observe(scroller)
     return () => observer.disconnect()
-  }, [])
+  }, [sequence])
+
+  /** Called positions, 0-based, for O(1) lookup while rendering rows. */
+  const variantPositions = React.useMemo(() => {
+    const set = new Set<number>()
+    for (const mutation of scan?.mutations ?? []) set.add(mutation.position - 1)
+    return set
+  }, [scan])
 
   const rows = React.useMemo(() => {
     const out: Array<{ start: number; bases: string[] }> = []
-    for (let i = 0; i < DNA_SEQUENCE.length; i += basesPerRow) {
-      out.push({ start: i, bases: DNA_SEQUENCE.slice(i, i + basesPerRow).split("") })
+    for (let i = 0; i < sequence.length; i += basesPerRow) {
+      out.push({ start: i, bases: sequence.slice(i, i + basesPerRow).split("") })
     }
     return out
-  }, [basesPerRow])
+  }, [basesPerRow, sequence])
 
-  const copyToClipboard = async () => {
-    try {
-      await navigator.clipboard.writeText(DNA_SEQUENCE)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch (err) {
-      console.error("Failed to copy:", err)
-    }
+  if (!scan) {
+    return (
+      <Pane className="min-h-0">
+        <PaneHeader icon={Dna} title="Sequence viewer" />
+        <EmptyState
+          icon={ScanLine}
+          title="No sequence loaded"
+          description="Scan a FASTA file in the DNA Scanner and the sequence appears here, with any called variants highlighted."
+          action={
+            <button
+              type="button"
+              onClick={() => openTab("/dna-scanner")}
+              className="cursor-pointer rounded-sm border border-border px-2 py-1 text-xs text-foreground/85 transition-colors hover:bg-[var(--wb-active)] focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
+            >
+              Open the DNA Scanner
+            </button>
+          }
+        />
+      </Pane>
+    )
   }
+
+  const truncated = scan.length > sequence.length
 
   return (
     <Pane className="min-h-0">
       <PaneHeader
         icon={Dna}
         title="Sequence viewer"
-        subtitle={`${DNA_SEQUENCE.length} bp · reference strand`}
+        subtitle={`${scan.header} · ${scan.length.toLocaleString()} bp · GC ${scan.gcContent.toFixed(1)}%`}
         actions={
           <>
-            <Chip tone="info">
-              hotspot {HIGHLIGHT_START}–{HIGHLIGHT_END}
-            </Chip>
+            {scan.mutationCount > 0 && (
+              <Chip tone="warning">
+                {scan.mutationCount.toLocaleString()} variant
+                {scan.mutationCount === 1 ? "" : "s"}
+              </Chip>
+            )}
             <ToolbarButton
-              icon={copied ? Check : Copy}
-              label={copied ? "Copied" : "Copy sequence"}
-              onClick={copyToClipboard}
-              className={cn(copied && "text-success")}
+              icon={Copy}
+              label="Copy the shown sequence"
+              onClick={() =>
+                copyToClipboard(sequence, `Copied ${sequence.length} bases`)
+              }
             />
           </>
         }
@@ -130,17 +165,18 @@ export function DNAViewer() {
             <span className="flex gap-px pr-4 tracking-wider whitespace-nowrap">
               {row.bases.map((base, i) => {
                 const index = row.start + i
-                const highlighted = index >= HIGHLIGHT_START && index < HIGHLIGHT_END
+                const variant = variantPositions.has(index)
                 return (
                   <span
                     key={index}
+                    title={variant ? `Variant at position ${index + 1}` : undefined}
                     className={cn(
                       "transition-colors duration-100",
                       BASE_CLASS[base] ?? "text-foreground/70",
-                      // The hotspot marks a run of bases, so a light wash and a
-                      // brighter glyph is enough — a ring on every base in the
-                      // run turned it into a striped block.
-                      highlighted && "bg-brand/20 font-semibold text-foreground",
+                      // A called variant is a single base, so it gets a ring
+                      // rather than the wash a range would take.
+                      variant &&
+                        "rounded-xs bg-destructive/25 font-semibold text-foreground ring-1 ring-destructive/50",
                     )}
                   >
                     {base}
@@ -158,18 +194,20 @@ export function DNAViewer() {
             <span className={cn("font-mono font-semibold", BASE_CLASS[base])}>
               {base}
             </span>
-            <span className="text-muted-foreground/70">
-              {(
-                ((DNA_SEQUENCE.split(base).length - 1) / DNA_SEQUENCE.length) *
-                100
-              ).toFixed(1)}
-              %
-            </span>
+            {base === "A"
+              ? "adenine"
+              : base === "T"
+                ? "thymine"
+                : base === "G"
+                  ? "guanine"
+                  : "cytosine"}
           </span>
         ))}
-        <span className="ml-auto">
-          Bases {HIGHLIGHT_START}–{HIGHLIGHT_END} flagged as a variant hotspot
-        </span>
+        {truncated && (
+          <span className="ml-auto text-muted-foreground/70">
+            showing the first {PREVIEW_BASES.toLocaleString()} bases
+          </span>
+        )}
       </footer>
     </Pane>
   )

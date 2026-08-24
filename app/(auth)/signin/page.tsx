@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
+import { toast } from "@/hooks/use-toast";
 
 const HIGHLIGHTS = [
   { icon: Dna, text: "Genomic sequence analysis & mutation scanning" },
@@ -39,9 +40,18 @@ export default function SignInPage() {
     const result = await signIn(email, password);
 
     if (result.success) {
-      navigate.push("/dashboard");
+      toast({
+        variant: "success",
+        title: "Signed in",
+        description: "Opening your workspace.",
+      });
+      navigate.replace("/dashboard");
     } else {
-      setError(result.error || "Something went wrong");
+      const reason = result.error || "Something went wrong";
+      setError(reason);
+      // The inline banner sits above the fold on a short viewport, so the
+      // toast is what makes a failed attempt visible without scrolling.
+      toast({ variant: "destructive", title: "Couldn't sign in", description: reason });
     }
   };
 

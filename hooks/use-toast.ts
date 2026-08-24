@@ -4,9 +4,33 @@
 import * as React from 'react'
 
 import type { ToastActionElement, ToastProps } from '@/components/ui/toast'
+import { getPreferences } from '@/lib/preferences'
 
-const TOAST_LIMIT = 1
-const TOAST_REMOVE_DELAY = 1000000
+/**
+ * How many toasts are on screen at once.
+ *
+ * This was 1, which meant a batch of related feedback — "3 files rejected" —
+ * could only ever show its last line, and any toast raised while another was
+ * visible silently replaced it. Three is enough to stack a short burst without
+ * the corner becoming a wall.
+ */
+const TOAST_LIMIT = 3
+
+/**
+ * How long a dismissed toast lingers in state before being dropped.
+ *
+ * This was 1_000_000ms — over sixteen minutes. Radix closes a toast on its own
+ * `duration`, so every toast the user had ever seen stayed in the array long
+ * after leaving the screen, occupying one of the slots above. It only needs to
+ * outlast the exit animation.
+ */
+const TOAST_REMOVE_DELAY = 400
+
+/** Default time on screen. Long enough to read two lines, short enough to ignore. */
+export const TOAST_DURATION = 5000
+
+/** Errors stay up longer: they usually need acting on, not just noticing. */
+export const TOAST_DURATION_LONG = 9000
 
 type ToasterToast = ToastProps & {
   id: string
@@ -74,6 +98,7 @@ const addToRemoveQueue = (toastId: string) => {
 export const reducer = (state: State, action: Action): State => {
   switch (action.type) {
     case 'ADD_TOAST':
+      // Newest first, and the oldest falls off the end once the stack is full.
       return {
         ...state,
         toasts: [action.toast, ...state.toasts].slice(0, TOAST_LIMIT),
@@ -139,10 +164,28 @@ function dispatch(action: Action) {
 
 type Toast = Omit<ToasterToast, 'id'>
 
+/**
+ * Raise a toast.
+ *
+ * Callable outside React — `lib/download.ts` and the activity bridge both use
+ * it from plain functions — because the store lives at module scope.
+ */
 function toast({ ...props }: Toast) {
+  /*
+   * Settings → "In-app notifications" is honoured here, at the one place every
+   * toast passes through, rather than at each of the thirty call sites.
+   *
+   * Errors are never suppressed. The preference is about whether routine
+   * confirmations are wanted — "export ready", "signed in" — not about hiding
+   * the fact that something failed, which would leave a silently broken app.
+   */
+  if (props.variant !== 'destructive' && !getPreferences().inAppNotifications) {
+    return { id: '', dismiss: () => {}, update: () => {} }
+  }
+
   const id = genId()
 
-  const update = (props: ToasterToast) =>
+  const update = (props: Partial<ToasterToast>) =>
     dispatch({
       type: 'UPDATE_TOAST',
       toast: { ...props, id },
@@ -152,6 +195,9 @@ function toast({ ...props }: Toast) {
   dispatch({
     type: 'ADD_TOAST',
     toast: {
+      // Errors get the longer dwell unless the caller says otherwise.
+      duration:
+        props.variant === 'destructive' ? TOAST_DURATION_LONG : TOAST_DURATION,
       ...props,
       id,
       open: true,
@@ -179,7 +225,7 @@ function useToast() {
         listeners.splice(index, 1)
       }
     }
-  }, [state])
+  }, [])
 
   return {
     ...state,

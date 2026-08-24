@@ -2,7 +2,6 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import {
   Dna,
   LogOut,
@@ -14,6 +13,7 @@ import {
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { toast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/AuthContext"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
@@ -24,6 +24,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+
+import { HelpMenu } from "@/components/support/help-menu"
 
 import { useWorkbench, type ActivityId } from "./workbench-provider"
 
@@ -66,6 +68,7 @@ export function ActivityBar() {
 
       <div className="flex-1" />
 
+      <HelpMenu />
       <AccountButton />
       <PreferencesButton />
     </nav>
@@ -122,12 +125,13 @@ function ActivityButton({
 
 function AccountButton() {
   const { user, signOut } = useAuth()
-  const router = useRouter()
   const initial = user?.name?.charAt(0).toUpperCase() ?? "G"
 
-  const handleSignOut = async () => {
-    await signOut()
-    router.push("/signin")
+  // Navigation belongs to `signOut` now — every call site used to push
+  // `/signin` itself, so the two had to be kept in step by hand.
+  const handleSignOut = () => {
+    signOut()
+    toast({ title: "Signed out", description: "Your workspace stays on this device." })
   }
 
   return (

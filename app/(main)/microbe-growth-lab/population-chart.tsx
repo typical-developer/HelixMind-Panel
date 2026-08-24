@@ -24,16 +24,13 @@ export interface PopulationPoint {
  * reads the rendered SVG out of the container the page owns, so it is
  * unaffected by the chart arriving a moment later.
  */
-export function PopulationChart({
-  data,
-  width,
-}: {
-  data: PopulationPoint[]
-  /** recharts v3 narrowed this to a number or a percentage string literal. */
-  width: number | `${number}%`
-}) {
+export function PopulationChart({ data }: { data: PopulationPoint[] }) {
   return (
-    <ResponsiveContainer width={width} height="100%">
+    /* The page used to drive this container's width, toggling it between
+       99.5% and 100% on a 1.5s interval to force recharts to re-measure while
+       a run was in progress. ResponsiveContainer already watches its own box;
+       the toggle only reflowed the plot twice a second for nothing. */
+    <ResponsiveContainer width="100%" height="100%">
       <LineChart data={data} margin={{ top: 4, right: 8, left: -8, bottom: 0 }}>
         <CartesianGrid {...CHART_GRID} />
         <XAxis

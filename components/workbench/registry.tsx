@@ -30,6 +30,16 @@ export interface WorkbenchView {
   runnable?: boolean
   /** Keyboard hint shown next to the palette entry. */
   chord?: string
+  /**
+   * The channel this view publishes logs and alerts under.
+   *
+   * Declared here rather than typed at each call site: the Growth Lab was
+   * publishing alerts as `microbe-growth-lab` and log lines as `microbe-lab`,
+   * so the console filed one view's output under two sources and the run-log
+   * filter listed a channel the Alerts tab had never heard of. It is also what
+   * lets a tab know whether the alert that just arrived belongs to it.
+   */
+  source: string
 }
 
 export type WorkbenchGroupId = "lab" | "amr" | "workspace"
@@ -43,6 +53,7 @@ export const WORKBENCH_GROUPS: Array<{ id: WorkbenchGroupId; label: string }> = 
 export const VIEWS: WorkbenchView[] = [
   {
     href: "/dashboard",
+    source: "overview",
     label: "Overview",
     group: "lab",
     icon: Gauge,
@@ -50,6 +61,7 @@ export const VIEWS: WorkbenchView[] = [
   },
   {
     href: "/dna-scanner",
+    source: "dna-scanner",
     label: "DNA Scanner",
     group: "lab",
     icon: ScanLine,
@@ -58,6 +70,7 @@ export const VIEWS: WorkbenchView[] = [
   },
   {
     href: "/mutation-simulator",
+    source: "mutation-simulator",
     label: "Mutation Simulator",
     group: "lab",
     icon: Split,
@@ -66,6 +79,7 @@ export const VIEWS: WorkbenchView[] = [
   },
   {
     href: "/microbe-growth-lab",
+    source: "microbe-growth-lab",
     label: "Microbe Growth Lab",
     group: "lab",
     icon: FlaskConical,
@@ -74,6 +88,7 @@ export const VIEWS: WorkbenchView[] = [
   },
   {
     href: "/amr-analysis-engine/resistance-predictor",
+    source: "amr-engine",
     label: "Resistance Predictor",
     group: "amr",
     icon: ShieldAlert,
@@ -82,6 +97,7 @@ export const VIEWS: WorkbenchView[] = [
   },
   {
     href: "/amr-analysis-engine/gene-database",
+    source: "gene-library",
     label: "Gene Library",
     group: "amr",
     icon: Database,
@@ -89,6 +105,7 @@ export const VIEWS: WorkbenchView[] = [
   },
   {
     href: "/notifications",
+    source: "notifications",
     label: "Notifications",
     group: "workspace",
     icon: Bell,
@@ -96,6 +113,7 @@ export const VIEWS: WorkbenchView[] = [
   },
   {
     href: "/settings",
+    source: "settings",
     label: "Settings",
     group: "workspace",
     icon: Settings2,
@@ -131,4 +149,23 @@ export function viewForPath(pathname: string): WorkbenchView | undefined {
 export function groupLabel(view: WorkbenchView | undefined) {
   if (!view) return "Workspace"
   return WORKBENCH_GROUPS.find((g) => g.id === view.group)?.label ?? "Workspace"
+}
+
+/** The view that publishes under a console channel. */
+export function viewForSource(source: string): WorkbenchView | undefined {
+  return VIEWS.find((v) => v.source === source)
+}
+
+/**
+ * Strip any query string, giving the registry href a link points at.
+ *
+ * The gene library is opened as `…/gene-database?q=mecA` from the sidebar and
+ * the palette. That string is not a registry href, so storing it in the open
+ * set produced a tab that matched no view and was silently dropped from the
+ * strip — while still accumulating, one entry per gene clicked, in the
+ * persisted layout.
+ */
+export function normalizeHref(href: string): string {
+  const index = href.indexOf("?")
+  return index === -1 ? href : href.slice(0, index)
 }

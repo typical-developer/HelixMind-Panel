@@ -8,6 +8,7 @@ import { useAuth } from "@/contexts/AuthContext"
 import { Workbench, WorkbenchProvider } from "@/components/workbench"
 import { WorkbenchBoot } from "@/components/workbench/workbench-boot"
 import { NotificationsProvider } from "@/components/notifications/notifications-provider"
+import { SupportProvider } from "@/components/support/support-provider"
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth()
@@ -26,7 +27,11 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   return (
     <NotificationsProvider>
       <WorkbenchProvider>
-        <Workbench>{children}</Workbench>
+        {/* Inside the workbench: a bug report carries the run log, the current
+            alerts and the layout, none of which exist above this point. */}
+        <SupportProvider>
+          <Workbench>{children}</Workbench>
+        </SupportProvider>
       </WorkbenchProvider>
     </NotificationsProvider>
   )

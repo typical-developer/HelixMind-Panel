@@ -7,16 +7,22 @@ import {
   ChevronsDownUp,
   ChevronsUpDown,
   CircleSlash,
+  Copy,
+  DownloadIcon,
   Info,
   ScrollText,
+  Search,
   Trash2,
   TriangleAlert,
   X,
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { toast } from "@/hooks/use-toast"
+import { ToastAction } from "@/components/ui/toast"
+import { copyToClipboard, downloadJSON, fileStamp } from "@/lib/download"
 
-import { Chip, ToolbarButton, WBSelect } from "./primitives"
+import { Chip, ToolbarButton, WBInput, WBSelect } from "./primitives"
 import {
   useConsole,
   useWorkbench,
@@ -26,6 +32,7 @@ import {
   type RunRecord,
   type WorkbenchAlert,
 } from "./workbench-provider"
+import { viewForSource } from "./registry"
 
 const PANEL_TABS: Array<{ id: PanelTabId; label: string }> = [
   { id: "alerts", label: "Alerts" },
@@ -41,7 +48,15 @@ const PANEL_TABS: Array<{ id: PanelTabId; label: string }> = [
 export function BottomPanel() {
   const { panelTab, setPanelTab, panelMaximized, togglePanelMaximized, togglePanel } =
     useWorkbench()
-  const { alerts, logs, runHistory, clearLogs, clearRunHistory } = useConsole()
+  const {
+    alerts,
+    logs,
+    runHistory,
+    clearLogs,
+    clearRunHistory,
+    dismissAlerts,
+    restoreRunHistory,
+  } = useConsole()
 
   const errors = alerts.filter((a) => a.severity === "error").length
   const warnings = alerts.filter((a) => a.severity === "warning").length
@@ -50,6 +65,27 @@ export function BottomPanel() {
     alerts: errors + warnings,
     log: logs.length,
     history: runHistory.length,
+  }
+
+  /**
+   * Clearing was silent and final in all three tabs.
+   *
+   * The run history in particular is the only record of what the bench has
+   * done, and it now survives reloads — so throwing it away with one
+   * unconfirmed click was worse than it used to be, not better.
+   */
+  const clearHistoryWithUndo = () => {
+    const snapshot = [...runHistory]
+    clearRunHistory()
+    toast({
+      title: "Run history cleared",
+      description: `${snapshot.length} run${snapshot.length === 1 ? "" : "s"} removed.`,
+      action: (
+        <ToastAction altText="Undo" onClick={() => restoreRunHistory(snapshot)}>
+          Undo
+        </ToastAction>
+      ),
+    })
   }
 
   return (
@@ -104,21 +140,78 @@ export function BottomPanel() {
         </div>
 
         <div className="ml-auto flex items-center gap-0.5">
-          {panelTab === "log" && (
+          {panelTab === "alerts" && alerts.length > 0 && (
             <ToolbarButton
               icon={Trash2}
-              label="Clear run log"
+              label="Dismiss all alerts"
               side="top"
-              onClick={clearLogs}
+              onClick={() => {
+                dismissAlerts()
+                toast({ title: "Alerts dismissed" })
+              }}
             />
           )}
+          {panelTab === "log" && (
+            <>
+              <ToolbarButton
+                icon={Copy}
+                label="Copy the run log"
+                side="top"
+                disabled={logs.length === 0}
+                onClick={() =>
+                  copyToClipboard(
+                    logs
+                      .map(
+                        (l) =>
+                          `${formatTime(l.ts)} [${l.source}] ${l.level}: ${l.message}`,
+                      )
+                      .join("\n"),
+                    `Copied ${logs.length} log line${logs.length === 1 ? "" : "s"}`,
+                  )
+                }
+              />
+              <ToolbarButton
+                icon={Trash2}
+                label="Clear run log"
+                side="top"
+                disabled={logs.length === 0}
+                onClick={clearLogs}
+              />
+            </>
+          )}
           {panelTab === "history" && (
-            <ToolbarButton
-              icon={Trash2}
-              label="Clear run history"
-              side="top"
-              onClick={clearRunHistory}
-            />
+            <>
+              <ToolbarButton
+                icon={DownloadIcon}
+                label="Export run history as JSON"
+                side="top"
+                disabled={runHistory.length === 0}
+                onClick={() =>
+                  downloadJSON(
+                    {
+                      exportedAt: new Date().toISOString(),
+                      runs: runHistory.map((r) => ({
+                        ...r,
+                        startedAt: new Date(r.startedAt).toISOString(),
+                        endedAt: new Date(r.endedAt).toISOString(),
+                        durationMs: r.endedAt - r.startedAt,
+                      })),
+                    },
+                    {
+                      filename: `helixmind-run-history-${fileStamp()}.json`,
+                      description: `${runHistory.length} run${runHistory.length === 1 ? "" : "s"}.`,
+                    },
+                  )
+                }
+              />
+              <ToolbarButton
+                icon={Trash2}
+                label="Clear run history"
+                side="top"
+                disabled={runHistory.length === 0}
+                onClick={clearHistoryWithUndo}
+              />
+            </>
           )}
           <ToolbarButton
             icon={panelMaximized ? ChevronsDownUp : ChevronsUpDown}
@@ -164,7 +257,8 @@ const SEVERITY_CLASS = {
 } as const
 
 function AlertsView() {
-  const { alerts } = useConsole()
+  const { alerts, dismissAlerts } = useConsole()
+  const { openTab } = useWorkbench()
 
   const grouped = React.useMemo(() => {
     const map = new Map<string, WorkbenchAlert[]>()
@@ -187,38 +281,80 @@ function AlertsView() {
 
   return (
     <div className="seq-scroll h-full overflow-auto py-1">
-      {grouped.map(([source, list]) => (
-        <div key={source}>
-          <div className="flex h-6 items-center gap-1.5 px-3 text-xs text-muted-foreground">
-            <span className="font-medium text-foreground/80">{source}</span>
-            <span className="tabular">({list.length})</span>
-          </div>
-          {list.map((alert, i) => {
-            const Icon = SEVERITY_ICON[alert.severity]
-            return (
-              <div
-                key={`${source}-${i}`}
-                className="row-hover flex min-h-6 items-start gap-2 py-1 pr-3 pl-7 text-sm"
+      {grouped.map(([source, list]) => {
+        // Alerts name a console channel; the registry knows which view owns
+        // it. Before this the source was a bare string with nothing behind it,
+        // so an alert told you a view had a problem but not how to reach it.
+        const view = viewForSource(source)
+
+        return (
+          <div key={source} className="group/source">
+            <div className="flex h-6 items-center gap-1.5 px-3 text-xs text-muted-foreground">
+              {view ? (
+                <button
+                  type="button"
+                  onClick={() => openTab(view.href)}
+                  title={`Open ${view.label}`}
+                  className="cursor-pointer font-medium text-foreground/80 hover:underline focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
+                >
+                  {view.label}
+                </button>
+              ) : (
+                <span className="font-medium text-foreground/80">{source}</span>
+              )}
+              <span className="tabular">({list.length})</span>
+              <button
+                type="button"
+                onClick={() => dismissAlerts(source)}
+                className="ml-auto cursor-pointer rounded-sm px-1.5 py-0.5 text-2xs opacity-0 transition-opacity hover:bg-[var(--wb-active)] hover:text-foreground group-hover/source:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
               >
-                <Icon
-                  className={cn(
-                    "mt-0.5 size-3.5 shrink-0",
-                    SEVERITY_CLASS[alert.severity],
-                  )}
-                />
-                <span className="min-w-0 flex-1 text-foreground/85">
-                  {alert.message}
-                </span>
-                {alert.at && (
-                  <span className="shrink-0 font-mono text-xs text-muted-foreground/70">
-                    {alert.at}
+                Dismiss
+              </button>
+            </div>
+
+            {list.map((alert, i) => {
+              const Icon = SEVERITY_ICON[alert.severity]
+              const row = (
+                <>
+                  <Icon
+                    className={cn(
+                      "mt-0.5 size-3.5 shrink-0",
+                      SEVERITY_CLASS[alert.severity],
+                    )}
+                  />
+                  <span className="min-w-0 flex-1 text-foreground/85">
+                    {alert.message}
                   </span>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      ))}
+                  {alert.at && (
+                    <span className="shrink-0 font-mono text-xs text-muted-foreground/70">
+                      {alert.at}
+                    </span>
+                  )}
+                </>
+              )
+
+              return view ? (
+                <button
+                  key={`${source}-${i}`}
+                  type="button"
+                  onClick={() => openTab(view.href)}
+                  title={`Open ${view.label}`}
+                  className="row-hover flex min-h-6 w-full cursor-pointer items-start gap-2 py-1 pr-3 pl-7 text-left text-sm focus-visible:ring-1 focus-visible:ring-ring/60 focus-visible:outline-none focus-visible:ring-inset"
+                >
+                  {row}
+                </button>
+              ) : (
+                <div
+                  key={`${source}-${i}`}
+                  className="row-hover flex min-h-6 items-start gap-2 py-1 pr-3 pl-7 text-sm"
+                >
+                  {row}
+                </div>
+              )
+            })}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -227,47 +363,102 @@ function AlertsView() {
    Run log
    ========================================================================= */
 
+const LEVELS: Array<LogLevel | "all"> = [
+  "all",
+  "info",
+  "success",
+  "warn",
+  "error",
+  "debug",
+  "command",
+]
+
 function RunLogView() {
   const { logs } = useConsole()
   const [channel, setChannel] = React.useState("all")
+  const [level, setLevel] = React.useState<LogLevel | "all">("all")
+  const [needle, setNeedle] = React.useState("")
 
   const channels = React.useMemo(
     () => ["all", ...Array.from(new Set(logs.map((l) => l.source))).sort()],
     [logs],
   )
 
-  const filtered = React.useMemo(
-    () => (channel === "all" ? logs : logs.filter((l) => l.source === channel)),
-    [channel, logs],
-  )
+  /**
+   * Text search, added because the channel dropdown alone was not enough.
+   *
+   * The buffer holds 500 lines and a simulation fills it in under a minute,
+   * so finding the generation where fitness dropped meant scrolling by eye.
+   */
+  const filtered = React.useMemo(() => {
+    const term = needle.trim().toLowerCase()
+    return logs.filter(
+      (line) =>
+        (channel === "all" || line.source === channel) &&
+        (level === "all" || line.level === level) &&
+        (!term || line.message.toLowerCase().includes(term)),
+    )
+  }, [channel, level, logs, needle])
+
+  const narrowed = channel !== "all" || level !== "all" || needle.trim() !== ""
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex h-8 shrink-0 items-center gap-2 border-b border-border px-3">
-        <span className="text-xs text-muted-foreground">From</span>
+        <div className="relative min-w-0 flex-1 sm:max-w-56">
+          <Search className="pointer-events-none absolute top-1/2 left-2 size-3 -translate-y-1/2 text-muted-foreground" />
+          <WBInput
+            value={needle}
+            onChange={(e) => setNeedle(e.target.value)}
+            placeholder="Filter output"
+            aria-label="Filter the run log"
+            className="h-6 pl-6 text-xs"
+          />
+        </div>
+
         <WBSelect
           value={channel}
           onChange={(e) => setChannel(e.target.value)}
-          className="h-6 w-56 text-xs"
+          className="h-6 w-40 text-xs"
           aria-label="Filter the run log by source"
         >
           {channels.map((c) => (
             <option key={c} value={c}>
-              {c === "all" ? "All analyses" : c}
+              {c === "all" ? "All analyses" : (viewForSource(c)?.label ?? c)}
             </option>
           ))}
         </WBSelect>
-        <span className="ml-auto font-mono text-xs text-muted-foreground tabular">
-          {filtered.length} {filtered.length === 1 ? "line" : "lines"}
+
+        <WBSelect
+          value={level}
+          onChange={(e) => setLevel(e.target.value as LogLevel | "all")}
+          className="h-6 w-28 text-xs"
+          aria-label="Filter the run log by level"
+        >
+          {LEVELS.map((l) => (
+            <option key={l} value={l}>
+              {l === "all" ? "All levels" : l}
+            </option>
+          ))}
+        </WBSelect>
+
+        <span className="ml-auto shrink-0 font-mono text-xs text-muted-foreground tabular">
+          {narrowed ? `${filtered.length} / ${logs.length}` : `${logs.length}`} lines
         </span>
       </div>
+
       <LogStream
         lines={filtered}
+        needle={needle.trim()}
         showSource={channel === "all"}
         empty={
           <ConsoleEmpty
-            icon={ScrollText}
-            message="No output yet. Start a scan or a simulation and its log streams here as it runs."
+            icon={narrowed ? Search : ScrollText}
+            message={
+              narrowed
+                ? "No lines match these filters."
+                : "No output yet. Start a scan or a simulation and its log streams here as it runs."
+            }
           />
         }
       />
@@ -280,14 +471,14 @@ function RunLogView() {
    ========================================================================= */
 
 function HistoryView() {
-  const { setPanelTab } = useWorkbench()
   const { runHistory } = useConsole()
+  const { setPanelTab } = useWorkbench()
 
   if (runHistory.length === 0) {
     return (
       <ConsoleEmpty
         icon={CircleSlash}
-        message="No finished runs in this session yet."
+        message="No finished runs yet. Completed scans, simulations and experiments are kept here between visits."
       />
     )
   }
@@ -299,6 +490,9 @@ function HistoryView() {
           key={record.id}
           type="button"
           onClick={() => setPanelTab("log")}
+          title={`${record.label}${record.detail ? ` — ${record.detail}` : ""} · ${new Date(
+            record.startedAt,
+          ).toLocaleString()}`}
           className="row-hover flex w-full cursor-pointer items-center gap-2.5 px-3 py-1.5 text-left focus-visible:ring-1 focus-visible:ring-ring/60 focus-visible:outline-none focus-visible:ring-inset"
         >
           {record.outcome === "completed" ? (
@@ -382,13 +576,31 @@ function formatTime(ts: number) {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
+/** Mark the searched term inside a log line. */
+function MarkedMessage({ text, needle }: { text: string; needle: string }) {
+  if (!needle) return <>{text}</>
+  const index = text.toLowerCase().indexOf(needle.toLowerCase())
+  if (index === -1) return <>{text}</>
+  return (
+    <>
+      {text.slice(0, index)}
+      <mark className="rounded-xs bg-warning/25 text-foreground">
+        {text.slice(index, index + needle.length)}
+      </mark>
+      {text.slice(index + needle.length)}
+    </>
+  )
+}
+
 function LogStream({
   lines,
   showSource,
+  needle = "",
   empty,
 }: {
   lines: LogLine[]
   showSource?: boolean
+  needle?: string
   empty?: React.ReactNode
 }) {
   const endRef = React.useRef<HTMLDivElement>(null)
@@ -432,7 +644,7 @@ function LogStream({
             {LEVEL_GLYPH[line.level]}
           </span>
           <span className={cn("min-w-0 flex-1 break-words", LEVEL_CLASS[line.level])}>
-            {line.message}
+            <MarkedMessage text={line.message} needle={needle} />
           </span>
         </div>
       ))}

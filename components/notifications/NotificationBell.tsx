@@ -1,15 +1,17 @@
 "use client"
 
+import * as React from "react"
 import Link from "next/link"
 import { ArrowUpRight, Bell, CheckCheck } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { useRelativeClock } from "@/lib/activity-store"
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
-import { Chip } from "@/components/workbench"
+import { Chip, useWorkbench } from "@/components/workbench"
 
 import NotificationItem from "./NotificationItem"
 import { useNotifications } from "./notifications-provider"
@@ -21,9 +23,12 @@ import { useNotifications } from "./notifications-provider"
 export default function NotificationBell() {
   const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification } =
     useNotifications()
+  const { openTab } = useWorkbench()
+  const [open, setOpen] = React.useState(false)
+  const now = useRelativeClock()
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
           type="button"
@@ -37,7 +42,14 @@ export default function NotificationBell() {
         >
           <Bell className="size-3.5" />
           {unreadCount > 0 && (
-            <span className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-brand ring-2 ring-chrome" />
+            <span
+              className={cn(
+                "absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full",
+                "bg-brand px-0.5 text-[9px] font-semibold text-brand-foreground ring-2 ring-chrome tabular",
+              )}
+            >
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
           )}
         </button>
       </PopoverTrigger>
@@ -66,16 +78,28 @@ export default function NotificationBell() {
 
         <div className="seq-scroll max-h-72 overflow-y-auto">
           {notifications.length === 0 ? (
-            <p className="px-3 py-8 text-center text-xs text-muted-foreground">
-              No notifications yet
+            <p className="px-3 py-8 text-center text-xs leading-relaxed text-muted-foreground">
+              No notifications yet.
+              <br />
+              Finished scans and simulations appear here.
             </p>
           ) : (
             notifications.map((n) => (
               <NotificationItem
                 key={n.id}
                 data={n}
+                now={now}
                 onRead={markAsRead}
                 onDelete={deleteNotification}
+                onOpen={(notification) => {
+                  if (!notification.href) return
+                  // Close first, then navigate on the next microtask.
+                  // Doing both synchronously has the router re-render the tree
+                  // while Radix is still tearing the popover down, which React
+                  // reports as a setState during another component's render.
+                  setOpen(false)
+                  queueMicrotask(() => openTab(notification.href!))
+                }}
                 compact
               />
             ))
@@ -85,6 +109,7 @@ export default function NotificationBell() {
         <div className="border-t border-border p-1">
           <Link
             href="/notifications"
+            onClick={() => setOpen(false)}
             className="row-hover flex items-center gap-1.5 rounded-sm px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground"
           >
             View all notifications

@@ -5,15 +5,19 @@ export {
   useAlerts,
   useConsole,
   useConsoleActions,
+  useConsoleSignals,
   useLogStream,
   useRunStatus,
   useStatusItems,
   useViewContext,
+  tabSignalFor,
+  type ConsoleSignals,
   type LogLevel,
   type LogLine,
   type RunRecord,
   type RunStatus,
   type StatusItem,
+  type TabSignal,
   type WorkbenchAlert,
 } from "./workbench-provider"
 export {
@@ -40,6 +44,8 @@ export {
   VIEWS,
   WORKBENCH_GROUPS,
   groupLabel,
+  normalizeHref,
   viewForPath,
+  viewForSource,
   type WorkbenchView,
 } from "./registry"

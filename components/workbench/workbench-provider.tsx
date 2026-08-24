@@ -3,7 +3,10 @@
 import * as React from "react"
 import { usePathname, useRouter } from "next/navigation"
 
-import { VIEWS, viewForPath, type WorkbenchView } from "./registry"
+import { STORAGE_KEYS, readJSON, writeJSON } from "@/lib/storage"
+import { toast } from "@/hooks/use-toast"
+
+import { VIEWS, normalizeHref, viewForPath, type WorkbenchView } from "./registry"
 
 /* ============================================================================
    Types
@@ -57,6 +60,30 @@ export interface RunStatus {
   /** 0–100; omitted when the job has no determinate progress. */
   progress?: number
   detail?: string
+  /**
+   * The console channel of the view running it, so the tab strip can mark the
+   * right tab as busy. Matches `WorkbenchView.source`.
+   */
+  source?: string
+}
+
+/** What a tab shows about the view behind it. */
+export type TabSignal = "running" | "attention" | "idle"
+
+/**
+ * The narrow slice the tab strip and status bar need.
+ *
+ * Kept in its own context because it changes only when a run's state or a
+ * view's alerts change. Reading the full console state would re-render the tab
+ * strip on every log line, which is the exact cost the console/layout split
+ * exists to avoid.
+ */
+export interface ConsoleSignals {
+  /** Channel of the run currently in flight, if any. */
+  runSource: string | null
+  runState: RunStatus["state"] | null
+  /** Error and warning counts per channel. */
+  alertsBySource: Record<string, { errors: number; warnings: number }>
 }
 
 /** A finished run, kept so the console can show what the bench has done. */
@@ -144,6 +171,10 @@ interface WorkbenchContextValue extends LayoutState {
   closeTab: (href: string) => void
   closeOtherTabs: (href: string) => void
   closeAllTabs: () => void
+  /** Put back the most recently closed analysis. Alt+Shift+T. */
+  reopenClosedTab: () => void
+  /** How many closes are on the undo stack, so a menu item can disable. */
+  closedTabCount: number
 
   resetLayout: () => void
 
@@ -173,9 +204,13 @@ interface ConsoleState {
 interface ConsoleActions {
   pushLog: (line: Omit<LogLine, "id" | "ts"> & { ts?: number }) => void
   clearLogs: () => void
+  restoreLogs: (lines: LogLine[]) => void
   publishAlerts: (source: string, alerts: WorkbenchAlert[]) => void
+  /** Drop one channel's alerts, or every channel's when given nothing. */
+  dismissAlerts: (source?: string) => void
   publishRunStatus: (status: RunStatus | null) => void
   clearRunHistory: () => void
+  restoreRunHistory: (records: RunRecord[]) => void
   publishStatusItems: (items: StatusItem[]) => void
   publishViewContext: (detail: string | null) => void
 }
@@ -183,6 +218,7 @@ interface ConsoleActions {
 const WorkbenchContext = React.createContext<WorkbenchContextValue | null>(null)
 const ConsoleStateContext = React.createContext<ConsoleState | null>(null)
 const ConsoleActionsContext = React.createContext<ConsoleActions | null>(null)
+const ConsoleSignalsContext = React.createContext<ConsoleSignals | null>(null)
 
 /* ============================================================================
    Provider
@@ -239,6 +275,23 @@ function ConsoleProvider({ children }: { children: React.ReactNode }) {
 
   const clearLogs = React.useCallback(() => setLogs([]), [])
 
+  /**
+   * Put a persisted tail back, ahead of anything already logged this session.
+   *
+   * Restored lines are renumbered rather than keeping the ids they were saved
+   * with. The workbench writes two boot lines from a child effect, which runs
+   * *before* this parent effect — so a restored line carrying id 0 collided
+   * with the boot line already holding id 0, and React rendered the list with
+   * duplicate keys.
+   */
+  const restoreLogs = React.useCallback((lines: LogLine[]) => {
+    if (lines.length === 0) return
+    setLogs((prev) => {
+      const renumbered = lines.map((line, index) => ({ ...line, id: -lines.length + index }))
+      return [...renumbered, ...prev]
+    })
+  }, [])
+
   /* ---- Alerts ---------------------------------------------------------- */
 
   const publishAlerts = React.useCallback((source: string, next: WorkbenchAlert[]) => {
@@ -262,6 +315,16 @@ function ConsoleProvider({ children }: { children: React.ReactNode }) {
     })
   }, [])
 
+  const dismissAlerts = React.useCallback((source?: string) => {
+    setAlertMap((prev) => {
+      if (source === undefined) return Object.keys(prev).length === 0 ? prev : {}
+      if (!(source in prev)) return prev
+      const next = { ...prev }
+      delete next[source]
+      return next
+    })
+  }, [])
+
   const alerts = React.useMemo(() => Object.values(alertMap).flat(), [alertMap])
 
   /* ---- Runs ------------------------------------------------------------ */
@@ -272,6 +335,7 @@ function ConsoleProvider({ children }: { children: React.ReactNode }) {
     label: string
     startedAt: number
     detail?: string
+    source?: string
   } | null>(null)
   const runId = React.useRef(0)
 
@@ -302,6 +366,7 @@ function ConsoleProvider({ children }: { children: React.ReactNode }) {
           label: status.label,
           startedAt: Date.now(),
           detail: status.detail,
+          source: status.source,
         }
       } else if (status.detail) {
         active.detail = status.detail
@@ -313,23 +378,51 @@ function ConsoleProvider({ children }: { children: React.ReactNode }) {
     // finished, one way or the other.
     if (!active) return
     activeRun.current = null
-    setRunHistory((prev) =>
-      [
-        {
-          id: runId.current++,
-          label: active.label,
-          detail: status?.detail ?? active.detail,
-          startedAt: active.startedAt,
-          endedAt: Date.now(),
-          outcome:
-            status?.state === "done" ? ("completed" as const) : ("stopped" as const),
-        },
-        ...prev,
-      ].slice(0, 50),
-    )
+
+    const completed = status?.state === "done"
+    const record: RunRecord = {
+      id: runId.current++,
+      label: active.label,
+      detail: status?.detail ?? active.detail,
+      startedAt: active.startedAt,
+      endedAt: Date.now(),
+      outcome: completed ? "completed" : "stopped",
+    }
+
+    setRunHistory((prev) => [record, ...prev].slice(0, 50))
+
+    if (completed) {
+      toast({
+        variant: "success",
+        title: `${active.label} finished`,
+        description: record.detail,
+      })
+    } else {
+      // A run ends when its view unmounts, which is what happens the moment
+      // you open another analysis. Saying so out loud is better than the run
+      // silently vanishing from the status bar — see docs/BUG-REPORT.md, where
+      // running analyses in the background is recorded as a known limitation.
+      toast({
+        variant: "warning",
+        title: `${active.label} stopped`,
+        description: "Runs end when you leave the analysis that started them.",
+      })
+    }
   }, [])
 
   const clearRunHistory = React.useCallback(() => setRunHistory([]), [])
+
+  /** Same renumbering as the log, for the same reason. */
+  const restoreRunHistory = React.useCallback((records: RunRecord[]) => {
+    if (records.length === 0) return
+    setRunHistory((prev) => {
+      const renumbered = records.map((record, index) => ({
+        ...record,
+        id: -records.length + index,
+      }))
+      return [...prev, ...renumbered].slice(0, 50)
+    })
+  }, [])
 
   /* ---- Contextual chrome ----------------------------------------------- */
 
@@ -360,33 +453,93 @@ function ConsoleProvider({ children }: { children: React.ReactNode }) {
     () => ({
       pushLog,
       clearLogs,
+      restoreLogs,
       publishAlerts,
+      dismissAlerts,
       publishRunStatus,
       clearRunHistory,
+      restoreRunHistory,
       publishStatusItems,
       publishViewContext,
     }),
     [
       pushLog,
       clearLogs,
+      restoreLogs,
       publishAlerts,
+      dismissAlerts,
       publishRunStatus,
       clearRunHistory,
+      restoreRunHistory,
       publishStatusItems,
       publishViewContext,
     ],
   )
+
+  /* ---- Persistence ----------------------------------------------------- */
+
+  // The History tab used to say "no finished runs in this session yet" after
+  // every refresh, because nothing outlived the page. Both the finished runs
+  // and the tail of the log are restored on mount and written back as they
+  // change.
+  const restored = React.useRef(false)
+
+  React.useEffect(() => {
+    if (restored.current) return
+    restored.current = true
+    restoreRunHistory(readJSON<RunRecord[]>(STORAGE_KEYS.runHistory, []))
+    restoreLogs(readJSON<LogLine[]>(STORAGE_KEYS.runLog, []))
+  }, [restoreLogs, restoreRunHistory])
+
+  React.useEffect(() => {
+    if (!restored.current) return
+    writeJSON(STORAGE_KEYS.runHistory, runHistory)
+  }, [runHistory])
+
+  React.useEffect(() => {
+    if (!restored.current) return
+    // Only the tail: a long simulation writes hundreds of lines a minute and
+    // the quota is not worth spending on all of them.
+    writeJSON(STORAGE_KEYS.runLog, logs.slice(-200))
+  }, [logs])
 
   const state = React.useMemo<ConsoleState>(
     () => ({ logs, alerts, runStatus, runHistory, statusItems, viewContext }),
     [logs, alerts, runStatus, runHistory, statusItems, viewContext],
   )
 
+  /* ---- Tab signals ----------------------------------------------------- */
+
+  // Derived from the alert map and the run status only, so appending a log line
+  // never invalidates it and the tab strip stays still while output streams.
+  const signals = React.useMemo<ConsoleSignals>(() => {
+    const alertsBySource: ConsoleSignals["alertsBySource"] = {}
+    for (const [source, list] of Object.entries(alertMap)) {
+      let errors = 0
+      let warnings = 0
+      for (const alert of list) {
+        if (alert.severity === "error") errors += 1
+        else if (alert.severity === "warning") warnings += 1
+      }
+      if (errors > 0 || warnings > 0) alertsBySource[source] = { errors, warnings }
+    }
+    return {
+      runSource:
+        runStatus && (runStatus.state === "running" || runStatus.state === "paused")
+          ? (runStatus.source ?? null)
+          : null,
+      runState: runStatus?.state ?? null,
+      alertsBySource,
+    }
+  }, [alertMap, runStatus])
+
   return (
     <ConsoleActionsContext.Provider value={actions}>
-      <ConsoleStateContext.Provider value={state}>
-        {children}
-      </ConsoleStateContext.Provider>
+      <ConsoleSignalsContext.Provider value={signals}>
+        <ConsoleStateContext.Provider value={state}>
+          {children}
+        </ConsoleStateContext.Provider>
+      </ConsoleSignalsContext.Provider>
     </ConsoleActionsContext.Provider>
   )
 }
@@ -501,10 +654,40 @@ function LayoutProvider({ children }: { children: React.ReactNode }) {
 
   /* ---- Open analyses --------------------------------------------------- */
 
-  // Opening a view keeps it open, so a half-finished simulation is still one
+  /**
+   * Closing every tab has to survive the effect below.
+   *
+   * "Close all" cleared the open set and then navigated to the Overview — and
+   * navigating is exactly what re-opens a tab, so the strip was never actually
+   * empty. This records the navigation that a close initiated, so the effect
+   * can let that one through without re-adding anything.
+   */
+  const suppressOpen = React.useRef<string | null>(null)
+
+  /**
+   * Recently closed analyses, newest first.
+   *
+   * Closing a tab was the one destructive action in the workbench with no way
+   * back — and with "close all" now genuinely emptying the strip, losing a
+   * carefully arranged set to one mis-click was a real risk. Every editor
+   * binds this to Ctrl+Shift+T, which browsers reserve for their own tabs, so
+   * the workbench uses Alt+Shift+T instead.
+   */
+  const [closedTabs, setClosedTabs] = React.useState<string[]>([])
+
+  const rememberClosed = React.useCallback((hrefs: string[]) => {
+    if (hrefs.length === 0) return
+    setClosedTabs((prev) => [...hrefs, ...prev.filter((h) => !hrefs.includes(h))].slice(0, 12))
+  }, [])
+
+  // Opening a view keeps it open, so a half-finished analysis is still one
   // click away after you go and check a gene record.
   React.useEffect(() => {
     if (!view) return
+    if (suppressOpen.current === view.href) {
+      suppressOpen.current = null
+      return
+    }
     setLayout((prev) =>
       prev.openTabs.includes(view.href)
         ? prev
@@ -520,12 +703,20 @@ function LayoutProvider({ children }: { children: React.ReactNode }) {
     [layout.openTabs],
   )
 
+  /**
+   * Open a view, and navigate to it.
+   *
+   * The href a caller passes may carry a query — the gene library is opened as
+   * `…/gene-database?q=mecA` from both the sidebar and the palette. The query
+   * is for the router; only the bare route is a tab.
+   */
   const openTab = React.useCallback(
     (href: string) => {
+      const tabHref = normalizeHref(href)
       setLayout((prev) =>
-        prev.openTabs.includes(href)
+        prev.openTabs.includes(tabHref)
           ? prev
-          : { ...prev, openTabs: [...prev.openTabs, href] },
+          : { ...prev, openTabs: [...prev.openTabs, tabHref] },
       )
       router.push(href)
     },
@@ -538,14 +729,22 @@ function LayoutProvider({ children }: { children: React.ReactNode }) {
       if (index === -1) return
 
       const next = layout.openTabs.filter((h) => h !== href)
+      rememberClosed([href])
       setLayout((prev) => ({
         ...prev,
         openTabs: prev.openTabs.filter((h) => h !== href),
       }))
 
-      // Closing the open view hands the bench to its neighbour.
-      if (view?.href === href) {
-        router.push(next[index] ?? next[index - 1] ?? "/dashboard")
+      if (view?.href !== href) return
+
+      // Closing the open view hands the bench to its neighbour: the tab that
+      // slid into this position, else the one before it. With nothing left,
+      // the Overview opens as a fresh tab — the bench cannot show nothing.
+      const successor = next[index] ?? next[index - 1]
+      if (successor) {
+        router.push(successor)
+      } else {
+        router.push("/dashboard")
       }
     },
     [layout.openTabs, router, view],
@@ -553,16 +752,50 @@ function LayoutProvider({ children }: { children: React.ReactNode }) {
 
   const closeOtherTabs = React.useCallback(
     (href: string) => {
+      rememberClosed(layout.openTabs.filter((h) => h !== href))
       setLayout((prev) => ({ ...prev, openTabs: [href] }))
       router.push(href)
     },
-    [router],
+    [layout.openTabs, rememberClosed, router],
   )
 
+  /**
+   * Empty the strip.
+   *
+   * The bench still has to render something, so this navigates to the Overview
+   * while telling the open-tab effect to let that navigation pass — otherwise
+   * the Overview is immediately re-added and "close all" leaves one tab behind,
+   * which is what it used to do.
+   */
   const closeAllTabs = React.useCallback(() => {
-    setLayout((prev) => ({ ...prev, openTabs: [] }))
-    router.push("/dashboard")
-  }, [router])
+    // Only arm the suppression when the navigation will actually happen.
+    // Setting it while already on the Overview would leave it armed and eat
+    // the *next* genuine visit instead.
+    suppressOpen.current = view?.href === "/dashboard" ? null : "/dashboard"
+    rememberClosed(layout.openTabs)
+    setLayout((prev) => (prev.openTabs.length === 0 ? prev : { ...prev, openTabs: [] }))
+    if (view?.href !== "/dashboard") router.push("/dashboard")
+  }, [layout.openTabs, rememberClosed, router, view])
+
+  /**
+   * Put back the most recently closed analysis.
+   *
+   * Reads the stack rather than mutating it from inside an updater: navigation
+   * and a second `setState` are side effects, and React is free to re-run an
+   * updater (it does, under StrictMode in development), which would have fired
+   * the router twice per press.
+   */
+  const reopenClosedTab = React.useCallback(() => {
+    const href = closedTabs[0]
+    if (!href) return
+    setClosedTabs((prev) => prev.slice(1))
+    setLayout((prev) =>
+      prev.openTabs.includes(href)
+        ? prev
+        : { ...prev, openTabs: [...prev.openTabs, href] },
+    )
+    router.push(href)
+  }, [closedTabs, router])
 
   /* ---- Layout actions -------------------------------------------------- */
 
@@ -675,14 +908,24 @@ function LayoutProvider({ children }: { children: React.ReactNode }) {
         return
       }
 
-      // Alt+W closes the open view. Ctrl+W is reserved by the browser for
-      // closing its own tab and cannot be intercepted, so it is not bound.
-      if (e.altKey && !mod && e.key.toLowerCase() === "w") {
-        if (view) {
+      // Alt+W closes the open view, Alt+Shift+T reopens the last one closed.
+      //
+      // Both use Alt for the same reason: the browser reserves Ctrl+W and
+      // Ctrl+Shift+T for its own tabs and will not surrender either to page
+      // content, so binding the editor-conventional chords here would have
+      // produced a shortcut that silently did the wrong thing.
+      if (e.altKey && !mod) {
+        const key = e.key.toLowerCase()
+        if (key === "w" && view) {
           e.preventDefault()
           closeTab(view.href)
+          return
         }
-        return
+        if (key === "t") {
+          e.preventDefault()
+          reopenClosedTab()
+          return
+        }
       }
 
       if (!mod) return
@@ -746,6 +989,7 @@ function LayoutProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [
     closeTab,
+    reopenClosedTab,
     layout.panelMaximized,
     layout.focusMode,
     openPalette,
@@ -795,6 +1039,8 @@ function LayoutProvider({ children }: { children: React.ReactNode }) {
       closeTab,
       closeOtherTabs,
       closeAllTabs,
+      reopenClosedTab,
+      closedTabCount: closedTabs.length,
       resetLayout,
       paletteOpen,
       setPaletteOpen,
@@ -826,6 +1072,8 @@ function LayoutProvider({ children }: { children: React.ReactNode }) {
       closeTab,
       closeOtherTabs,
       closeAllTabs,
+      reopenClosedTab,
+      closedTabs.length,
       resetLayout,
       paletteOpen,
       paletteSeed,
@@ -876,6 +1124,41 @@ export function useConsoleActions() {
 }
 
 /**
+ * Run and alert state only — no log output.
+ *
+ * For chrome that needs to know *whether* something is happening without
+ * re-rendering every time a line is written: the tab strip and the rail badge.
+ */
+export function useConsoleSignals() {
+  const ctx = React.useContext(ConsoleSignalsContext)
+  if (!ctx) {
+    throw new Error("useConsoleSignals must be used inside <WorkbenchProvider>")
+  }
+  return ctx
+}
+
+/**
+ * What a given view's tab should show: a pulse while it runs, a dot when it has
+ * raised something, nothing otherwise.
+ */
+export function tabSignalFor(
+  view: WorkbenchView,
+  signals: ConsoleSignals,
+): { signal: TabSignal; severity: "error" | "warning" | null } {
+  if (signals.runSource && signals.runSource === view.source) {
+    return { signal: "running", severity: null }
+  }
+  const counts = signals.alertsBySource[view.source]
+  if (counts) {
+    return {
+      signal: "attention",
+      severity: counts.errors > 0 ? "error" : "warning",
+    }
+  }
+  return { signal: "idle", severity: null }
+}
+
+/**
  * Mirror a producer's log strings into the console's run log.
  *
  * Tracks the last line it emitted rather than a count, so it works for both
@@ -910,18 +1193,22 @@ export function useLogStream(
   }, [lines, level, pushLog, source])
 }
 
-/** Publish a view's alerts to the console and the status bar. */
+/**
+ * Publish a view's alerts to the console, the status bar and its tab.
+ *
+ * Alerts deliberately survive the view unmounting. They used to be cleared on
+ * unmount, which meant the Alerts tab could only ever show the analysis you
+ * were looking at — scan three files across three views and the console still
+ * showed one view's warnings. Keeping them is also what lets a tab carry an
+ * attention marker for a view you are not currently on. They are replaced when
+ * the view republishes, and dismissed explicitly from the console.
+ */
 export function useAlerts(source: string, alerts: WorkbenchAlert[]) {
   const { publishAlerts } = useConsoleActions()
 
   React.useEffect(() => {
     publishAlerts(source, alerts)
   }, [alerts, publishAlerts, source])
-
-  // Clear this view's alerts when it unmounts so stale entries don't linger.
-  React.useEffect(() => {
-    return () => publishAlerts(source, [])
-  }, [publishAlerts, source])
 }
 
 /**

@@ -13,7 +13,7 @@ const NAV = [
     icon: ShieldAlert,
   },
   {
-    name: "Gene Database",
+    name: "Gene Library",
     href: "/amr-analysis-engine/gene-database",
     icon: Database,
   },

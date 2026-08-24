@@ -20,6 +20,9 @@ import {
   PanelRight,
   Pill,
   RotateCcw,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  CornerUpLeft,
   Search,
   SlidersHorizontal,
   Square,
@@ -41,8 +44,13 @@ import {
 } from "@/components/ui/dropdown-menu"
 
 import { SideSection, ToolbarButton, TreeRow, WBInput, Chip } from "./primitives"
-import { useConsole, useWorkbench } from "./workbench-provider"
-import { VIEWS, WORKBENCH_GROUPS } from "./registry"
+import {
+  tabSignalFor,
+  useConsole,
+  useConsoleSignals,
+  useWorkbench,
+} from "./workbench-provider"
+import { VIEWS, WORKBENCH_GROUPS, viewForSource } from "./registry"
 
 const TITLES: Record<string, string> = {
   analyses: "Analyses",
@@ -156,24 +164,102 @@ function SideBarMenu() {
  * open yet.
  */
 function AnalysesView() {
-  const { view, openTab } = useWorkbench()
+  const { view, openTab, tabs } = useWorkbench()
+  const signals = useConsoleSignals()
+
+  /**
+   * Which groups are expanded.
+   *
+   * This used to be `useState(true)` inside each group, which meant nothing
+   * outside a group could act on all of them at once — there was no way to
+   * collapse the tree, and on a short viewport all three groups expanded left
+   * the list scrolling for no reason. Held here so the header can drive it.
+   */
+  const [collapsed, setCollapsed] = React.useState<Record<string, boolean>>({})
+
+  const allCollapsed = WORKBENCH_GROUPS.every((group) => collapsed[group.id])
+
+  const toggleAll = () => {
+    setCollapsed(
+      allCollapsed
+        ? {}
+        : Object.fromEntries(WORKBENCH_GROUPS.map((group) => [group.id, true])),
+    )
+  }
+
+  const openHrefs = React.useMemo(
+    () => new Set(tabs.map((tab) => tab.href)),
+    [tabs],
+  )
 
   return (
     <div className="space-y-1">
-      <SideSection title="HelixMind Lab">
+      <SideSection
+        title="HelixMind Lab"
+        actions={
+          <ToolbarButton
+            icon={allCollapsed ? ChevronsUpDown : ChevronsDownUp}
+            label={allCollapsed ? "Expand all groups" : "Collapse all groups"}
+            onClick={(event) => {
+              // The section header is itself a toggle; collapsing the tree
+              // must not also collapse the section it lives in.
+              event.stopPropagation()
+              toggleAll()
+            }}
+          />
+        }
+      >
         {WORKBENCH_GROUPS.map((group) => (
-          <AnalysisGroup key={group.id} label={group.label}>
-            {VIEWS.filter((v) => v.group === group.id).map((v) => (
-              <TreeRow
-                key={v.href}
-                icon={v.icon}
-                label={v.label}
-                active={view?.href === v.href}
-                level={2}
-                onClick={() => openTab(v.href)}
-                title={v.hint}
-              />
-            ))}
+          <AnalysisGroup
+            key={group.id}
+            label={group.label}
+            open={!collapsed[group.id]}
+            onToggle={() =>
+              setCollapsed((prev) => ({ ...prev, [group.id]: !prev[group.id] }))
+            }
+          >
+            {VIEWS.filter((v) => v.group === group.id).map((v) => {
+              const { signal, severity } = tabSignalFor(v, signals)
+              return (
+                <TreeRow
+                  key={v.href}
+                  icon={v.icon}
+                  label={v.label}
+                  active={view?.href === v.href}
+                  level={2}
+                  onClick={() => openTab(v.href)}
+                  title={v.hint}
+                  /* The tree and the tab strip describe the same set of
+                     analyses, so they now carry the same two marks: a dot for
+                     "already open", and the run/attention signal. Before this
+                     the tree gave no hint that a view was open at all. */
+                  detail={
+                    <span className="flex items-center gap-1.5">
+                      {signal !== "idle" && (
+                        <span
+                          aria-hidden
+                          className={cn(
+                            "size-1.5 rounded-full",
+                            signal === "running" && "animate-soft-pulse bg-brand",
+                            signal === "attention" &&
+                              (severity === "error"
+                                ? "bg-destructive"
+                                : "bg-warning"),
+                          )}
+                        />
+                      )}
+                      {openHrefs.has(v.href) && signal === "idle" && (
+                        <span
+                          aria-hidden
+                          title="Open"
+                          className="size-1 rounded-full bg-muted-foreground/60"
+                        />
+                      )}
+                    </span>
+                  }
+                />
+              )
+            })}
           </AnalysisGroup>
         ))}
       </SideSection>
@@ -183,13 +269,15 @@ function AnalysesView() {
 
 function AnalysisGroup({
   label,
+  open,
+  onToggle,
   children,
 }: {
   label: string
+  open: boolean
+  onToggle: () => void
   children: React.ReactNode
 }) {
-  const [open, setOpen] = React.useState(true)
-
   return (
     <div>
       <TreeRow
@@ -197,7 +285,7 @@ function AnalysisGroup({
         iconClassName="text-muted-foreground"
         label={label}
         level={1}
-        onClick={() => setOpen((o) => !o)}
+        onClick={onToggle}
         className="font-medium text-foreground/80"
       />
       {open && <div className="animate-fade-in">{children}</div>}

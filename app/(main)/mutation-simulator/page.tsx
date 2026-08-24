@@ -13,12 +13,32 @@ import {
   Upload,
 } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 // ui
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ChartFallback } from "@/components/chart-fallback";
+import { toast } from "@/hooks/use-toast";
+import { recordActivity } from "@/lib/activity-store";
+import { downloadJSON, fileStamp } from "@/lib/download";
+import {
+  FASTA_EXTENSIONS,
+  parseFasta,
+  findORFs,
+  validateFastaFile,
+  type ORF,
+} from "@/lib/fasta";
+import {
+  calculateFitness,
+  createRandom,
+  nextRunAction,
+  runGeneration,
+  toCelsius,
+  type GenerationStats,
+  type MutationRecord,
+  type SimulationParams,
+} from "@/lib/mutation-model";
 
 // Recharts is the heaviest dependency on this route and nothing above the fold
 // needs it, so the plot loads as its own chunk once the controls are live.
@@ -44,182 +64,18 @@ import {
   type WorkbenchAlert,
 } from "@/components/workbench";
 
-// ==================== SIMULATION UTILITIES ====================
+/** Milliseconds between generations. Slow enough to watch the plot build. */
+const GENERATION_INTERVAL = 800;
 
-const CODON_MAP: Record<string, string> = {
-  ATA: "I",
-  ATC: "I",
-  ATT: "I",
-  ATG: "M",
-  ACA: "T",
-  ACC: "T",
-  ACG: "T",
-  ACT: "T",
-  AAC: "N",
-  AAT: "N",
-  AAA: "K",
-  AAG: "K",
-  AGC: "S",
-  AGT: "S",
-  AGA: "R",
-  AGG: "R",
-  CTA: "L",
-  CTC: "L",
-  CTG: "L",
-  CTT: "L",
-  CCA: "P",
-  CCC: "P",
-  CCG: "P",
-  CCT: "P",
-  CAC: "H",
-  CAT: "H",
-  CAA: "Q",
-  CAG: "Q",
-  CGA: "R",
-  CGC: "R",
-  CGG: "R",
-  CGT: "R",
-  GTA: "V",
-  GTC: "V",
-  GTG: "V",
-  GTT: "V",
-  GCA: "A",
-  GCC: "A",
-  GCG: "A",
-  GCT: "A",
-  GAC: "D",
-  GAT: "D",
-  GAA: "E",
-  GAG: "E",
-  GGA: "G",
-  GGC: "G",
-  GGG: "G",
-  GGT: "G",
-  TCA: "S",
-  TCC: "S",
-  TCG: "S",
-  TCT: "S",
-  TTC: "F",
-  TTT: "F",
-  TTA: "L",
-  TTG: "L",
-  TAC: "Y",
-  TAT: "Y",
-  TAA: "",
-  TAG: "",
-  TGC: "C",
-  TGT: "C",
-  TGA: "_",
-  TGG: "W",
-};
-
-class SeededRandom {
-  private seed: number;
-
-  constructor(seed: number) {
-    this.seed = seed;
-  }
-
-  next(): number {
-    this.seed = (this.seed * 9301 + 49297) % 233280;
-    return this.seed / 233280;
-  }
-}
-
-const getMutatedBase = (original: string, rng: SeededRandom): string => {
-  const transitions: Record<string, string> = {
-    A: "G",
-    G: "A",
-    C: "T",
-    T: "C",
-  };
-  const transversions: Record<string, string[]> = {
-    A: ["C", "T"],
-    G: ["C", "T"],
-    C: ["A", "G"],
-    T: ["A", "G"],
-  };
-
-  if (rng.next() < 0.66) {
-    return transitions[original] || original;
-  } else {
-    const choices = transversions[original] || [original];
-    return choices[Math.floor(rng.next() * choices.length)];
-  }
-};
-
-const calculateFitness = (
-  seq: string,
-  mutations: { type: string; context: string; aminoAcidChange: string }[]
-): number => {
-  let fitness = 100;
-
-  mutations.forEach((m) => {
-    if (m.type === "substitution" && m.context === "coding") {
-      if (m.aminoAcidChange && m.aminoAcidChange !== "none") fitness -= 1.5;
-    } else if (m.type === "insertion" || m.type === "deletion") {
-      fitness -= 10.0;
-    }
-  });
-
-  const stopCodons = ["TAA", "TAG", "TGA"];
-  for (let i = 0; i < seq.length - 2; i += 3) {
-    if (stopCodons.includes(seq.substr(i, 3))) fitness -= 5;
-  }
-  return Math.max(0, fitness);
-};
-
-const parseFASTA = (text: string): Record<string, string> => {
-  const sequences: Record<string, string> = {};
-  const lines = text.split("\n");
-  let currentHeader = "";
-  let currentSeq = "";
-
-  for (const line of lines) {
-    if (line.startsWith(">")) {
-      if (currentHeader) {
-        sequences[currentHeader] = currentSeq;
-      }
-      currentHeader = line.substring(1).trim();
-      currentSeq = "";
-    } else {
-      currentSeq += line.trim().toUpperCase();
-    }
-  }
-
-  if (currentHeader) {
-    sequences[currentHeader] = currentSeq;
-  }
-
-  return sequences;
-};
-
-// ==================== MAIN COMPONENT ====================
-
-interface MutationData {
-  generation: number;
-  position: number;
-  type: "insertion" | "deletion" | "substitution";
-  original: string;
-  mutated: string;
-  aminoAcidChange: string;
-  context: "coding" | "non-coding";
-}
-
-interface GenerationStats {
-  generation: number;
-  fitness: number;
-  mutationCount: number;
-  progress: number;
-  cumulativeMutations: number;
-}
+const MAX_GENERATIONS = 10;
 
 export default function MutationSimulator() {
   const [isRunning, setIsRunning] = useState(false);
   const [queryFastaFile, setQueryFastaFile] = useState<File | null>(null);
   const [sequence, setSequence] = useState<string>("");
-  const [params, setParams] = useState({
-    tempUnit: "C" as "C" | "F",
+  const [sequenceHeader, setSequenceHeader] = useState<string>("");
+  const [params, setParams] = useState<SimulationParams>({
+    tempUnit: "C",
     temperature: 37,
     substitutionRate: 0.0001,
     numGenerations: 5,
@@ -236,254 +92,357 @@ export default function MutationSimulator() {
   });
 
   const [currentGeneration, setCurrentGeneration] = useState(0);
-  const [mutations, setMutations] = useState<MutationData[]>([]);
+  const [mutations, setMutations] = useState<MutationRecord[]>([]);
   const [generationStats, setGenerationStats] = useState<GenerationStats[]>([]);
-  const [totalMutations, setTotalMutations] = useState(0);
-  const [substitutions, setSubstitutions] = useState(0);
-  const [insertions, setInsertions] = useState(0);
+  const [totals, setTotals] = useState({
+    substitutions: 0,
+    insertions: 0,
+    deletions: 0,
+  });
   const [currentSequence, setCurrentSequence] = useState("");
+  /**
+   * The seed the run started from.
+   *
+   * The original `SeededRandom` was re-seeded with `Date.now() + generation`
+   * on every step, so nothing about a run was reproducible despite the name.
+   * The seed is fixed when a run starts, carried through every generation, and
+   * written into the export so a run can be repeated exactly.
+   */
+  const [seed, setSeed] = useState<number | null>(null);
 
-  const animationRef = useRef<number | null>(null);
-  const lastUpdateRef = useRef<number>(0);
+  /** Kept across generations so the random stream is continuous. */
+  const randomRef = useRef<(() => number) | null>(null);
+  /** ORFs of the original sequence, computed once per upload. */
+  const orfsRef = useRef<ORF[]>([]);
+  /** Set once per run so completion is announced exactly once. */
+  const announced = useRef(false);
 
-  const handleFileChange = async (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const totalMutations = mutations.length;
 
-    setQueryFastaFile(file);
+  /* ---- Input ------------------------------------------------------------ */
 
-    const text = await file.text();
-    const sequences = parseFASTA(text);
-    const firstSeq = Object.values(sequences)[0];
+  const handleFileChange = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.target.value = "";
+      if (!file) return;
 
-    if (firstSeq) {
-      setSequence(firstSeq);
-      setCurrentSequence(firstSeq);
-    }
-  };
-
-  const validateTemperature = (value: number) => {
-    const min = params.tempUnit === "C" ? -10 : 14;
-    const max = params.tempUnit === "C" ? 100 : 212;
-
-    if (value < min) {
-      setErrors((prev) => ({
-        ...prev,
-        temperature: `Too low! Minimum is ${min}°${params.tempUnit}`,
-      }));
-      return false;
-    } else if (value > max) {
-      setErrors((prev) => ({
-        ...prev,
-        temperature: `Too high! Maximum is ${max}°${params.tempUnit}`,
-      }));
-      return false;
-    } else {
-      setErrors((prev) => ({ ...prev, temperature: "" }));
-      return true;
-    }
-  };
-
-  const validatePH = (value: number) => {
-    if (value < 0) {
-      setErrors((prev) => ({ ...prev, pH: "Too low! Minimum is 0.0" }));
-      return false;
-    } else if (value > 14) {
-      setErrors((prev) => ({ ...prev, pH: "Too high! Maximum is 14.0" }));
-      return false;
-    } else {
-      setErrors((prev) => ({ ...prev, pH: "" }));
-      return true;
-    }
-  };
-
-  const validateGenerations = (value: number) => {
-    if (value < 1) {
-      setErrors((prev) => ({
-        ...prev,
-        numGenerations: "Too low! Minimum is 1",
-      }));
-      return false;
-    } else if (value > 10) {
-      setErrors((prev) => ({
-        ...prev,
-        numGenerations: "Too high! Maximum is 10",
-      }));
-      return false;
-    } else {
-      setErrors((prev) => ({ ...prev, numGenerations: "" }));
-      return true;
-    }
-  };
-
-  const validateMutationRate = (value: number) => {
-    if (value < 0) {
-      setErrors((prev) => ({
-        ...prev,
-        substitutionRate: "Too low! Minimum is 0.00000",
-      }));
-      return false;
-    } else if (value > 0.001) {
-      setErrors((prev) => ({
-        ...prev,
-        substitutionRate: "Too high! Maximum is 0.00100",
-      }));
-      return false;
-    } else {
-      setErrors((prev) => ({ ...prev, substitutionRate: "" }));
-      return true;
-    }
-  };
-
-  const runSimulationStep = () => {
-    if (!sequence || currentGeneration >= params.numGenerations) {
-      setIsRunning(false);
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
+      const check = validateFastaFile(file);
+      if (!check.ok) {
+        toast({
+          variant: "destructive",
+          title: "That file can't be simulated",
+          description: check.error,
+        });
+        return;
       }
-      return;
-    }
 
-    const rng = new SeededRandom(Date.now() + currentGeneration);
+      try {
+        const text = await file.text();
+        const records = parseFasta(text);
+        const first = records[0];
 
-    const tempCelsius =
-      params.tempUnit === "F"
-        ? ((params.temperature - 32) * 5) / 9
-        : params.temperature;
-    const tempFactor = Math.pow(1.1, (tempCelsius - 37) / 5);
-    const effectiveSubRate = params.substitutionRate * tempFactor;
-
-    let seqArray = currentSequence.split("");
-    const genMutations: MutationData[] = [];
-    let genSubCount = 0;
-    let genInsCount = 0;
-
-    for (let i = 0; i < currentSequence.length; i++) {
-      if (rng.next() < effectiveSubRate) {
-        const originalBase = seqArray[i];
-        const newBase = getMutatedBase(originalBase, rng);
-
-        let aaChange = "none";
-        const codonStart = Math.floor(i / 3) * 3;
-        const originalCodon = currentSequence.substr(codonStart, 3);
-
-        if (originalCodon.length === 3) {
-          const tempCodon = originalCodon.split("");
-          tempCodon[i % 3] = newBase;
-          const newCodon = tempCodon.join("");
-          if (CODON_MAP[originalCodon] !== CODON_MAP[newCodon]) {
-            aaChange = `${CODON_MAP[originalCodon]}->${CODON_MAP[newCodon]}`;
-          }
+        if (!first) {
+          toast({
+            variant: "destructive",
+            title: "No sequences found",
+            description: `${file.name} contains no FASTA records.`,
+          });
+          return;
         }
 
-        seqArray[i] = newBase;
-        genMutations.push({
-          generation: currentGeneration + 1,
-          position: i,
-          type: "substitution",
-          original: originalBase,
-          mutated: newBase,
-          aminoAcidChange: aaChange,
-          context: i < currentSequence.length - 100 ? "coding" : "non-coding",
+        setQueryFastaFile(file);
+        setSequence(first.sequence);
+        setSequenceHeader(first.header);
+        setCurrentSequence(first.sequence);
+        orfsRef.current = findORFs(first.sequence);
+        // A new sequence invalidates whatever the previous run produced.
+        setIsRunning(false);
+        setCurrentGeneration(0);
+        setMutations([]);
+        setGenerationStats([]);
+        setTotals({ substitutions: 0, insertions: 0, deletions: 0 });
+        setSeed(null);
+
+        toast({
+          variant: "success",
+          title: "Sequence loaded",
+          description: `${first.header} · ${first.sequence.length.toLocaleString()} bp · ${orfsRef.current.length} ORF${
+            orfsRef.current.length === 1 ? "" : "s"
+          }`,
         });
-        genSubCount++;
+      } catch (error) {
+        toast({
+          variant: "destructive",
+          title: "Couldn't read the file",
+          description:
+            error instanceof Error ? error.message : "The file could not be read.",
+        });
       }
-    }
+    },
+    [],
+  );
 
-    const newSeq = seqArray.join("");
-    setCurrentSequence(newSeq);
+  /* ---- Validation ------------------------------------------------------- */
 
-    const allMutations = [...mutations, ...genMutations];
-    setMutations(allMutations);
-    setTotalMutations(allMutations.length);
-    setSubstitutions(substitutions + genSubCount);
-    setInsertions(insertions + genInsCount);
+  const validateTemperature = useCallback(
+    (value: number) => {
+      const min = params.tempUnit === "C" ? -10 : 14;
+      const max = params.tempUnit === "C" ? 100 : 212;
+      const message = Number.isNaN(value)
+        ? "Enter a number"
+        : value < min
+          ? `Too low — the minimum is ${min}°${params.tempUnit}`
+          : value > max
+            ? `Too high — the maximum is ${max}°${params.tempUnit}`
+            : "";
+      setErrors((prev) => ({ ...prev, temperature: message }));
+      return message === "";
+    },
+    [params.tempUnit],
+  );
 
-    const fitness = calculateFitness(newSeq, allMutations);
-    const newStats: GenerationStats = {
-      generation: currentGeneration + 1,
-      fitness,
-      mutationCount: genMutations.length,
-      progress: ((currentGeneration + 1) / params.numGenerations) * 100,
-      cumulativeMutations: allMutations.length,
-    };
+  const validatePH = useCallback((value: number) => {
+    const message = Number.isNaN(value)
+      ? "Enter a number"
+      : value < 0
+        ? "Too low — the minimum is 0.0"
+        : value > 14
+          ? "Too high — the maximum is 14.0"
+          : "";
+    setErrors((prev) => ({ ...prev, pH: message }));
+    return message === "";
+  }, []);
 
-    setGenerationStats((prev) => [...prev, newStats]);
-    setCurrentGeneration((prev) => prev + 1);
-  };
+  const validateGenerations = useCallback((value: number) => {
+    const message = Number.isNaN(value)
+      ? "Enter a whole number"
+      : value < 1
+        ? "Too low — the minimum is 1"
+        : value > MAX_GENERATIONS
+          ? `Too high — the maximum is ${MAX_GENERATIONS}`
+          : "";
+    setErrors((prev) => ({ ...prev, numGenerations: message }));
+    return message === "";
+  }, []);
 
-  useEffect(() => {
-    if (!isRunning) return;
+  const validateMutationRate = useCallback((value: number) => {
+    const message = Number.isNaN(value)
+      ? "Enter a number"
+      : value < 0
+        ? "Too low — the minimum is 0.00000"
+        : value > 0.001
+          ? "Too high — the maximum is 0.00100"
+          : "";
+    setErrors((prev) => ({ ...prev, substitutionRate: message }));
+    return message === "";
+  }, []);
 
-    const animate = (timestamp: number) => {
-      if (timestamp - lastUpdateRef.current > 800) {
-        runSimulationStep();
-        lastUpdateRef.current = timestamp;
-      }
-      animationRef.current = requestAnimationFrame(animate);
-    };
+  /* ---- Run -------------------------------------------------------------- */
 
-    animationRef.current = requestAnimationFrame(animate);
-
-    return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
-    };
-  }, [isRunning, currentGeneration, currentSequence]);
-
-  const handleStart = () => {
-    handleReset();
-    if (!queryFastaFile || !sequence) {
-      alert("Please upload a FASTA file before starting the simulation.");
-      return;
-    }
-
-    if (isRunning) {
-      setIsRunning(false);
-    } else {
-      setIsRunning(true);
-    }
-  };
-
-  const handleReset = () => {
+  const handleReset = useCallback(() => {
     setIsRunning(false);
     setCurrentGeneration(0);
     setMutations([]);
     setGenerationStats([]);
-    setTotalMutations(0);
-    setSubstitutions(0);
-    setInsertions(0);
+    setTotals({ substitutions: 0, insertions: 0, deletions: 0 });
     setCurrentSequence(sequence);
-    if (animationRef.current) {
-      cancelAnimationFrame(animationRef.current);
+    setSeed(null);
+    randomRef.current = null;
+    announced.current = false;
+  }, [sequence]);
+
+  /**
+   * Start, pause or resume.
+   *
+   * This used to call `handleReset()` on its first line, unconditionally —
+   * which set `isRunning` to false, so the `isRunning` check immediately below
+   * it could never be true. Pressing "Pause" threw the run away and started it
+   * again from generation zero; the button had never once paused anything.
+   */
+  const handleStart = useCallback(() => {
+    const invalid = Object.entries(errors).find(([, message]) => message !== "");
+
+    // The decision lives in lib/mutation-model.ts so it can be tested; see the
+    // note there on what this used to do instead.
+    const action = nextRunAction({
+      isRunning,
+      hasSequence: Boolean(queryFastaFile && sequence),
+      currentGeneration,
+      numGenerations: params.numGenerations,
+      hasInvalidParams: Boolean(invalid),
+    });
+
+    if (action === "pause") {
+      setIsRunning(false);
+      return;
     }
-  };
+
+    if (action === "blocked") {
+      // Parameters were only ever validated as they were typed; nothing
+      // checked them at the point of starting, so a run could begin on a value
+      // the inspector was already showing as an error.
+      toast(
+        invalid
+          ? {
+              variant: "destructive",
+              title: "Check the parameters",
+              description: invalid[1],
+            }
+          : {
+              variant: "destructive",
+              title: "No sequence loaded",
+              description: "Upload a FASTA file before starting the simulation.",
+            },
+      );
+      return;
+    }
+
+    if (action === "restart") handleReset();
+
+    if (randomRef.current === null) {
+      const nextSeed = Date.now() >>> 0;
+      setSeed(nextSeed);
+      randomRef.current = createRandom(nextSeed);
+      announced.current = false;
+    }
+
+    setIsRunning(true);
+  }, [
+    currentGeneration,
+    errors,
+    handleReset,
+    isRunning,
+    params.numGenerations,
+    queryFastaFile,
+    sequence,
+  ]);
+
+  /**
+   * The generation loop.
+   *
+   * One timer per completed generation rather than a self-rescheduling
+   * animation frame: the previous loop re-created its `requestAnimationFrame`
+   * chain on every state change it caused, which made its effective cadence
+   * depend on how often React happened to re-render.
+   */
+  useEffect(() => {
+    if (!isRunning) return;
+
+    if (currentGeneration >= params.numGenerations || !currentSequence) {
+      setIsRunning(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      const random = randomRef.current;
+      if (!random) return;
+
+      const generation = currentGeneration + 1;
+      const result = runGeneration(
+        currentSequence,
+        generation,
+        params,
+        random,
+        orfsRef.current,
+      );
+
+      setCurrentSequence(result.sequence);
+      setMutations((prev) => {
+        const all = [...prev, ...result.mutations];
+        setGenerationStats((stats) => [
+          ...stats,
+          {
+            generation,
+            fitness: calculateFitness(all),
+            mutationCount: result.mutations.length,
+            progress: (generation / params.numGenerations) * 100,
+            cumulativeMutations: all.length,
+          },
+        ]);
+        return all;
+      });
+      setTotals((prev) => ({
+        substitutions: prev.substitutions + result.substitutions,
+        insertions: prev.insertions + result.insertions,
+        deletions: prev.deletions + result.deletions,
+      }));
+      setCurrentGeneration(generation);
+    }, GENERATION_INTERVAL);
+
+    return () => window.clearTimeout(timer);
+  }, [isRunning, currentGeneration, currentSequence, params]);
+
+  /** Announce completion once, when the last generation lands. */
+  useEffect(() => {
+    if (
+      currentGeneration === 0 ||
+      currentGeneration < params.numGenerations ||
+      announced.current
+    ) {
+      return;
+    }
+    announced.current = true;
+
+    recordActivity({
+      kind: "simulation.completed",
+      engine: "simulator",
+      label: `Simulation · ${params.numGenerations} generations`,
+      detail: `${sequenceHeader || queryFastaFile?.name || "sequence"} · ${
+        mutations.length
+      } mutation${mutations.length === 1 ? "" : "s"}`,
+      href: "/mutation-simulator",
+      severity: "success",
+      value: params.numGenerations,
+    });
+  }, [
+    currentGeneration,
+    mutations.length,
+    params.numGenerations,
+    queryFastaFile,
+    sequenceHeader,
+  ]);
+
+  const currentFitness =
+    generationStats.length > 0
+      ? generationStats[generationStats.length - 1].fitness
+      : 100;
+
+  /* ---- Export ----------------------------------------------------------- */
 
   const handleExport = () => {
-    const data = {
-      finalSequence: currentSequence,
-      mutations,
-      generationStats,
-      summary: {
-        totalMutations,
-        substitutions,
-        insertions,
-        finalGeneration: currentGeneration,
+    downloadJSON(
+      {
+        metadata: {
+          sequence: sequenceHeader,
+          file: queryFastaFile?.name ?? null,
+          startingLength: sequence.length,
+          finalLength: currentSequence.length,
+          // Enough to reproduce the run exactly.
+          seed,
+          parameters: params,
+          temperatureCelsius: toCelsius(params.temperature, params.tempUnit),
+          generatedAt: new Date().toISOString(),
+          note: "pH, nutrients and oxygen are recorded but do not currently affect the model.",
+        },
+        summary: {
+          totalMutations: mutations.length,
+          ...totals,
+          finalGeneration: currentGeneration,
+          finalFitness: currentFitness,
+        },
+        generationStats,
+        mutations,
+        finalSequence: currentSequence,
       },
-    };
-
-    const blob = new Blob([JSON.stringify(data, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `simulation-results-${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+      {
+        filename: `mutation-run-${fileStamp()}.json`,
+        engine: "simulator",
+        description: `${currentGeneration} generation${
+          currentGeneration === 1 ? "" : "s"
+        }, ${mutations.length} mutation${mutations.length === 1 ? "" : "s"}.`,
+      },
+    );
   };
 
   /* ---- Bench integration ------------------------------------------------
@@ -491,10 +450,15 @@ export default function MutationSimulator() {
      run-log line, and the run itself drives the status bar. */
 
   const problems = useMemo<WorkbenchAlert[]>(() => {
-    const list: WorkbenchAlert[] = []
+    const list: WorkbenchAlert[] = [];
     for (const [field, message] of Object.entries(errors)) {
       if (message) {
-        list.push({ source: "mutation-simulator", severity: "error", message, at: field })
+        list.push({
+          source: "mutation-simulator",
+          severity: "error",
+          message,
+          at: field,
+        });
       }
     }
     if (!queryFastaFile) {
@@ -502,12 +466,20 @@ export default function MutationSimulator() {
         source: "mutation-simulator",
         severity: "info",
         message: "No query sequence loaded — upload a FASTA file to enable the run.",
-      })
+      });
     }
-    return list
-  }, [errors, queryFastaFile])
+    if (currentFitness < 60 && currentGeneration > 0) {
+      list.push({
+        source: "mutation-simulator",
+        severity: "warning",
+        message: `Fitness has fallen to ${currentFitness.toFixed(1)} — the sequence is accumulating damaging changes.`,
+        at: `generation ${currentGeneration}`,
+      });
+    }
+    return list;
+  }, [errors, queryFastaFile, currentFitness, currentGeneration]);
 
-  useAlerts("mutation-simulator", problems)
+  useAlerts("mutation-simulator", problems);
 
   const logLines = useMemo(
     () =>
@@ -516,9 +488,9 @@ export default function MutationSimulator() {
           `gen ${s.generation}/${params.numGenerations} · ${s.mutationCount} mutations · fitness ${s.fitness.toFixed(1)} · total ${s.cumulativeMutations}`,
       ),
     [generationStats, params.numGenerations],
-  )
+  );
 
-  useLogStream("mutation-simulator", logLines)
+  useLogStream("mutation-simulator", logLines);
 
   useRunStatus(
     useMemo(
@@ -526,6 +498,7 @@ export default function MutationSimulator() {
         currentGeneration > 0 || isRunning
           ? {
               label: "Mutation simulation",
+              source: "mutation-simulator",
               state: isRunning
                 ? ("running" as const)
                 : currentGeneration >= params.numGenerations
@@ -537,33 +510,47 @@ export default function MutationSimulator() {
           : null,
       [currentGeneration, isRunning, params.numGenerations],
     ),
-  )
-
-  const currentFitness =
-    generationStats.length > 0
-      ? generationStats[generationStats.length - 1].fitness
-      : 100
+  );
 
   useStatusItems(
     useMemo(
       () => [
-        { id: "gen", label: `Gen ${currentGeneration}/${params.numGenerations}` },
+        {
+          id: "gen",
+          label: `Gen ${currentGeneration}/${params.numGenerations}`,
+          title: "Generations completed in this run",
+        },
         {
           id: "fit",
           label: `Fitness ${currentFitness.toFixed(1)}`,
+          title:
+            "Starts at 100; coding substitutions and indels reduce it",
           tone: currentFitness < 80 ? ("warning" as const) : ("default" as const),
         },
-        { id: "mut", label: `${totalMutations} mutations` },
+        {
+          id: "mut",
+          label: `${totalMutations} mutations`,
+          title: `${totals.substitutions} substitutions, ${totals.insertions} insertions, ${totals.deletions} deletions`,
+        },
       ],
-      [currentGeneration, params.numGenerations, currentFitness, totalMutations],
+      [
+        currentGeneration,
+        params.numGenerations,
+        currentFitness,
+        totalMutations,
+        totals,
+      ],
     ),
-  )
+  );
 
   useViewContext(
     queryFastaFile
-      ? `${queryFastaFile.name} · ${sequence.length.toLocaleString()} bp · ${params.numGenerations} generations at ${params.temperature}°${params.tempUnit}`
+      ? `${sequenceHeader || queryFastaFile.name} · ${sequence.length.toLocaleString()} bp · ${params.numGenerations} generations at ${params.temperature}°${params.tempUnit}`
       : null,
-  )
+  );
+
+  const substitutions = totals.substitutions;
+  const insertions = totals.insertions;
 
   return (
     <ViewLayout
@@ -592,7 +579,12 @@ export default function MutationSimulator() {
           <div className="grid grid-cols-1 gap-3 @sm/bench:grid-cols-2 @4xl/bench:grid-cols-4">
             <StatTile icon={Activity} label="Total mutations" value={totalMutations} />
             <StatTile label="Substitutions" value={substitutions} />
-            <StatTile label="Insertions" value={insertions} />
+            <StatTile
+              label="Indels"
+              value={insertions + totals.deletions}
+              hint={`${insertions} in · ${totals.deletions} del`}
+              tone={insertions + totals.deletions > 0 ? "warning" : "default"}
+            />
             <StatTile
               label="Current fitness"
               value={currentFitness.toFixed(1)}
@@ -692,16 +684,6 @@ export default function MutationSimulator() {
    Inspector — every simulation parameter, in one dense column
    ========================================================================= */
 
-type Params = {
-  tempUnit: "C" | "F"
-  temperature: number
-  substitutionRate: number
-  numGenerations: number
-  pH: number
-  nutrients: string
-  oxygen: string
-}
-
 function SimulatorInspector({
   params,
   setParams,
@@ -717,8 +699,8 @@ function SimulatorInspector({
   validateGenerations,
   validateMutationRate,
 }: {
-  params: Params
-  setParams: React.Dispatch<React.SetStateAction<Params>>
+  params: SimulationParams
+  setParams: React.Dispatch<React.SetStateAction<SimulationParams>>
   errors: Record<string, string>
   isRunning: boolean
   sequence: string
@@ -747,12 +729,12 @@ function SimulatorInspector({
                   Upload FASTA
                 </span>
                 <span className="block truncate text-xs text-muted-foreground/80">
-                  .fasta .fa .fna .ffn .faa .frn
+                  {FASTA_EXTENSIONS.join(" ")}
                 </span>
               </span>
               <input
                 type="file"
-                accept=".fasta,.fa,.fna,.ffn,.faa,.frn"
+                accept={FASTA_EXTENSIONS.join(",")}
                 id="query_fasta"
                 className="hidden"
                 onChange={onFileChange}

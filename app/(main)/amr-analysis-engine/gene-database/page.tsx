@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
-import { Bug, Clock, Database, Dna, Layers, Search, X } from "lucide-react"
+import { Bug, Clock, Database, Dna, Layers, Search, ShieldAlert, X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { AMR_DATABASE_STATS, AMR_RECORDS } from "@/lib/amr-records"
+import { AMR_RECORDS, databaseStats, searchRecords } from "@/lib/amr-records"
+import { copyToClipboard } from "@/lib/download"
 import {
   Chip,
   ViewLayout,
@@ -19,6 +20,7 @@ import {
   WBInput,
   useStatusItems,
   useViewContext,
+  useWorkbench,
 } from "@/components/workbench"
 
 const STAT_ICONS = [Dna, Bug, Layers, Clock]
@@ -30,12 +32,20 @@ const COLUMNS = [
   "Drug Class",
   "Mechanism",
   "Organism",
-  "Impact",
+  "Prevalence",
+  "",
 ] as const
 
 export default function GeneDatabase() {
   const searchParams = useSearchParams()
+  const { openTab } = useWorkbench()
   const [searchTerm, setSearchTerm] = useState("")
+
+  /** Score a marker in the Resistance Predictor, with it already selected. */
+  const analyseGene = (gene: string) =>
+    openTab(
+      `/amr-analysis-engine/resistance-predictor?genes=${encodeURIComponent(gene)}`,
+    )
 
   /* Arriving from a gene hit in the command palette pre-fills the filter, so
      picking a specific gene lands on that gene rather than on the full library
@@ -46,15 +56,10 @@ export default function GeneDatabase() {
     if (seededQuery) setSearchTerm(seededQuery)
   }, [seededQuery])
 
-  const filteredRecords = useMemo(() => {
-    const needle = searchTerm.trim().toLowerCase()
-    if (!needle) return AMR_RECORDS
-    return AMR_RECORDS.filter((record) =>
-      [record.gene, record.antibiotic, record.organism, record.drugClass].some((f) =>
-        f.toLowerCase().includes(needle),
-      ),
-    )
-  }, [searchTerm])
+  /* One matcher for every surface. The grid used to search four fields, the
+     sidebar three and the palette five, so the same query returned different
+     results depending on where it was typed. */
+  const filteredRecords = useMemo(() => searchRecords(searchTerm), [searchTerm])
 
   useStatusItems(
     useMemo(
@@ -133,7 +138,7 @@ export default function GeneDatabase() {
                 {filteredRecords.map((record) => (
                   <tr
                     key={record.id}
-                    className="row-hover border-b border-border/50 last:border-0"
+                    className="group/row row-hover border-b border-border/50 last:border-0"
                   >
                     <td className="px-3 py-2 font-mono text-muted-foreground">
                       {record.id}
@@ -156,14 +161,30 @@ export default function GeneDatabase() {
                     <td
                       className={cn(
                         "px-3 py-2 font-mono font-semibold",
-                        record.impact >= 10
+                        record.prevalence >= 10
                           ? "text-destructive"
-                          : record.impact >= 5
+                          : record.prevalence >= 5
                             ? "text-warning"
                             : "text-foreground/80",
                       )}
                     >
-                      {record.impact}%
+                      {record.prevalence}%
+                    </td>
+                    <td className="w-16 px-2 py-2">
+                      <div className="flex items-center justify-end gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100">
+                        <ToolbarButton
+                          icon={ShieldAlert}
+                          label={`Analyse ${record.gene} in the Resistance Predictor`}
+                          onClick={() => analyseGene(record.gene)}
+                        />
+                        <ToolbarButton
+                          icon={Dna}
+                          label={`Copy ${record.gene}`}
+                          onClick={() =>
+                            copyToClipboard(record.gene, `Copied ${record.gene}`)
+                          }
+                        />
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -183,14 +204,22 @@ export default function GeneDatabase() {
                       {r.gene}
                     </p>
                     <p className="font-mono text-sm text-muted-foreground tabular">
-                      {r.impact}%
+                      {r.prevalence}%
                     </p>
                   </div>
                   <p className="mt-0.5 font-mono text-xs text-muted-foreground">
                     {r.id}
                   </p>
-                  <div className="mt-2">
+                  <div className="mt-2 flex items-center gap-2">
                     <Chip>{r.antibiotic}</Chip>
+                    <button
+                      type="button"
+                      onClick={() => analyseGene(r.gene)}
+                      className="ml-auto flex cursor-pointer items-center gap-1 rounded-sm border border-border px-1.5 py-0.5 text-xs text-foreground/85 transition-colors hover:bg-[var(--wb-active)] focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
+                    >
+                      <ShieldAlert className="size-3" />
+                      Analyse
+                    </button>
                   </div>
                   <dl className="mt-2 space-y-0.5 text-xs text-muted-foreground">
                     <div className="flex gap-1.5">
@@ -226,7 +255,7 @@ function DatabaseInspector() {
   return (
     <InspectorScroll>
       <div className="grid grid-cols-2 gap-2">
-        {AMR_DATABASE_STATS.map((stat, i) => {
+        {databaseStats().map((stat, i) => {
           const Icon = STAT_ICONS[i]
           return (
             <StatTile

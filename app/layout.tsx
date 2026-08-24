@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import "./globals.css"
 import { AuthProvider } from "@/contexts/AuthContext"
+import { Toaster } from "@/components/ui/toaster"
 
 // Self-hosted via next/font: automatic preload, size-adjusted fallback (no CLS
 // on font swap) and `display: swap` so text paints immediately.
@@ -50,6 +51,10 @@ export default function RootLayout({
       <body className="font-sans antialiased">
         <AuthProvider>
           {children}
+          {/* Mounted at the root rather than inside the workbench: sign-in,
+              sign-up and password reset all raise toasts, and none of them is
+              rendered inside the bench. */}
+          <Toaster />
           <Analytics />
         </AuthProvider>
       </body>

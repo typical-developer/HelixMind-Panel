@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
+import { toast } from "@/hooks/use-toast";
 
 const HIGHLIGHTS = [
   { icon: Dna, text: "Genomic sequence analysis & mutation scanning" },
@@ -16,7 +17,7 @@ const HIGHLIGHTS = [
   { icon: ShieldCheck, text: "AI-powered antimicrobial resistance prediction" },
 ];
 
-export default function signupPage() {
+export default function SignUpPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -75,9 +76,20 @@ export default function signupPage() {
     const result = await signUp(name, email, password);
 
     if (result.success) {
-      navigate.push("/signin");
+      toast({
+        variant: "success",
+        title: "Account created",
+        description: "Sign in with your new credentials to continue.",
+      });
+      navigate.replace("/signin");
     } else {
-      setError(result.error || "Something went wrong");
+      const reason = result.error || "Something went wrong";
+      setError(reason);
+      toast({
+        variant: "destructive",
+        title: "Couldn't create the account",
+        description: reason,
+      });
     }
   };
 
