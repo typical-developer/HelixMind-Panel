@@ -295,34 +295,51 @@ export function TreeRow({
 /* ============================================================================
    Rows — a glyph beside a label
 
-   One alignment contract for every "icon and text" row in the bench.
+   One alignment contract for every "icon and text" row in the bench: the icon
+   sits in the vertical middle of the text beside it.
 
-   Two faults were spread across the app before this. Rows carrying a
-   description centred their icon on the *whole* text block (`items-center`),
-   which parks the glyph in the gap between the title and the line beneath it
-   instead of on the title itself. And rows that did align to the first line
-   each picked their own nudge — `mt-0.5` in one pane, `mt-px` in the next,
-   nothing at all in a third — so rows that look identical sat a pixel or two
-   apart depending on which file they were written in.
+   ## Why the middle of the block, and not the first line
 
-   The offset is arithmetic, not taste. An icon is optically centred on a line
-   of text when it is inset by half the difference between the line box and the
-   icon. `text-sm` is an 18px line box, so a 14px icon takes 2px and a 16px
-   icon takes 1px; `text-xs` is a 16px box, so a 14px icon takes 1px and a
-   16px icon takes none. `ICON_OFFSET` is that sum, written down once.
+   An earlier revision aligned the icon to the *first line* of the text, inset
+   by half the difference between the line box and the icon. That is the right
+   rule for a wrapping paragraph, and the wrong one for the shape this app is
+   actually built from — a title with one short supporting line under it. On a
+   two-line block it put the glyph roughly ten pixels above the block's centre,
+   which reads as "top-aligned", not "centred", and it was reported as such.
+
+   ## Why every row, rather than centring short blocks and top-aligning long ones
+
+   The typographically pure rule is to centre at two lines and fall back to the
+   first line beyond that. It behaves badly here. Whether a row runs to two
+   lines or three depends on the width of a resizable panel, so that rule would
+   flip a row between two alignments as the sidebar is dragged. A row that
+   changes treatment when you resize it is worse than either rule applied
+   consistently.
+
+   ## Why there is no table of offsets any more
+
+   Centring is what `align-self: center` already does, against the flex line's
+   cross size — which is the text block. It needs no arithmetic, holds at every
+   interface-scale step without a per-size entry, and cannot drift out of step
+   with the type ramp. The nine `mt-*` constants that used to live here are
+   gone; `align="first-line"` below is the one escape hatch, kept for a
+   genuinely long prose block should one ever appear.
    ========================================================================= */
-
-/**
- * The type size of the row's *first* line — what the icon aligns to.
- *
- * `relaxed` is `text-sm` set at `leading-relaxed` (~21px), which the app uses
- * for prose that wraps: explanatory empty states, help text. It needs its own
- * entry because the line box, not the font size, is what the icon centres on.
- */
-export type RowLine = "sm" | "xs" | "relaxed"
 
 /** Icon sizes the bench uses. Anything else wants a one-off, not this table. */
 export type RowIconSize = "3" | "3.5" | "4"
+
+/**
+ * What the icon lines up with.
+ *
+ * `block` — the vertical middle of the whole text block. The default, and what
+ * every row in the app wants.
+ *
+ * `first-line` — the top line only. Nothing uses it today. It exists so that a
+ * future row carrying a genuine paragraph has somewhere to go other than back
+ * to a hand-written margin.
+ */
+export type RowIconAlign = "block" | "first-line"
 
 const ICON_SIZE: Record<RowIconSize, string> = {
   "3": "size-3",
@@ -330,35 +347,37 @@ const ICON_SIZE: Record<RowIconSize, string> = {
   "4": "size-4",
 }
 
-/** (line box − icon) ÷ 2, per pairing. See the note above. */
-const ICON_OFFSET: Record<RowLine, Record<RowIconSize, string>> = {
-  sm: { "3": "mt-[3px]", "3.5": "mt-0.5", "4": "mt-px" },
-  xs: { "3": "mt-0.5", "3.5": "mt-px", "4": "" },
-  relaxed: { "3": "mt-[4px]", "3.5": "mt-[3px]", "4": "mt-0.5" },
-}
-
 /**
- * A leading icon, aligned to the first line of the text beside it.
+ * A leading icon, centred on the text beside it.
  *
  * Exported on its own for rows whose layout is too particular for {@link Row} —
- * the notification row, which overlays its own action buttons, is the reason
- * this is separate. Those rows still get the alignment contract.
+ * the notification row, which overlays its own action buttons, and the toast,
+ * whose body is a grid. Those rows still get the alignment contract.
+ *
+ * `self-center` rather than `items-center` on the parent: it centres the icon
+ * without the caller having to change how its row lays out anything else, so a
+ * container that is `items-start` for reasons of its own keeps working.
  */
 export function RowIcon({
   icon: Icon,
-  line = "sm",
+  align = "block",
   size = "3.5",
   className,
 }: {
   icon: IconComponent
-  line?: RowLine
+  align?: RowIconAlign
   size?: RowIconSize
   className?: string
 }) {
   return (
     <Icon
       aria-hidden
-      className={cn("shrink-0", ICON_SIZE[size], ICON_OFFSET[line][size], className)}
+      className={cn(
+        "shrink-0",
+        ICON_SIZE[size],
+        align === "block" ? "self-center" : "self-start",
+        className,
+      )}
     />
   )
 }
@@ -433,10 +452,7 @@ export function Row({
       </span>
       {trailing && (
         <span
-          className={cn(
-            "flex shrink-0 items-center gap-2 self-center pl-2",
-            trailingClassName,
-          )}
+          className={cn("flex shrink-0 items-center gap-2 pl-2", trailingClassName)}
         >
           {trailing}
         </span>
@@ -444,9 +460,11 @@ export function Row({
     </>
   )
 
-  // `items-start`, always. The icon's own offset does the aligning, so a
-  // description appearing on one row cannot drag its icon out of line.
-  const shared = "flex w-full items-start gap-2 px-3 py-2 text-left"
+  // `items-center`: the icon, the text block and the trailing content all sit
+  // on the row's middle, so a row with a description reads the same as one
+  // without. See the note above the primitive for why this is not first-line
+  // alignment.
+  const shared = "flex w-full items-center gap-2 px-3 py-2 text-left"
 
   if (!onClick) {
     // Spreading button props onto a div would be a lie, so a static row takes

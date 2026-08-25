@@ -7,7 +7,7 @@ import { Eye, EyeOff, AlertCircle, Dna, Activity, ShieldCheck } from "lucide-rea
 import Logo from "@/components/ui/Logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { RowIcon } from "@/components/workbench";
+import { RowIcon } from "@/components/workbench/primitives";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { toast } from "@/hooks/use-toast";

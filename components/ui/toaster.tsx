@@ -8,8 +8,8 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 
-import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
+import { RowIcon } from '@/components/workbench/primitives'
 import {
   Toast,
   ToastClose,
@@ -41,11 +41,15 @@ export function Toaster() {
 
         return (
           <Toast key={id} variant={variant} {...props}>
+            {/*
+              The last place in the app hand-rolling its own icon offset, and it
+              had both faults at once: `mt-0.5` was a pixel low even under the
+              rule it was written for, and that rule pinned the glyph to the
+              title while the description sat below it — so on the two-line
+              toasts this app actually raises, the icon rode high in the corner.
+            */}
             {glyph && (
-              <glyph.Icon
-                aria-hidden
-                className={cn('mt-0.5 size-4 shrink-0', glyph.className)}
-              />
+              <RowIcon icon={glyph.Icon} size="4" className={glyph.className} />
             )}
             <div className="grid min-w-0 flex-1 gap-0.5">
               {title && <ToastTitle>{title}</ToastTitle>}

@@ -40,8 +40,8 @@ export {
   WBInput,
   WBSelect,
   type IconComponent,
+  type RowIconAlign,
   type RowIconSize,
-  type RowLine,
   type RowProps,
 } from "./primitives"
 export {

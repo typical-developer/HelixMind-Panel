@@ -3,7 +3,7 @@
 Everything found during the production-readiness pass, with file references,
 how it showed up, and what happened to it.
 
-**Summary:** 63 issues. 56 fixed, 7 open (5 by your decision, 1 third-party,
+**Summary:** 64 issues. 57 fixed, 7 open (5 by your decision, 1 third-party,
 1 needing a backend change).
 
 Nothing here was found by reading alone — the app was built, typechecked,
@@ -667,6 +667,68 @@ written down once as `ICON_OFFSET` and applied everywhere, with
 flex row, ranges the first text line and compares centres. Across all nine
 routes with content seeded, zero rows are off by more than 1px; the History rows
 that were previously offset now measure exactly 0.
+
+### M30b · The fix for M30 over-corrected — **FIXED** *(reported)*
+`components/workbench/primitives.tsx`, `components/ui/toaster.tsx`
+
+M30 replaced eleven hand-written icon offsets with one contract, and picked the
+wrong rule for it: align the icon to the **first line** of the text beside it.
+That is right for a wrapping paragraph and wrong for the shape this app is built
+from — a title with one short supporting line under it, which is nearly every
+row in the bench. You reported the result as icons "not properly centre
+aligned", and narrowed it yourself: it happens when the text runs to more than
+one line.
+
+**Measured before the fix**, on two-line rows:
+
+| Row | Icon vs block centre |
+|---|---|
+| Overview → Get started cards (×4) | −9.9px |
+| Simulator → FASTA drop zone | −9.0px |
+| Growth Lab → Antibiotic switch | −9.0px |
+
+Alignment to the *first line* measured 0.5px, so the rule was being applied
+accurately. The rule itself was the fault.
+
+**Fixed:** `RowIcon` emits `self-center` and `Row` is `items-center`, so
+an icon centres on the whole text block at any height. The nine-entry
+`ICON_OFFSET` table is deleted — centring is what `align-self: center`
+already does, so there is no arithmetic left to drift out of step with the type
+ramp, and no per-size entry to keep in sync. `RowLine` (and its `relaxed`
+variant, which existed only to carry a different line box) went with it;
+`align="first-line"` remains as an explicit escape hatch, unused today.
+
+**Centred at every line count, deliberately.** The typographically pure rule is
+to centre at two lines and fall back to the first line beyond that. It behaves
+badly in this app: whether a row wraps to two lines or three depends on the
+width of a resizable panel, so that rule would flip a row between two alignments
+as the sidebar is dragged. A row that changes treatment when you resize it is
+worse than either rule applied consistently.
+
+**The toast was worse than the rest.** `components/ui/toaster.tsx` never moved
+onto the primitive in the first pass, so it still carried
+`className={cn('mt-0.5 size-4 shrink-0', …)}` — two faults in one line. The
+`mt-0.5` was a pixel low even under the old rule (a 16px icon on an 18px line
+box wants 1px), *and* the old rule pinned the glyph to the title while the
+description sat below it. It now uses `RowIcon` like everything else.
+
+`RowIcon` is imported there from `components/workbench/primitives` rather
+than the barrel: the Toaster is mounted in the root layout, so it is on the
+sign-in and sign-up bundles, and the barrel would drag the whole bench onto
+routes that never render it. The three auth pages were moved to the same path
+for the same reason.
+
+**Verified in the browser** with the workspace seeded so the reported rows
+actually render (an empty workspace hides all of them):
+
+- 51 multi-line rows across nine routes, the bell popover, the console's History
+  tab and the sidebar's Preferences — **0 off by more than 1px**, against ≈ −9 to
+  −10px before.
+- Held at every interface-scale step (13/14/16/18/20px root) and at 375px
+  viewport width, with no horizontal overflow.
+- The toast measures 0 against its own two-line block, and the status bar is
+  still reachable underneath it — C10 has not regressed.
+- Single-line rows did not move.
 
 ### M31 · One bit of state, drawn four times — **FIXED** *(reported)*
 `components/notifications/NotificationItem.tsx`

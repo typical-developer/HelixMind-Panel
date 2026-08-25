@@ -550,7 +550,7 @@ function ConsoleEmpty({
 }) {
   return (
     <div className="flex h-full items-start gap-2 px-3 py-3 text-sm text-muted-foreground">
-      <RowIcon icon={Icon} line="relaxed" className="opacity-70" />
+      <RowIcon icon={Icon} className="opacity-70" />
       <span className="max-w-lg leading-relaxed">{message}</span>
     </div>
   )
