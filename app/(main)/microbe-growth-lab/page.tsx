@@ -32,7 +32,7 @@ const PopulationChart = dynamic(
   { ssr: false, loading: () => <ChartFallback height={288} /> },
 );
 import { toast } from "@/hooks/use-toast";
-import { recordActivity } from "@/lib/activity-store";
+import { linkActivityRun, recordActivity } from "@/lib/activity-store";
 import { archiveRun } from "@/lib/run-archive";
 import { LastRunLink } from "@/components/last-run";
 import { downloadBlob, downloadCSV, fileStamp, safeFilename } from "@/lib/download";
@@ -48,6 +48,7 @@ import {
 } from "@/lib/growth-model";
 import {
   Chip,
+  ExportMenu,
   ViewLayout,
   ViewScroll,
   Field,
@@ -57,6 +58,7 @@ import {
   StatTile,
   ToolbarButton,
   WBInput,
+  WBSlider,
   useLogStream,
   useAlerts,
   useRunStatus,
@@ -321,7 +323,7 @@ export default function MicrobeGrowthLab() {
     // steps to reach — so this is where the run is recorded for the Overview,
     // the notification feed and the console's history.
     if (state.timeStep > 0) {
-      recordActivity({
+      const event = recordActivity({
         kind: "growth.completed",
         engine: "growth",
         label: `Growth experiment · ${currentStrain.name}`,
@@ -367,6 +369,11 @@ export default function MicrobeGrowthLab() {
           environment: state.environment,
           note: "The selected strain is displayed but does not yet drive the model — see the About dialog's known limitations.",
         },
+      }).then((runId) => {
+        // Linked after the write, not before it: a browser with no
+        // IndexedDB archives nothing, and an event pointing at a run
+        // that was never filed is worse than one pointing at its engine.
+        if (runId) linkActivityRun(event.id, runId)
       });
     }
   };
@@ -708,18 +715,25 @@ export default function MicrobeGrowthLab() {
               title="Population growth"
               subtitle={`${chartData.length} data points`}
               actions={
-                <>
-                  <ToolbarButton
-                    icon={ImageDown}
-                    label="Export chart as PNG"
-                    onClick={handleExportPNG}
-                  />
-                  <ToolbarButton
-                    icon={Download}
-                    label="Export data as CSV"
-                    onClick={handleExport}
-                  />
-                </>
+                <ExportMenu
+                  disabled={chartData.length === 0}
+                  items={[
+                    {
+                      id: "csv",
+                      label: "Growth curve",
+                      format: "CSV",
+                      hint: `${chartData.length} step${chartData.length === 1 ? "" : "s"} of population and resistance`,
+                      onSelect: handleExport,
+                    },
+                    {
+                      id: "png",
+                      label: "Chart image",
+                      format: "PNG",
+                      hint: "The plot as drawn, for a report",
+                      onSelect: handleExportPNG,
+                    },
+                  ]}
+                />
               }
             />
             <div className="p-3">
@@ -973,33 +987,25 @@ function LabInspector({
                 label="Growth rate"
                 value={`${(customStrain.growthRate * 100).toFixed(1)}%`}
               >
-                <input
-                  type="range"
-                  min="0.05"
-                  max="0.5"
-                  step="0.01"
+                <WBSlider
+                  min={0.05}
+                  max={0.5}
+                  step={0.01}
                   value={customStrain.growthRate}
-                  onChange={(e) =>
-                    setCustomStrain({
-                      ...customStrain,
-                      growthRate: Number(e.target.value),
-                    })
+                  onValueChange={(growthRate) =>
+                    setCustomStrain({ ...customStrain, growthRate })
                   }
                   aria-label="Growth rate"
                 />
               </Field>
 
               <Field label="Optimal temp" value={`${customStrain.tempOptimal}°C`}>
-                <input
-                  type="range"
-                  min="10"
-                  max="80"
+                <WBSlider
+                  min={10}
+                  max={80}
                   value={customStrain.tempOptimal}
-                  onChange={(e) =>
-                    setCustomStrain({
-                      ...customStrain,
-                      tempOptimal: Number(e.target.value),
-                    })
+                  onValueChange={(tempOptimal) =>
+                    setCustomStrain({ ...customStrain, tempOptimal })
                   }
                   aria-label="Optimal temperature"
                 />
@@ -1009,17 +1015,13 @@ function LabInspector({
                 label="Resistance"
                 value={`${(customStrain.resistance * 100).toFixed(0)}%`}
               >
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.01"
+                <WBSlider
+                  min={0}
+                  max={1}
+                  step={0.01}
                   value={customStrain.resistance}
-                  onChange={(e) =>
-                    setCustomStrain({
-                      ...customStrain,
-                      resistance: Number(e.target.value),
-                    })
+                  onValueChange={(resistance) =>
+                    setCustomStrain({ ...customStrain, resistance })
                   }
                   aria-label="Resistance"
                 />
@@ -1033,12 +1035,11 @@ function LabInspector({
           <div className="space-y-4 p-3">
             <Field label="Temperature" value={`${temperature}°C`} error={tempWarning}>
               <div className="space-y-2">
-                <input
-                  type="range"
-                  min="10"
-                  max="46"
+                <WBSlider
+                  min={10}
+                  max={46}
                   value={temperature}
-                  onChange={(e) => onTemperatureChange(Number(e.target.value))}
+                  onValueChange={onTemperatureChange}
                   aria-label="Temperature"
                 />
                 <WBInput
@@ -1051,13 +1052,12 @@ function LabInspector({
 
             <Field label="pH" value={pH.toFixed(1)} error={phWarning}>
               <div className="space-y-2">
-                <input
-                  type="range"
-                  min="5"
-                  max="9"
-                  step="0.1"
+                <WBSlider
+                  min={5}
+                  max={9}
+                  step={0.1}
                   value={pH}
-                  onChange={(e) => onPHChange(Number(e.target.value))}
+                  onValueChange={onPHChange}
                   aria-label="pH"
                 />
                 <WBInput
@@ -1071,12 +1071,11 @@ function LabInspector({
 
             <Field label="Nutrients" value={`${Math.round(nutrients)}%`}>
               <div className="space-y-2">
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
+                <WBSlider
+                  min={0}
+                  max={100}
                   value={nutrients}
-                  onChange={(e) => setNutrients(Number(e.target.value))}
+                  onValueChange={setNutrients}
                   aria-label="Nutrients"
                 />
                 <WBInput
@@ -1089,12 +1088,11 @@ function LabInspector({
 
             <Field label="Oxygen" value={`${oxygen}%`}>
               <div className="space-y-2">
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
+                <WBSlider
+                  min={0}
+                  max={100}
                   value={oxygen}
-                  onChange={(e) => setOxygen(Number(e.target.value))}
+                  onValueChange={setOxygen}
                   aria-label="Oxygen"
                 />
                 <WBInput

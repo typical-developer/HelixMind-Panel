@@ -168,6 +168,52 @@ export function viewForSource(source: string): WorkbenchView | undefined {
   return VIEWS.find((v) => v.source === source)
 }
 
+/* ============================================================================
+   Breadcrumbs
+   ========================================================================= */
+
+/** One step in the trail. A crumb with no `href` is not somewhere you can go. */
+export interface Crumb {
+  label: string
+  href?: string
+  icon?: LucideIcon
+  /**
+   * True for a crumb the view has to fill in itself — an archived run's name.
+   * The bar uses it to hold a placeholder rather than flicker the trail.
+   */
+  pending?: boolean
+}
+
+/**
+ * Where a route sits, as a trail.
+ *
+ * The registry is flat as a *list*, which is why the bar this replaced was
+ * removed — it drew a view's icon and name next to a tab already carrying both.
+ * But the views are grouped, and two routes go deeper than a view: an archived
+ * run at `/activity/<id>` and the redirect at `/amr-analysis-engine`. So the
+ * hierarchy is `group → view → detail`, and a bare `/activity/l8x2k-3` is
+ * exactly the case that needs saying out loud.
+ *
+ * The group is not a link. Groups are sidebar headings, not routes, and a crumb
+ * that looks clickable and refuses is worse than one that never offered.
+ */
+export function crumbsForPath(pathname: string): Crumb[] {
+  const view = viewForPath(pathname)
+  if (!view) return [{ label: "Workspace" }]
+
+  const trail: Crumb[] = [
+    { label: groupLabel(view) },
+    { label: view.label, href: view.href, icon: view.icon },
+  ]
+
+  // Anything past the view's own route is a detail the view names itself —
+  // see `useCrumb`. The id is the honest placeholder until it does.
+  const rest = pathname.slice(view.href.length).replace(/^\/+|\/+$/g, "")
+  if (rest) trail.push({ label: rest.split("/")[0], pending: true })
+
+  return trail
+}
+
 /**
  * Reduce a link to the registry href it belongs to.
  *

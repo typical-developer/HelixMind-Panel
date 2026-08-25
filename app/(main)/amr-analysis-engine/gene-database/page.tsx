@@ -10,6 +10,8 @@ import { copyToClipboard } from "@/lib/download"
 import {
   Chip,
   ViewLayout,
+  DataTable,
+  Th,
   ViewScroll,
   EmptyState,
   InspectorScroll,
@@ -113,22 +115,24 @@ export default function GeneDatabase() {
             description={`Nothing in the database matches “${searchTerm}”.`}
           />
         ) : (
-          <ViewScroll>
+          <>
             {/* Desktop grid. Seven columns need real width, so below the
-                min-width the grid scrolls sideways inside its own container
-                rather than crushing every column — the bench can be narrow at
-                any viewport size once the inspector is open. */}
-            <div className="seq-scroll hidden overflow-x-auto lg:block">
-              <table className="w-full min-w-[52rem] text-sm">
-              <thead className="sticky top-0 z-10 bg-surface">
-                <tr className="border-b border-border">
+                min-width the grid scrolls sideways rather than crushing every
+                column — the bench can be narrow at any viewport size once the
+                inspector is open.
+
+                Both axes belong to one element. This used to be an
+                `overflow-x-auto` div inside a `ViewScroll`, and a box that
+                scrolls in x has its `overflow-y: visible` computed to `auto`
+                too — so that div became the scrollport the sticky header
+                pinned to, while the vertical scrolling actually happened in
+                the container outside it. The header stayed faithfully pinned
+                to a viewport that never moved, and never stuck to anything. */}
+            <DataTable minWidth="52rem" containerClassName="hidden lg:block">
+              <thead>
+                <tr>
                   {COLUMNS.map((h) => (
-                    <th
-                      key={h}
-                      className="px-3 py-2 text-left text-xs font-medium text-muted-foreground"
-                    >
-                      {h}
-                    </th>
+                    <Th key={h}>{h}</Th>
                   ))}
                 </tr>
               </thead>
@@ -186,12 +190,13 @@ export default function GeneDatabase() {
                     </td>
                   </tr>
                 ))}
-                </tbody>
-              </table>
-            </div>
+              </tbody>
+            </DataTable>
 
-            {/* Compact cards below the grid breakpoint */}
-            <div className="grid gap-2 p-3 lg:hidden">
+            {/* Compact cards below the grid breakpoint. Its own scroller, so
+                neither layout has to share a scrollport with the other. */}
+            <ViewScroll className="lg:hidden">
+              <div className="grid gap-2 p-3">
               {filteredRecords.map((r) => (
                 <div
                   key={r.id}
@@ -234,9 +239,10 @@ export default function GeneDatabase() {
                     </div>
                   </dl>
                 </div>
-              ))}
-            </div>
-          </ViewScroll>
+                ))}
+              </div>
+            </ViewScroll>
+          </>
         )}
       </div>
     </ViewLayout>

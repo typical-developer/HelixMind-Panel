@@ -36,6 +36,7 @@ import {
   Row,
   Rule,
   ViewScroll,
+  useCrumb,
   useStatusItems,
   useViewContext,
   useWorkbench,
@@ -114,6 +115,10 @@ export default function RunDetailPage() {
       : null,
   )
 
+  // The trail's last step. Without it the breadcrumb can only show what is in
+  // the URL, which here is the run's id — `Workspace › Activity › l8x2k-3`.
+  useCrumb(run?.label ?? null)
+
   if (status === "loading") {
     return (
       <ViewScroll>
@@ -162,6 +167,22 @@ export default function RunDetailPage() {
   return (
     <ViewScroll>
       <div className="animate-stagger mx-auto flex max-w-3xl flex-col gap-3 p-3">
+        {/* A way back to the list.
+
+            This page is reachable from a notification, from the activity log
+            and from a bookmark, and until now the only route out of it was the
+            sidebar or a tab — neither of which is "the list I came from". The
+            breadcrumb above carries the same link; this is the one that sits
+            where the eye already is when you have finished reading a run. */}
+        <button
+          type="button"
+          onClick={() => openTab("/activity")}
+          className="row-hover -mb-1 flex w-fit cursor-pointer items-center gap-1.5 rounded-sm px-1.5 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
+        >
+          <ArrowLeft className="size-3.5" />
+          All activity
+        </button>
+
         <Pane>
           <PaneHeader
             icon={engine?.icon ?? Info}

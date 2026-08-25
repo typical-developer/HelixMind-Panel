@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react"
 import {
-  Download,
   FlaskConical,
   History,
   ScanLine,
@@ -29,10 +28,10 @@ import { useArchivedRuns } from "@/lib/run-archive"
 import {
   Chip,
   EmptyState,
+  ExportMenu,
   Pane,
   PaneHeader,
   Row,
-  ToolbarButton,
   ViewScroll,
   WBInput,
   WBSelect,
@@ -98,14 +97,28 @@ export default function ActivityPage() {
   const [shown, setShown] = useState(PAGE)
 
   /**
-   * An event and the archived run it produced, matched on the engine and the
-   * completion time. The activity log and the archive are written in the same
-   * tick by the same handler, so a couple of seconds of tolerance is enough to
-   * pair them without threading an id through both stores.
+   * An event and the archived run it produced.
+   *
+   * Events carry the run's id now — see `linkActivityRun`. What is left here is
+   * a fallback for events recorded before they did, which are sitting in the
+   * log of every workspace that has already been used: match on the engine and
+   * allow a few seconds between the two timestamps, since the log and the
+   * archive are written by the same handler in the same tick.
+   *
+   * That guess is the reason the id exists. It cannot tell two engines that
+   * finished together apart, and it silently pairs an event with the wrong
+   * result rather than failing. It applies only to events with no `runId`, and
+   * ages out with them.
    */
   const runFor = useMemo(() => {
+    const live = new Set(runs.map((run) => run.id))
     const map = new Map<string, string>()
     for (const event of events) {
+      if (event.runId) {
+        // Only if the run is still in the archive — it may have been evicted.
+        if (live.has(event.runId)) map.set(event.id, event.runId)
+        continue
+      }
       const match = runs.find(
         (run) => run.engine === event.engine && Math.abs(run.endedAt - event.ts) < 4000,
       )
@@ -177,51 +190,56 @@ export default function ActivityPage() {
                 : `${events.length} event${events.length === 1 ? "" : "s"}`
             }
             actions={
-              <>
-                <ToolbarButton
-                  icon={Download}
-                  label="Export what is shown as CSV"
-                  disabled={filtered.length === 0}
-                  onClick={() =>
-                    downloadCSV(
-                      ["When", "Engine", "Kind", "Severity", "Label", "Detail"],
-                      filtered.map((e) => [
-                        new Date(e.ts).toISOString(),
-                        e.engine,
-                        e.kind,
-                        e.severity,
-                        e.label,
-                        e.detail ?? "",
-                      ]),
-                      {
-                        filename: `helixmind-activity-${fileStamp()}.csv`,
-                        description: `${filtered.length} event${filtered.length === 1 ? "" : "s"}.`,
-                      },
-                    )
-                  }
-                />
-                <ToolbarButton
-                  icon={Download}
-                  label="Export what is shown as JSON"
-                  disabled={filtered.length === 0}
-                  onClick={() =>
-                    downloadJSON(
-                      {
-                        exportedAt: new Date().toISOString(),
-                        filters: { engine, kind, severity, search: needle.trim() },
-                        events: filtered.map((e) => ({
-                          ...e,
-                          at: new Date(e.ts).toISOString(),
-                        })),
-                      },
-                      {
-                        filename: `helixmind-activity-${fileStamp()}.json`,
-                        description: `${filtered.length} event${filtered.length === 1 ? "" : "s"}.`,
-                      },
-                    )
-                  }
-                />
-              </>
+              // One control, two formats. This was a pair of buttons drawing
+              // the same download glyph, told apart only by their tooltips.
+              <ExportMenu
+                disabled={filtered.length === 0}
+                items={[
+                  {
+                    id: "csv",
+                    label: "What is shown",
+                    format: "CSV",
+                    hint: "One row per event, for a spreadsheet",
+                    onSelect: () =>
+                      downloadCSV(
+                        ["When", "Engine", "Kind", "Severity", "Label", "Detail"],
+                        filtered.map((e) => [
+                          new Date(e.ts).toISOString(),
+                          e.engine,
+                          e.kind,
+                          e.severity,
+                          e.label,
+                          e.detail ?? "",
+                        ]),
+                        {
+                          filename: `helixmind-activity-${fileStamp()}.csv`,
+                          description: `${filtered.length} event${filtered.length === 1 ? "" : "s"}.`,
+                        },
+                      ),
+                  },
+                  {
+                    id: "json",
+                    label: "What is shown, with filters",
+                    format: "JSON",
+                    hint: "Records the filters that produced it",
+                    onSelect: () =>
+                      downloadJSON(
+                        {
+                          exportedAt: new Date().toISOString(),
+                          filters: { engine, kind, severity, search: needle.trim() },
+                          events: filtered.map((e) => ({
+                            ...e,
+                            at: new Date(e.ts).toISOString(),
+                          })),
+                        },
+                        {
+                          filename: `helixmind-activity-${fileStamp()}.json`,
+                          description: `${filtered.length} event${filtered.length === 1 ? "" : "s"}.`,
+                        },
+                      ),
+                  },
+                ]}
+              />
             }
           />
 
@@ -242,55 +260,53 @@ export default function ActivityPage() {
               />
             </div>
 
-            <WBSelect
+            <WBSelect<EngineFilter>
               value={engine}
-              onChange={(e) => {
-                setEngine(e.target.value as EngineFilter)
+              onValueChange={(next) => {
+                setEngine(next)
                 setShown(PAGE)
               }}
               aria-label="Filter activity by engine"
               className="h-6 w-36 text-xs"
-            >
-              <option value="all">All engines</option>
-              {ENGINES.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.label}
-                </option>
-              ))}
-            </WBSelect>
+              options={[
+                { value: "all", label: "All engines" },
+                ...ENGINES.map((e) => ({ value: e.id, label: e.label })),
+              ]}
+            />
 
-            <WBSelect
+            <WBSelect<KindFilter>
               value={kind}
-              onChange={(e) => {
-                setKind(e.target.value as KindFilter)
+              onValueChange={(next) => {
+                setKind(next)
                 setShown(PAGE)
               }}
               aria-label="Filter activity by kind"
               className="h-6 w-40 text-xs"
-            >
-              <option value="all">Everything</option>
-              {(Object.keys(KIND_LABEL) as ActivityKind[]).map((k) => (
-                <option key={k} value={k}>
-                  {KIND_LABEL[k]}
-                </option>
-              ))}
-            </WBSelect>
+              options={[
+                { value: "all", label: "Everything" },
+                ...(Object.keys(KIND_LABEL) as ActivityKind[]).map((k) => ({
+                  value: k,
+                  label: KIND_LABEL[k],
+                })),
+              ]}
+            />
 
-            <WBSelect
+            <WBSelect<SeverityFilter>
               value={severity}
-              onChange={(e) => {
-                setSeverity(e.target.value as SeverityFilter)
+              onValueChange={(next) => {
+                setSeverity(next)
                 setShown(PAGE)
               }}
               aria-label="Filter activity by severity"
               className="h-6 w-28 text-xs"
-            >
-              <option value="all">Any severity</option>
-              <option value="danger">Danger</option>
-              <option value="warning">Warning</option>
-              <option value="success">Success</option>
-              <option value="info">Info</option>
-            </WBSelect>
+              options={[
+                { value: "all", label: "Any severity" },
+                { value: "danger", label: "Danger" },
+                { value: "warning", label: "Warning" },
+                { value: "success", label: "Success" },
+                { value: "info", label: "Info" },
+              ]}
+            />
 
             {narrowed && (
               <button

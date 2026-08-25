@@ -140,7 +140,15 @@ export function NotificationsProvider({
         message: event.detail ? `${event.label} — ${event.detail}` : event.label,
         createdAt: event.ts,
         read: read.has(event.id),
-        href: event.href,
+        // The result, not the engine that produced it.
+        //
+        // A notification saying "Scan finished" used to open `/dna-scanner` —
+        // the live view, which by then had been unmounted and reset, so the
+        // one thing the notification was about was the one thing it could not
+        // show you. The archived run is what it means; the engine is the
+        // fallback for an event that never got one (nothing was filed, or the
+        // browser has no archive to file it in).
+        href: event.runId ? `/activity/${event.runId}` : event.href,
         severity: event.severity,
       }))
   }, [notifiable, state])

@@ -5,7 +5,7 @@ import dynamic from "next/dynamic"
 
 import { cn } from "@/lib/utils"
 import { ChartFallback } from "@/components/chart-fallback"
-import { Chip, CodeSurface } from "@/components/workbench"
+import { Chip, CodeSurface, DataTable, Th } from "@/components/workbench"
 import type { EngineId } from "@/lib/activity-store"
 
 /**
@@ -89,21 +89,15 @@ function ScanResult({ data }: { data: Record<string, unknown> }) {
 
   return (
     <div className="space-y-3">
-      <div className="seq-scroll max-h-80 overflow-auto">
-        <table className="w-full min-w-[22rem] text-sm">
-          <thead className="sticky top-0 z-10 bg-surface">
-            <tr className="border-b border-border">
-              {["Position", "Change", "Class"].map((h) => (
-                <th
-                  key={h}
-                  className="px-3 py-2 text-left text-xs font-medium text-muted-foreground"
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
+      <DataTable minWidth="22rem" containerClassName="max-h-80 flex-none">
+        <thead>
+          <tr>
+            {["Position", "Change", "Class"].map((h) => (
+              <Th key={h}>{h}</Th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
             {mutations.map((m) => (
               <tr
                 key={m.position}
@@ -130,8 +124,7 @@ function ScanResult({ data }: { data: Record<string, unknown> }) {
               </tr>
             ))}
           </tbody>
-        </table>
-      </div>
+      </DataTable>
 
       {/* The archive bounds what a scan contributes, so a listing that stopped
           silently would misreport how many variants the run actually found. */}
@@ -193,21 +186,17 @@ function SimulationResult({ data }: { data: Record<string, unknown> }) {
   return (
     <div className="space-y-3 p-3">
       <RunChart data={stats} />
-      <div className="seq-scroll max-h-56 overflow-auto rounded-md border border-border">
-        <table className="w-full text-sm">
-          <thead className="sticky top-0 z-10 bg-surface">
-            <tr className="border-b border-border">
-              {["Generation", "New", "Cumulative", "Fitness"].map((h) => (
-                <th
-                  key={h}
-                  className="px-3 py-1.5 text-left text-xs font-medium text-muted-foreground"
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
+      <DataTable containerClassName="max-h-56 flex-none rounded-md border border-border">
+        <thead>
+          <tr>
+            {["Generation", "New", "Cumulative", "Fitness"].map((h) => (
+              <Th key={h} className="py-1.5">
+                {h}
+              </Th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
             {stats.map((s) => (
               <tr
                 key={s.generation}
@@ -229,8 +218,7 @@ function SimulationResult({ data }: { data: Record<string, unknown> }) {
               </tr>
             ))}
           </tbody>
-        </table>
-      </div>
+      </DataTable>
       <Note text={data.note} />
     </div>
   )

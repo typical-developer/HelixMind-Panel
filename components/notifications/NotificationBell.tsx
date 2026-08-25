@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import Link from "next/link"
 import { ArrowUpRight, Bell, CheckCheck } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -121,27 +120,46 @@ export default function NotificationBell() {
           )}
         </div>
 
+        {/* Both go through `openTab` rather than a bare `<Link>`. Navigating
+            with a link left the open-tab set to be backfilled by the provider's
+            pathname effect after the route had already changed, so the strip
+            caught up a beat late; every other route into these views registers
+            the tab as it navigates. Closing first, then pushing on the next
+            microtask, for the reason given on the rows above. */}
         <div className="border-t border-border p-1">
-          <Link
-            href="/notifications"
-            onClick={() => setOpen(false)}
-            className="row-hover flex items-center gap-1.5 rounded-sm px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
-          >
-            {notifications.length > POPOVER_ROWS
-              ? `View all ${notifications.length} notifications`
-              : "View all notifications"}
-            <ArrowUpRight className="ml-auto size-3" />
-          </Link>
-          <Link
-            href="/activity"
-            onClick={() => setOpen(false)}
-            className="row-hover flex items-center gap-1.5 rounded-sm px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
-          >
-            Activity and past runs
-            <ArrowUpRight className="ml-auto size-3" />
-          </Link>
+          <PopoverLink
+            label={
+              notifications.length > POPOVER_ROWS
+                ? `View all ${notifications.length} notifications`
+                : "View all notifications"
+            }
+            onClick={() => {
+              setOpen(false)
+              queueMicrotask(() => openTab("/notifications"))
+            }}
+          />
+          <PopoverLink
+            label="Activity and past runs"
+            onClick={() => {
+              setOpen(false)
+              queueMicrotask(() => openTab("/activity"))
+            }}
+          />
         </div>
       </PopoverContent>
     </Popover>
+  )
+}
+
+function PopoverLink({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="row-hover flex w-full cursor-pointer items-center gap-1.5 rounded-sm px-2 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
+    >
+      {label}
+      <ArrowUpRight className="ml-auto size-3 shrink-0" />
+    </button>
   )
 }

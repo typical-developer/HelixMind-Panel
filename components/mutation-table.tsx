@@ -6,9 +6,11 @@ import { cn } from "@/lib/utils"
 import { useLabSnapshot, PREVIEW_MUTATIONS } from "@/lib/lab-snapshot"
 import {
   Chip,
+  DataTable,
   EmptyState,
   Pane,
   PaneHeader,
+  Th,
   useWorkbench,
 } from "@/components/workbench"
 
@@ -89,21 +91,15 @@ export function MutationTable() {
         }
       />
 
-      <div className="seq-scroll min-h-0 flex-1 overflow-auto">
-        <table className="w-full min-w-[22rem] text-sm">
-          <thead className="sticky top-0 z-10 bg-surface">
-            <tr className="border-b border-border">
-              {HEADERS.map((h) => (
-                <th
-                  key={h}
-                  className="px-3 py-2 text-left text-xs font-medium text-muted-foreground"
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
+      <DataTable minWidth="22rem">
+        <thead>
+          <tr>
+            {HEADERS.map((h) => (
+              <Th key={h}>{h}</Th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
             {scan.mutations.map((mutation) => (
               <tr
                 key={mutation.position}
@@ -135,9 +131,8 @@ export function MutationTable() {
                 </td>
               </tr>
             ))}
-          </tbody>
-        </table>
-      </div>
+        </tbody>
+      </DataTable>
 
       {scan.mutationCount > scan.mutations.length && (
         <footer className="shrink-0 border-t border-border px-3 py-2 text-xs text-muted-foreground/70">

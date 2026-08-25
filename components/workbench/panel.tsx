@@ -419,29 +419,25 @@ function RunLogView() {
 
         <WBSelect
           value={channel}
-          onChange={(e) => setChannel(e.target.value)}
+          onValueChange={setChannel}
           className="h-6 w-40 text-xs"
           aria-label="Filter the run log by source"
-        >
-          {channels.map((c) => (
-            <option key={c} value={c}>
-              {c === "all" ? "All analyses" : (viewForSource(c)?.label ?? c)}
-            </option>
-          ))}
-        </WBSelect>
+          options={channels.map((c) => ({
+            value: c,
+            label: c === "all" ? "All analyses" : (viewForSource(c)?.label ?? c),
+          }))}
+        />
 
-        <WBSelect
+        <WBSelect<LogLevel | "all">
           value={level}
-          onChange={(e) => setLevel(e.target.value as LogLevel | "all")}
+          onValueChange={setLevel}
           className="h-6 w-28 text-xs"
           aria-label="Filter the run log by level"
-        >
-          {LEVELS.map((l) => (
-            <option key={l} value={l}>
-              {l === "all" ? "All levels" : l}
-            </option>
-          ))}
-        </WBSelect>
+          options={LEVELS.map((l) => ({
+            value: l,
+            label: l === "all" ? "All levels" : l,
+          }))}
+        />
 
         <span
           className="ml-auto shrink-0 font-mono text-xs text-muted-foreground tabular"

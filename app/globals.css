@@ -398,47 +398,11 @@
     background: transparent;
   }
 
-  /* Native range inputs, restyled to match the workbench. */
-  input[type="range"] {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 100%;
-    height: 4px;
-    border-radius: 999px;
-    background: var(--alpha-200);
-    outline: none;
-    cursor: pointer;
-  }
-  input[type="range"]:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-  input[type="range"]::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    height: 13px;
-    width: 13px;
-    border-radius: 999px;
-    background: var(--gray-1000);
-    border: 1px solid var(--alpha-400);
-    box-shadow: 0 1px 2px #00000052;
-    transition: transform 0.15s var(--ease-out-quint),
-      box-shadow 0.15s var(--ease-out-quint);
-  }
-  input[type="range"]::-webkit-slider-thumb:hover {
-    transform: scale(1.15);
-  }
-  input[type="range"]:active::-webkit-slider-thumb {
-    transform: scale(0.95);
-    box-shadow: 0 0 0 4px var(--accent-halo);
-  }
-  input[type="range"]::-moz-range-thumb {
-    height: 13px;
-    width: 13px;
-    border-radius: 999px;
-    background: var(--gray-1000);
-    border: 1px solid var(--alpha-400);
-  }
+  /* Range inputs used to be restyled here, in five vendor-prefixed rules that
+     between them could not draw the one thing a slider needs: the filled part
+     of the track. `input[type="range"]` has no element for it. Every slider in
+     the bench is `WBSlider` now, which is composed of real elements — see
+     components/workbench/primitives.tsx. */
 
   /* Strip the spinner from numeric inputs — the workbench uses explicit
      sliders and steppers instead. */
@@ -885,6 +849,19 @@
   }
   .seq-scroll::-webkit-scrollbar-thumb:hover {
     background: var(--alpha-600);
+  }
+
+  /* A box exactly one line tall, for centring a marker on the first line of a
+     wrapping block — see `BulletItem` in components/workbench/primitives.tsx.
+
+     `1lh` is the element's own computed line height, so the marker stays
+     centred whatever leading the surrounding prose sets. That matters because
+     these lists appear in two places with different type ramps: the inspector
+     and the help dialog. The `em` fallback covers browsers without `lh` and is
+     only ever a fraction of a pixel out. */
+  .line-box {
+    height: 1.5em;
+    height: 1lh;
   }
 
   /* Gutter used by the sequence viewer to mimic an editor's line numbers. */

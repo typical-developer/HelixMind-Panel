@@ -29,7 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { toast } from "@/hooks/use-toast"
-import { recordActivity } from "@/lib/activity-store"
+import { linkActivityRun, recordActivity } from "@/lib/activity-store"
 import { archiveRun } from "@/lib/run-archive"
 import { LastRunLink } from "@/components/last-run"
 import { savePredictionSnapshot } from "@/lib/lab-snapshot"
@@ -47,6 +47,8 @@ import {
   type ResistanceCall,
 } from "@/lib/amr-model"
 import {
+  BulletItem,
+  BulletList,
   Chip,
   ViewLayout,
   ViewScroll,
@@ -155,7 +157,7 @@ export default function ResistancePredictorPage() {
 
     const high = result.calls.filter((c) => c.confidence.level === "High")
 
-    recordActivity({
+    const event = recordActivity({
       kind: "prediction.completed",
       engine: "amr",
       label: `Resistance profile · ${result.organism}`,
@@ -164,17 +166,21 @@ export default function ResistancePredictorPage() {
       severity: high.length > 0 ? "danger" : "success",
     })
 
-    if (high.length > 0) {
-      recordActivity({
-        kind: "threat.detected",
-        engine: "amr",
-        label: `${high.length} high-confidence resistance call${high.length === 1 ? "" : "s"}`,
-        detail: high.map((c) => c.drugClass).join(", "),
-        href: "/amr-analysis-engine/resistance-predictor",
-        severity: "danger",
-        value: high.length,
-      })
-    }
+    // Two events, one run. The threat is worth its own line in the log and its
+    // own notification, but it is the same analysis — so both are linked to the
+    // same archived record below, and either one opens it.
+    const threat =
+      high.length > 0
+        ? recordActivity({
+            kind: "threat.detected",
+            engine: "amr",
+            label: `${high.length} high-confidence resistance call${high.length === 1 ? "" : "s"}`,
+            detail: high.map((c) => c.drugClass).join(", "),
+            href: "/amr-analysis-engine/resistance-predictor",
+            severity: "danger",
+            value: high.length,
+          })
+        : null
 
     // A resistance profile is the most consequential thing this panel
     // produces, and it was the least durable: `savePredictionSnapshot` above
@@ -209,6 +215,13 @@ export default function ResistancePredictorPage() {
         calls: result.calls,
         note: "Rule-based marker scoring for research use. Not a susceptibility report — see the About dialog.",
       },
+    }).then((runId) => {
+      // Linked after the write, not before it: a browser with no
+      // IndexedDB archives nothing, and an event pointing at a run
+      // that was never filed is worse than one pointing at its engine.
+      if (!runId) return
+      linkActivityRun(event.id, runId)
+      if (threat) linkActivityRun(threat.id, runId)
     })
 
     toast({
@@ -636,22 +649,24 @@ function PredictorInspector({
               diagnostic tool.
             </p>
             <Rule label="Notes" />
-            <ul className="list-disc space-y-1 pl-4">
-              <li>Confidence is literature-based; individual isolates vary</li>
-              <li>
+            <BulletList>
+              <BulletItem>
+                Confidence is literature-based; individual isolates vary
+              </BulletItem>
+              <BulletItem>
                 The organism is recorded and used to flag unexpected markers, but
                 does not change the score
-              </li>
+              </BulletItem>
               {SYNERGY_RULES.map((rule) => (
-                <li key={rule.drugClass + rule.genes.join()}>
+                <BulletItem key={rule.drugClass + rule.genes.join()}>
                   <span className="font-mono text-foreground/70">
                     {rule.genes.join(" + ")}
                   </span>{" "}
                   raises {rule.drugClass} to{" "}
                   {Math.round(rule.boostedConfidence * 100)}%
-                </li>
+                </BulletItem>
               ))}
-            </ul>
+            </BulletList>
           </div>
         </Pane>
       </div>

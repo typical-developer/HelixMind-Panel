@@ -1,7 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { ChevronRight } from "lucide-react"
+import * as SliderPrimitive from "@radix-ui/react-slider"
+import { ChevronDown, ChevronRight, Download } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -11,6 +12,20 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 /**
  * Icons are typed structurally rather than as `LucideIcon` so the workbench can
@@ -182,6 +197,97 @@ export function ToolbarButton({
       </TooltipTrigger>
       <TooltipContent side={side}>{label}</TooltipContent>
     </Tooltip>
+  )
+}
+
+/**
+ * One control for everything a view can export.
+ *
+ * Views that could produce two files put two buttons in their header, both
+ * drawn with the same download glyph and told apart only by their tooltips —
+ * so the header showed a pair of identical icons and you had to hover each to
+ * find out which was which. A single control that names the formats says the
+ * same thing in less space and reads correctly at a glance.
+ *
+ * Only for views with a genuine choice. A one-item menu is a button with an
+ * extra click in front of it, so the views that produce exactly one file keep
+ * their plain button.
+ */
+export function ExportMenu({
+  items,
+  label = "Export",
+  disabled,
+  align = "end",
+  side = "bottom",
+}: {
+  items: ReadonlyArray<{
+    id: string
+    /** What is being exported — "Everything shown", "Variant calls". */
+    label: string
+    /** The file it produces. Shown right-aligned, as a monospace tag. */
+    format: string
+    /** Why you would pick this one, when the label alone is not enough. */
+    hint?: string
+    disabled?: boolean
+    onSelect: () => void
+  }>
+  label?: string
+  disabled?: boolean
+  align?: "start" | "end"
+  side?: "top" | "bottom"
+}) {
+  // Nothing to choose between means nothing to open.
+  const usable = items.filter((item) => !item.disabled)
+  const allDisabled = disabled || usable.length === 0
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label={label}
+          title={label}
+          disabled={allDisabled}
+          className={cn(
+            "inline-flex h-6 shrink-0 cursor-pointer items-center gap-0.5 rounded-sm px-1",
+            "text-muted-foreground transition-[background-color,color] duration-100",
+            "hover:bg-[var(--wb-hover)] hover:text-foreground",
+            "focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none",
+            "disabled:pointer-events-none disabled:opacity-40",
+            "data-[state=open]:bg-[var(--wb-active)] data-[state=open]:text-foreground",
+          )}
+        >
+          <Download className="size-3.5" />
+          <ChevronDown className="size-2.5" />
+        </button>
+      </DropdownMenuTrigger>
+
+      <DropdownMenuContent align={align} side={side} className="w-64">
+        <DropdownMenuLabel className="text-xs text-muted-foreground">
+          {label}
+        </DropdownMenuLabel>
+        {items.map((item) => (
+          <DropdownMenuItem
+            key={item.id}
+            disabled={item.disabled}
+            onSelect={item.onSelect}
+            className="gap-2"
+          >
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate text-sm">{item.label}</span>
+              {item.hint && (
+                <span className="truncate text-xs text-muted-foreground">
+                  {item.hint}
+                </span>
+              )}
+            </span>
+            <span className="shrink-0 font-mono text-2xs text-muted-foreground/80">
+              {item.format}
+            </span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -494,6 +600,136 @@ export function Row({
 }
 
 /* ============================================================================
+   Data tables
+
+   Every grid in the bench wants a header that stays put while its rows scroll.
+   Five of them declared `sticky top-0` on the `<thead>` and none of them fully
+   worked, for two separate reasons that are easy to hit and hard to see.
+
+   ## The scrollport has to be the element that actually scrolls
+
+   `position: sticky` pins to the nearest scrolling ancestor. The Gene Library
+   put its table in a `overflow-x-auto` div for sideways scrolling and left the
+   page's own container to do the vertical — but a box with `overflow-x: auto`
+   and `overflow-y: visible` computes its `overflow-y` to `auto` as well, so
+   that div *became* the vertical scrollport. Having no height of its own it
+   never scrolled, and the header dutifully stayed pinned to a viewport that
+   never moved. `DataTable` owns both axes in one element so the two can't
+   drift apart.
+
+   ## The rule has to be painted by the sticky element
+
+   Tailwind's preflight sets `border-collapse: collapse`. Under collapsed
+   borders a cell's border belongs to the table's border grid rather than to
+   the cell, so a `border-b` on the row inside a sticky header does not travel
+   with it — the header pins and its underline scrolls away, letting rows run
+   into it. {@link Th} draws the rule as an inset shadow, which is painted by
+   the element and so goes where it goes.
+   ========================================================================= */
+
+/**
+ * A grid and the one element that scrolls it.
+ *
+ * `minWidth` is what makes the sideways scroll happen: below it the columns
+ * would be crushed rather than scrolled, and a table in this bench can be
+ * narrow at any viewport size once the inspector is open.
+ */
+export function DataTable({
+  minWidth,
+  className,
+  containerClassName,
+  children,
+  ...props
+}: React.ComponentProps<"table"> & {
+  minWidth?: string
+  containerClassName?: string
+}) {
+  return (
+    <div
+      className={cn(
+        // Both axes, one element — see the note above.
+        "seq-scroll min-h-0 flex-1 overflow-auto",
+        containerClassName,
+      )}
+    >
+      <table
+        className={cn("w-full text-sm", className)}
+        style={minWidth ? { minWidth } : undefined}
+        {...props}
+      >
+        {children}
+      </table>
+    </div>
+  )
+}
+
+/**
+ * A column heading that pins to the top of its {@link DataTable}.
+ *
+ * Sticky lives on the cell rather than the `<thead>` so that the background and
+ * the rule are painted by the thing being pinned.
+ */
+export function Th({ className, ...props }: React.ComponentProps<"th">) {
+  return (
+    <th
+      className={cn(
+        "sticky top-0 z-10 bg-surface px-3 py-2 text-left text-xs font-medium text-muted-foreground",
+        // Stands in for `border-b`, which a collapsed border grid would leave
+        // behind when the header pins.
+        "shadow-[inset_0_-1px_0_var(--wb-border)]",
+        className,
+      )}
+      {...props}
+    />
+  )
+}
+
+/* ============================================================================
+   Bulleted prose
+   ========================================================================= */
+
+/**
+ * A list whose dots the app draws.
+ *
+ * `list-disc` hands the marker to the browser, which places it in the first
+ * line box to its own taste and gives no way to say otherwise. On the one-line
+ * items that mostly went unnoticed; on the two- and three-line items these
+ * lists are actually made of — the Resistance Predictor's caveats, the help
+ * sheet's known limitations — the dot sat visibly off the line it belonged to,
+ * and inconsistently with {@link RowIcon}, which every other glyph-beside-text
+ * pairing in the bench goes through.
+ *
+ * These are the genuine prose blocks that primitive's `align="first-line"`
+ * escape hatch was written for, so the dot is centred on the *first line*
+ * rather than the whole block. It is centred in a box exactly one line tall,
+ * expressed in `em`, which holds at every interface-zoom step without a table
+ * of per-size offsets — the same reasoning that removed the nine `mt-*`
+ * constants from the row icon.
+ */
+export function BulletList({ className, ...props }: React.ComponentProps<"ul">) {
+  return <ul className={cn("space-y-1", className)} {...props} />
+}
+
+export function BulletItem({
+  className,
+  children,
+  ...props
+}: React.ComponentProps<"li">) {
+  return (
+    <li className={cn("flex gap-2", className)} {...props}>
+      {/* `.line-box` is exactly one line tall — see globals.css. Deriving it
+          from the inherited line height rather than hardcoding a multiplier is
+          what lets the same primitive sit in the inspector and in the help
+          dialog, which set different leading. */}
+      <span aria-hidden className="line-box flex shrink-0 items-center">
+        <span className="size-1 rounded-full bg-muted-foreground/70" />
+      </span>
+      <span className="min-w-0 flex-1">{children}</span>
+    </li>
+  )
+}
+
+/* ============================================================================
    Metrics
    ========================================================================= */
 
@@ -685,20 +921,160 @@ export function WBInput({ className, ...props }: React.ComponentProps<"input">) 
   )
 }
 
-/** Dense native select styled to match {@link WBInput}. */
-export function WBSelect({ className, ...props }: React.ComponentProps<"select">) {
+/**
+ * Dense dropdown, matched to {@link WBInput}.
+ *
+ * Built on Radix rather than a native `<select>`. The old version styled the
+ * *closed* control convincingly and could do nothing about the open one: the
+ * popup list is drawn by the operating system, so it arrived in the OS font at
+ * the OS size with the OS's own hover colour, and looked different on every
+ * machine the panel ran on. It was the one control in the bench that was not
+ * the bench's.
+ *
+ * Options are a prop rather than children because Radix needs an explicit
+ * `value` per item — `<option>Low</option>`, where the label was also the
+ * value, has no equivalent. Passing the pairs makes that explicit at the call
+ * site instead of inferring it from a text node.
+ */
+export function WBSelect<T extends string>({
+  value,
+  onValueChange,
+  options,
+  placeholder,
+  disabled,
+  className,
+  contentClassName,
+  "aria-label": ariaLabel,
+}: {
+  value: T
+  onValueChange: (value: T) => void
+  options: ReadonlyArray<{ value: T; label: React.ReactNode }>
+  /**
+   * Required. A native `<select>` inside {@link Field} took its name from the
+   * wrapping `<label>`; a Radix trigger is a `<button>`, and the implicit
+   * pairing does not carry a name to it.
+   */
+  "aria-label": string
+  placeholder?: string
+  disabled?: boolean
+  /** Sizing for the trigger, e.g. `h-6 w-36 text-xs`. */
+  className?: string
+  contentClassName?: string
+}) {
   return (
-    <select
+    <Select
+      value={value}
+      onValueChange={(next) => onValueChange(next as T)}
+      disabled={disabled}
+    >
+      <SelectTrigger
+        aria-label={ariaLabel}
+        className={cn(
+          // Deliberately not `SelectTrigger`'s default sizing: the bench runs
+          // at 32px controls, and the shadcn default is 36px with `w-fit`.
+          "h-8 w-full cursor-pointer rounded-sm border-border bg-[var(--wb-raised)] px-2 text-sm text-foreground shadow-none",
+          "transition-[border-color,box-shadow] duration-100",
+          "focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/25",
+          "disabled:cursor-not-allowed disabled:opacity-50",
+          // The chevron is sized by the trigger's own `[&_svg]` rule; pull it
+          // back to the 14px the rest of the bench uses.
+          "[&_svg:not([class*='size-'])]:size-3.5",
+          className,
+        )}
+      >
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent className={cn("bg-[var(--wb-overlay)]", contentClassName)}>
+        {options.map((option) => (
+          <SelectItem
+            key={option.value}
+            value={option.value}
+            className="cursor-pointer text-sm"
+          >
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+}
+
+/**
+ * Dense slider, matched to {@link WBInput}.
+ *
+ * Replaces `<input type="range">`. The native control was restyled in
+ * `globals.css` and looked close, but a range input has no element for the
+ * filled part of the track — so every slider in the bench showed its thumb
+ * against a uniform rail, with no indication of where the value sat until you
+ * read the number beside it.
+ *
+ * Scalar in and scalar out. Radix models a slider as a list of thumbs, and all
+ * nine of these carry exactly one; unwrapping it here keeps the array out of
+ * nine call sites.
+ */
+export function WBSlider({
+  value,
+  onValueChange,
+  min = 0,
+  max = 100,
+  step = 1,
+  disabled,
+  className,
+  "aria-label": ariaLabel,
+}: {
+  value: number
+  onValueChange: (value: number) => void
+  "aria-label": string
+  min?: number
+  max?: number
+  step?: number
+  disabled?: boolean
+  className?: string
+}) {
+  // Radix reports `value + n * step`, accumulated in binary floating point, so
+  // a 0.1 step walks to 5.699999999999999 and a 0.00001 step to
+  // 0.00016000000000000001. Both are shown to the operator as the run's
+  // parameters and both are written into the archived record, so they are
+  // rounded back onto the step's own precision here rather than at each of the
+  // nine call sites.
+  const decimals = React.useMemo(() => {
+    const text = String(step)
+    const dot = text.indexOf(".")
+    if (dot === -1) return 0
+    return text.length - dot - 1
+  }, [step])
+
+  return (
+    <SliderPrimitive.Root
+      value={[value]}
+      onValueChange={([next]) => onValueChange(Number(next.toFixed(decimals)))}
+      min={min}
+      max={max}
+      step={step}
+      disabled={disabled}
       className={cn(
-        "h-8 w-full cursor-pointer appearance-none rounded-sm border border-border bg-[var(--wb-raised)] px-2 text-sm text-foreground",
-        "bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2016%2016%22%20fill%3D%22none%22%20stroke%3D%22%238f8f8f%22%20stroke-width%3D%221.5%22%3E%3Cpath%20d%3D%22M4%206l4%204%204-4%22/%3E%3C/svg%3E')] bg-[length:14px] bg-[position:right_6px_center] bg-no-repeat pr-7",
-        "transition-[border-color,box-shadow] duration-100",
-        "focus:border-ring focus:ring-2 focus:ring-ring/25 focus:outline-none",
-        "disabled:cursor-not-allowed disabled:opacity-50",
+        "relative flex w-full touch-none items-center py-1.5 select-none",
+        "data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50",
         className,
       )}
-      {...props}
-    />
+    >
+      <SliderPrimitive.Track className="relative h-1 w-full grow overflow-hidden rounded-full bg-[var(--alpha-200)]">
+        <SliderPrimitive.Range className="absolute h-full bg-foreground/70" />
+      </SliderPrimitive.Track>
+      {/* The name goes on the thumb, not the root. The thumb is the element
+          carrying `role="slider"`, so a label on the root is announced against
+          a generic group and the control itself reads as unnamed — which is
+          what the native input it replaced did not do. */}
+      <SliderPrimitive.Thumb
+        aria-label={ariaLabel}
+        className={cn(
+          "block size-3.5 shrink-0 rounded-full border border-[var(--alpha-400)] bg-[var(--gray-1000)]",
+          "shadow-[0_1px_2px_#00000052] transition-[transform,box-shadow] duration-150 ease-[var(--ease-out-quint)]",
+          "hover:scale-115 focus-visible:ring-4 focus-visible:ring-ring/30 focus-visible:outline-none",
+          "active:scale-95",
+        )}
+      />
+    </SliderPrimitive.Root>
   )
 }
 

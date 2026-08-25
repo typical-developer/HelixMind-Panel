@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ChartFallback } from "@/components/chart-fallback";
 import { toast } from "@/hooks/use-toast";
-import { recordActivity } from "@/lib/activity-store";
+import { linkActivityRun, recordActivity } from "@/lib/activity-store";
 import { archiveRun } from "@/lib/run-archive";
 import { LastRunLink } from "@/components/last-run";
 import { downloadJSON, fileStamp } from "@/lib/download";
@@ -58,6 +58,7 @@ import {
   ToolbarButton,
   WBInput,
   WBSelect,
+  WBSlider,
   useLogStream,
   useAlerts,
   useRunStatus,
@@ -419,7 +420,7 @@ export default function MutationSimulator() {
     }
     announced.current = true;
 
-    recordActivity({
+    const event = recordActivity({
       kind: "simulation.completed",
       engine: "simulator",
       label: `Simulation · ${params.numGenerations} generations`,
@@ -472,6 +473,11 @@ export default function MutationSimulator() {
         finalSequence: currentSequence,
         note: "pH, nutrients and oxygen are recorded but do not currently affect the model.",
       },
+    }).then((runId) => {
+      // Linked after the write, not before it: a browser with no
+      // IndexedDB archives nothing, and an event pointing at a run
+      // that was never filed is worse than one pointing at its engine.
+      if (runId) linkActivityRun(event.id, runId)
     });
   }, [
     currentGeneration,
@@ -862,22 +868,20 @@ function SimulatorInspector({
                   }}
                   disabled={isRunning}
                 />
-                <WBSelect
+                <WBSelect<"C" | "F">
                   value={params.tempUnit}
-                  onChange={(e) => {
-                    setParams((prev) => ({
-                      ...prev,
-                      tempUnit: e.target.value as "C" | "F",
-                    }))
+                  onValueChange={(tempUnit) => {
+                    setParams((prev) => ({ ...prev, tempUnit }))
                     validateTemperature(params.temperature)
                   }}
                   disabled={isRunning}
                   className="w-20"
                   aria-label="Temperature unit"
-                >
-                  <option value={"C"}>&deg;C</option>
-                  <option value={"F"}>&deg;F</option>
-                </WBSelect>
+                  options={[
+                    { value: "C", label: "°C" },
+                    { value: "F", label: "°F" },
+                  ]}
+                />
               </div>
             </Field>
 
@@ -888,14 +892,12 @@ function SimulatorInspector({
               hint="Acidic · Neutral · Alkaline"
             >
               <div className="space-y-2">
-                <input
-                  type="range"
-                  min="0"
-                  max="14"
-                  step="0.1"
+                <WBSlider
+                  min={0}
+                  max={14}
+                  step={0.1}
                   value={params.pH}
-                  onChange={(e) => {
-                    const val = parseFloat(e.target.value)
+                  onValueChange={(val) => {
                     if (validatePH(val)) {
                       setParams((prev) => ({ ...prev, pH: val }))
                     }
@@ -922,34 +924,41 @@ function SimulatorInspector({
               </div>
             </Field>
 
+            {/* These two carried no `value` attributes — the option's text was
+                its value. The strings are reproduced exactly, because they are
+                what a saved run's parameters were recorded as. */}
             <Field label="Nutrient availability">
               <WBSelect
                 value={params.nutrients}
-                onChange={(e) =>
-                  setParams((prev) => ({ ...prev, nutrients: e.target.value }))
+                onValueChange={(nutrients) =>
+                  setParams((prev) => ({ ...prev, nutrients }))
                 }
                 disabled={isRunning}
-              >
-                <option>Low</option>
-                <option>Medium</option>
-                <option>High</option>
-                <option>Excess</option>
-              </WBSelect>
+                aria-label="Nutrient availability"
+                options={[
+                  { value: "Low", label: "Low" },
+                  { value: "Medium", label: "Medium" },
+                  { value: "High", label: "High" },
+                  { value: "Excess", label: "Excess" },
+                ]}
+              />
             </Field>
 
             <Field label="Oxygen level">
               <WBSelect
                 value={params.oxygen}
-                onChange={(e) =>
-                  setParams((prev) => ({ ...prev, oxygen: e.target.value }))
+                onValueChange={(oxygen) =>
+                  setParams((prev) => ({ ...prev, oxygen }))
                 }
                 disabled={isRunning}
-              >
-                <option>Anaerobic (None)</option>
-                <option>Low</option>
-                <option>Normal (21%)</option>
-                <option>High</option>
-              </WBSelect>
+                aria-label="Oxygen level"
+                options={[
+                  { value: "Anaerobic (None)", label: "Anaerobic (None)" },
+                  { value: "Low", label: "Low" },
+                  { value: "Normal (21%)", label: "Normal (21%)" },
+                  { value: "High", label: "High" },
+                ]}
+              />
             </Field>
 
             <Field label="Generations" error={errors.numGenerations} hint="1 – 10 per run">
@@ -976,16 +985,14 @@ function SimulatorInspector({
               error={errors.substitutionRate}
             >
               <div className="space-y-2">
-                <input
-                  type="range"
-                  min="0"
-                  max="0.001"
-                  step="0.00001"
+                <WBSlider
+                  min={0}
+                  max={0.001}
+                  step={0.00001}
                   value={params.substitutionRate}
                   disabled={isRunning}
                   aria-label="Base mutation rate"
-                  onChange={(e) => {
-                    const val = parseFloat(e.target.value)
+                  onValueChange={(val) => {
                     if (validateMutationRate(val)) {
                       setParams((prev) => ({ ...prev, substitutionRate: val }))
                     }

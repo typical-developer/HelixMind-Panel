@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "@/hooks/use-toast"
-import { recordActivity } from "@/lib/activity-store"
+import { linkActivityRun, recordActivity } from "@/lib/activity-store"
 import { archiveRun } from "@/lib/run-archive"
 import { LastRunLink } from "@/components/last-run"
 import { saveScanSnapshot } from "@/lib/lab-snapshot"
@@ -38,15 +38,18 @@ import {
 } from "@/lib/fasta"
 import {
   Chip,
+  DataTable,
   ViewLayout,
   ViewScroll,
   EmptyState,
+  ExportMenu,
   InspectorScroll,
   Pane,
   PaneHeader,
   RowIcon,
   Rule,
   StatTile,
+  Th,
   ToolbarButton,
   WBSelect,
   useLogStream,
@@ -252,7 +255,7 @@ export default function DNAScanner() {
       setPhase("idle")
       publishResult(parsedTargets[0], parsedReference, result)
 
-      recordActivity({
+      const event = recordActivity({
         kind: "scan.completed",
         engine: "scanner",
         label: `${fastaFile.name} scanned`,
@@ -310,6 +313,11 @@ export default function DNAScanner() {
             length: s.sequence.length,
           })),
         },
+      }).then((runId) => {
+        // Linked after the write, not before it: a browser with no
+        // IndexedDB archives nothing, and an event pointing at a run
+        // that was never filed is worse than one pointing at its engine.
+        if (runId) linkActivityRun(event.id, runId)
       })
     } catch (error) {
       // `File.text()` rejects on a file that has been moved or revoked since
@@ -567,17 +575,31 @@ export default function DNAScanner() {
             </TabsList>
 
             <div className="ml-auto flex items-center gap-0.5">
-              <ToolbarButton
-                icon={DownloadIcon}
-                label="Export statistics as JSON"
-                onClick={exportStats}
-                disabled={!stats}
-              />
-              <ToolbarButton
-                icon={FileText}
-                label="Export mutations as CSV"
-                onClick={exportMutations}
-                disabled={mutations.length === 0}
+              {/* The scan produces two different things, so the menu names
+                  them rather than leaving two glyphs to be told apart by
+                  hovering each in turn. */}
+              <ExportMenu
+                items={[
+                  {
+                    id: "stats",
+                    label: "Sequence statistics",
+                    format: "JSON",
+                    hint: "Composition, GC content and warnings",
+                    disabled: !stats,
+                    onSelect: exportStats,
+                  },
+                  {
+                    id: "variants",
+                    label: "Variant calls",
+                    format: "CSV",
+                    hint:
+                      mutations.length > 0
+                        ? `${mutations.length} row${mutations.length === 1 ? "" : "s"}`
+                        : "Needs a reference to call against",
+                    disabled: mutations.length === 0,
+                    onSelect: exportMutations,
+                  },
+                ]}
               />
             </div>
           </div>
@@ -768,48 +790,41 @@ function MutationsView({
   }
 
   return (
-    <div className="seq-scroll h-full min-h-0 overflow-auto">
-      <table className="w-full min-w-[28rem] text-sm">
-        <thead className="sticky top-0 z-10 bg-surface">
-          <tr className="border-b border-border">
-            {["Position", "Reference", "Variant", "Type", "Substitution"].map((h) => (
-              <th
-                key={h}
-                className="px-3 py-2 text-left text-xs font-medium text-muted-foreground"
-              >
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {mutations.map((m) => (
-            <tr
-              key={m.position}
-              className="row-hover border-b border-border/50 last:border-0"
-            >
-              <td className="px-3 py-2 font-mono text-foreground tabular">
-                {m.position.toLocaleString()}
-              </td>
-              <td className="px-3 py-2 font-mono text-muted-foreground">
-                {m.refBase}
-              </td>
-              <td className="px-3 py-2 font-mono font-semibold text-destructive">
-                {m.varBase}
-              </td>
-              <td className="px-3 py-2">
-                <Chip>{m.type}</Chip>
-              </td>
-              <td className="px-3 py-2">
-                <Chip tone={m.substitution === "transversion" ? "warning" : "neutral"}>
-                  {m.substitution}
-                </Chip>
-              </td>
-            </tr>
+    <DataTable minWidth="28rem" containerClassName="h-full">
+      <thead>
+        <tr>
+          {["Position", "Reference", "Variant", "Type", "Substitution"].map((h) => (
+            <Th key={h}>{h}</Th>
           ))}
-        </tbody>
-      </table>
-    </div>
+        </tr>
+      </thead>
+      <tbody>
+        {mutations.map((m) => (
+          <tr
+            key={m.position}
+            className="row-hover border-b border-border/50 last:border-0"
+          >
+            <td className="px-3 py-2 font-mono text-foreground tabular">
+              {m.position.toLocaleString()}
+            </td>
+            <td className="px-3 py-2 font-mono text-muted-foreground">
+              {m.refBase}
+            </td>
+            <td className="px-3 py-2 font-mono font-semibold text-destructive">
+              {m.varBase}
+            </td>
+            <td className="px-3 py-2">
+              <Chip>{m.type}</Chip>
+            </td>
+            <td className="px-3 py-2">
+              <Chip tone={m.substitution === "transversion" ? "warning" : "neutral"}>
+                {m.substitution}
+              </Chip>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </DataTable>
   )
 }
 
@@ -980,16 +995,14 @@ function ScannerInspector({
           <div className="p-3">
             <WBSelect
               value={selectedTargetId}
-              onChange={(e) => onSelectTarget(e.target.value)}
+              onValueChange={onSelectTarget}
               aria-label="Active target sequence"
               disabled={busy}
-            >
-              {targetSequences.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.header} · {s.sequence.length.toLocaleString()} bp
-                </option>
-              ))}
-            </WBSelect>
+              options={targetSequences.map((s) => ({
+                value: s.id,
+                label: `${s.header} · ${s.sequence.length.toLocaleString()} bp`,
+              }))}
+            />
           </div>
         </Pane>
       )}

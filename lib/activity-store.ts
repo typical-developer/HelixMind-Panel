@@ -44,8 +44,21 @@ export interface ActivityEvent {
   /** One line, shown in the Overview's activity list and the notification feed. */
   label: string
   detail?: string
-  /** Where clicking through should land. */
+  /** Where clicking through should land, when no run was archived. */
   href?: string
+  /**
+   * The archived run this event produced, once it has been filed.
+   *
+   * Set by {@link linkActivityRun} after the write resolves rather than at
+   * record time, because the archive is asynchronous and can decline — a
+   * private-browsing window has no IndexedDB. An event with no `runId` still
+   * links to its engine, which is what it did before the archive existed.
+   *
+   * Its absence is what forced the Activity view to *guess*: it paired events
+   * to runs by matching the engine and allowing four seconds of slack between
+   * the two timestamps. That works right up until two engines finish together.
+   */
+  runId?: string
   severity: ActivitySeverity
   /**
    * A count the event contributes to a headline figure — sequences parsed by a
@@ -127,6 +140,24 @@ export function recordActivity(
   persist()
   emit()
   return record
+}
+
+/**
+ * Point an event at the run it produced.
+ *
+ * Called once the archive write has resolved, so an event only ever claims a
+ * run that is actually there to open. Silently does nothing for an event that
+ * has already aged out of the log.
+ */
+export function linkActivityRun(eventId: string, runId: string): void {
+  hydrate()
+  const index = events.findIndex((event) => event.id === eventId)
+  if (index === -1 || events[index].runId === runId) return
+  const next = [...events]
+  next[index] = { ...next[index], runId }
+  events = next
+  persist()
+  emit()
 }
 
 export function clearActivity() {

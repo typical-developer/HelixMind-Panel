@@ -24,7 +24,6 @@ import {
 import { ToolbarButton } from "./primitives"
 import {
   tabSignalFor,
-  useConsole,
   useConsoleSignals,
   useWorkbench,
   type ConsoleSignals,
@@ -182,9 +181,9 @@ export function TabBar() {
   }
 
   return (
-    // A query container, so the analysis context hides on a narrow *bench*
-    // rather than a narrow window — dragging the sidebar out changes the
-    // strip's width without the viewport changing at all.
+    // A query container, so anything inside responds to the *bench's* width
+    // rather than the window's — dragging the sidebar out changes the strip's
+    // width without the viewport changing at all.
     <div className="@container flex h-9 shrink-0 items-stretch border-b border-border bg-chrome">
       <div
         ref={stripRef}
@@ -235,7 +234,9 @@ export function TabBar() {
         {announcement}
       </span>
 
-      <AnalysisContext />
+      {/* The analysis context line used to ride here, at the end of the strip,
+          where it competed with the tabs for width and hid below `@2xl`. It
+          moved to the breadcrumb bar, which has a row of its own for it. */}
 
       <div className="flex shrink-0 items-center gap-0.5 border-l border-border px-1.5">
         <ToolbarButton
@@ -680,34 +681,5 @@ function TabOverflowMenu() {
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-  )
-}
-
-/**
- * What the open analysis is working on — the sample loaded, the organism
- * selected — falling back to what the analysis is *for* until it has one.
- *
- * This used to be a 28px band of its own beneath the tabs, which also drew the
- * view's icon, its name and its group. The active tab already carries the first
- * two and the sidebar carries the third, and `VIEWS` is a flat registry, so
- * there was no hierarchy for it to breadcrumb — a whole horizontal band, on top
- * of three others, for one string. The string is the part worth keeping, so it
- * rides at the end of the strip that already names the view.
- */
-function AnalysisContext() {
-  const { view } = useWorkbench()
-  const { viewContext } = useConsole()
-
-  if (!view) return null
-
-  return (
-    <span
-      // Given away first when the strip runs out of room: the tabs themselves
-      // and the toolbar are both load-bearing, and this is a detail line.
-      className="hidden min-w-0 shrink items-center truncate px-2 text-xs text-muted-foreground @2xl:flex"
-      title={viewContext ?? view.hint}
-    >
-      {viewContext ?? view.hint}
-    </span>
   )
 }

@@ -108,6 +108,7 @@ interface LayoutState {
   inspectorVisible: boolean
   statusBarVisible: boolean
   tabBarVisible: boolean
+  breadcrumbsVisible: boolean
   focusMode: boolean
   zoom: number
   openTabs: string[]
@@ -124,6 +125,7 @@ const DEFAULT_LAYOUT: LayoutState = {
   inspectorVisible: true,
   statusBarVisible: true,
   tabBarVisible: true,
+  breadcrumbsVisible: true,
   focusMode: false,
   zoom: 0,
   openTabs: ["/dashboard"],
@@ -170,7 +172,21 @@ interface WorkbenchContextValue extends LayoutState {
   toggleInspector: () => void
   toggleStatusBar: () => void
   toggleTabBar: () => void
+  toggleBreadcrumbs: () => void
   toggleFocusMode: () => void
+
+  /**
+   * Step back and forward through the views visited this session.
+   *
+   * Guarded against leaving the app. `router.back()` walks the *browser's*
+   * history, which on the first view of a session is whatever preceded it —
+   * the sign-in page, or another site entirely. `canGoBack` is false until the
+   * bench has somewhere of its own to return to.
+   */
+  canGoBack: boolean
+  goBack: () => void
+  canGoForward: boolean
+  goForward: () => void
 
   zoomIn: () => void
   zoomOut: () => void
@@ -214,8 +230,16 @@ interface ConsoleState {
   runStatus: RunStatus | null
   runHistory: RunRecord[]
   statusItems: StatusItem[]
-  /** What the open view is working on, shown at the end of the tab strip. */
+  /** What the open view is working on, shown at the end of the breadcrumb bar. */
   viewContext: string | null
+  /**
+   * The last crumb in the trail, for routes that go deeper than a view.
+   *
+   * Published by the view rather than derived from the path because the name
+   * is not in the URL: `/activity/l8x2k-3` needs the archived run's label, and
+   * that is an asynchronous read the breadcrumb bar has no business doing.
+   */
+  viewCrumb: string | null
   /**
    * A line the status bar shows for a few seconds, then drops.
    *
@@ -239,6 +263,8 @@ interface ConsoleActions {
   restoreRunHistory: (records: RunRecord[]) => void
   publishStatusItems: (items: StatusItem[]) => void
   publishViewContext: (detail: string | null) => void
+  /** Name the deepest crumb. See {@link ConsoleState.viewCrumb}. */
+  publishViewCrumb: (label: string | null) => void
   /** Say something in the status bar briefly. See {@link ConsoleState.notice}. */
   notify: (message: string) => void
 }
@@ -284,6 +310,7 @@ function ConsoleProvider({ children }: { children: React.ReactNode }) {
   // context line, so these are single slots rather than per-source maps.
   const [statusItems, setStatusItems] = React.useState<StatusItem[]>([])
   const [viewContext, setViewContext] = React.useState<string | null>(null)
+  const [viewCrumb, setViewCrumb] = React.useState<string | null>(null)
   const [notice, setNotice] = React.useState<string | null>(null)
 
   /* ---- Run log --------------------------------------------------------- */
@@ -516,6 +543,12 @@ function ConsoleProvider({ children }: { children: React.ReactNode }) {
     [],
   )
 
+  const publishViewCrumb = React.useCallback(
+    (label: string | null) =>
+      setViewCrumb((prev) => (prev === label ? prev : label)),
+    [],
+  )
+
   // Every dependency here is a `useCallback` with an empty dep list, so this
   // object is created once. That is the whole point: publishers subscribe to it
   // and never re-render because of the data they publish.
@@ -531,6 +564,7 @@ function ConsoleProvider({ children }: { children: React.ReactNode }) {
       restoreRunHistory,
       publishStatusItems,
       publishViewContext,
+      publishViewCrumb,
       notify,
     }),
     [
@@ -544,6 +578,7 @@ function ConsoleProvider({ children }: { children: React.ReactNode }) {
       restoreRunHistory,
       publishStatusItems,
       publishViewContext,
+      publishViewCrumb,
       notify,
     ],
   )
@@ -576,8 +611,26 @@ function ConsoleProvider({ children }: { children: React.ReactNode }) {
   }, [logs])
 
   const state = React.useMemo<ConsoleState>(
-    () => ({ logs, alerts, runStatus, runHistory, statusItems, viewContext, notice }),
-    [logs, alerts, runStatus, runHistory, statusItems, viewContext, notice],
+    () => ({
+      logs,
+      alerts,
+      runStatus,
+      runHistory,
+      statusItems,
+      viewContext,
+      viewCrumb,
+      notice,
+    }),
+    [
+      logs,
+      alerts,
+      runStatus,
+      runHistory,
+      statusItems,
+      viewContext,
+      viewCrumb,
+      notice,
+    ],
   )
 
   /* ---- Tab signals ----------------------------------------------------- */
@@ -734,6 +787,102 @@ function LayoutProvider({ children }: { children: React.ReactNode }) {
 
   const sidebarVisible = layout.sidebarVisible && !forced.sidebar
   const inspectorVisible = layout.inspectorVisible && !forced.inspector
+
+  /* ---- Navigation history ----------------------------------------------- */
+
+  /**
+   * The views visited this session, and where in them we are.
+   *
+   * The bench needs its own record because the browser's is not answerable:
+   * `history.length` counts entries from before the app was loaded and cannot
+   * be read positionally, so there is no way to ask "is there anywhere of ours
+   * to go back to". Without that, a Back button on the first view of a session
+   * quietly navigates to the sign-in page or off the site entirely.
+   *
+   * Held in a ref and mirrored into state: the stack is written from an effect
+   * that must not re-run because of its own write, but the buttons have to
+   * re-render when it changes.
+   */
+  const nav = React.useRef<{ stack: string[]; index: number }>({
+    stack: [],
+    index: -1,
+  })
+  const [travel, setTravel] = React.useState({ back: false, forward: false })
+
+  /**
+   * Whether the navigation about to arrive is a traversal rather than a push.
+   *
+   * Two sources, because neither covers both cases. Our own buttons set
+   * `intent` directly — they know which way they went, and relying on the
+   * event would make the cursor depend on `popstate` landing before the
+   * pathname effect, which is not something the router guarantees. The
+   * browser's own Back and Forward announce themselves only through the event,
+   * so that listener stays: without it a press of the browser's back button
+   * looks like a push and truncates everything ahead of the cursor.
+   */
+  const intent = React.useRef<-1 | 0 | 1>(0)
+  const popped = React.useRef(false)
+
+  React.useEffect(() => {
+    const onPop = () => {
+      popped.current = true
+    }
+    window.addEventListener("popstate", onPop)
+    return () => window.removeEventListener("popstate", onPop)
+  }, [])
+
+  React.useEffect(() => {
+    const history = nav.current
+    const wasPop = intent.current !== 0 || popped.current
+    intent.current = 0
+    popped.current = false
+
+    if (history.index === -1) {
+      history.stack = [pathname]
+      history.index = 0
+    } else if (history.stack[history.index] !== pathname) {
+      if (wasPop) {
+        // Check the neighbours first. A view visited twice appears twice in the
+        // stack, and matching on the step actually taken keeps the cursor where
+        // the traversal put it rather than snapping to another occurrence.
+        if (history.stack[history.index - 1] === pathname) history.index -= 1
+        else if (history.stack[history.index + 1] === pathname) history.index += 1
+        else {
+          const found = history.stack.lastIndexOf(pathname)
+          if (found === -1) {
+            history.stack = [...history.stack, pathname]
+            history.index = history.stack.length - 1
+          } else {
+            history.index = found
+          }
+        }
+      } else {
+        // A push makes everything ahead of the cursor unreachable.
+        history.stack = [...history.stack.slice(0, history.index + 1), pathname]
+        history.index = history.stack.length - 1
+      }
+    }
+
+    setTravel((prev) => {
+      const next = {
+        back: history.index > 0,
+        forward: history.index < history.stack.length - 1,
+      }
+      return prev.back === next.back && prev.forward === next.forward ? prev : next
+    })
+  }, [pathname])
+
+  const goBack = React.useCallback(() => {
+    if (nav.current.index <= 0) return
+    intent.current = -1
+    router.back()
+  }, [router])
+
+  const goForward = React.useCallback(() => {
+    if (nav.current.index >= nav.current.stack.length - 1) return
+    intent.current = 1
+    router.forward()
+  }, [router])
 
   /* ---- Open analyses --------------------------------------------------- */
 
@@ -973,6 +1122,10 @@ function LayoutProvider({ children }: { children: React.ReactNode }) {
     () => setLayout((p) => ({ ...p, tabBarVisible: !p.tabBarVisible })),
     [],
   )
+  const toggleBreadcrumbs = React.useCallback(
+    () => setLayout((p) => ({ ...p, breadcrumbsVisible: !p.breadcrumbsVisible })),
+    [],
+  )
   const toggleFocusMode = React.useCallback(
     () => setLayout((p) => ({ ...p, focusMode: !p.focusMode })),
     [],
@@ -1150,7 +1303,12 @@ function LayoutProvider({ children }: { children: React.ReactNode }) {
       toggleInspector,
       toggleStatusBar,
       toggleTabBar,
+      toggleBreadcrumbs,
       toggleFocusMode,
+      canGoBack: travel.back,
+      goBack,
+      canGoForward: travel.forward,
+      goForward,
       zoomIn,
       zoomOut,
       zoomReset,
@@ -1184,7 +1342,12 @@ function LayoutProvider({ children }: { children: React.ReactNode }) {
       toggleInspector,
       toggleStatusBar,
       toggleTabBar,
+      toggleBreadcrumbs,
       toggleFocusMode,
+      travel.back,
+      travel.forward,
+      goBack,
+      goForward,
       zoomIn,
       zoomOut,
       zoomReset,
@@ -1377,4 +1540,25 @@ export function useViewContext(detail: string | null) {
   React.useEffect(() => {
     return () => publishViewContext(null)
   }, [publishViewContext])
+}
+
+/**
+ * Name the last crumb in the breadcrumb trail.
+ *
+ * Only for routes that go deeper than a registered view. The trail derives
+ * everything else from the path, but a segment like `/activity/l8x2k-3` is an
+ * id, and the name behind it lives in the archive — so the view that has
+ * already loaded the record hands it over rather than the bar going and
+ * fetching it a second time.
+ */
+export function useCrumb(label: string | null) {
+  const { publishViewCrumb } = useConsoleActions()
+
+  React.useEffect(() => {
+    publishViewCrumb(label)
+  }, [label, publishViewCrumb])
+
+  React.useEffect(() => {
+    return () => publishViewCrumb(null)
+  }, [publishViewCrumb])
 }

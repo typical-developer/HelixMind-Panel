@@ -20,7 +20,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { APP_NAME, APP_VERSION, SUPPORT_EMAIL } from "@/lib/app-info"
-import { useWorkbench } from "@/components/workbench"
+import { BulletItem, BulletList, useWorkbench } from "@/components/workbench"
 
 import { useSupport } from "./support-provider"
 
@@ -149,31 +149,31 @@ function AboutDialog({
 
           <div className="space-y-1.5 rounded-md border border-warning/30 p-3">
             <p className="font-medium text-warning">Known limitations</p>
-            <ul className="list-disc space-y-1 pl-4">
-              <li>
+            <BulletList>
+              <BulletItem>
                 A run stops when you leave the analysis that started it — runs do
                 not continue in the background.
-              </li>
-              <li>
+              </BulletItem>
+              <BulletItem>
                 In the Growth Lab, the strain you pick is displayed but does not
                 yet drive the model.
-              </li>
-              <li>
+              </BulletItem>
+              <BulletItem>
                 In the Mutation Simulator, pH, nutrients and oxygen are recorded
                 but do not yet affect mutation rate.
-              </li>
-              <li>
+              </BulletItem>
+              <BulletItem>
                 In the Resistance Predictor, the organism flags unexpected
                 markers but does not change the score.
-              </li>
-              <li>
+              </BulletItem>
+              <BulletItem>
                 Resistance calls score marker <em>presence</em> against a curated
                 table. Presence is not phenotype, and no breakpoint standard
                 (EUCAST or CLSI) is applied — this is not a susceptibility
                 report.
-              </li>
-              <li>Password reset is not available — contact support.</li>
-            </ul>
+              </BulletItem>
+              <BulletItem>Password reset is not available — contact support.</BulletItem>
+            </BulletList>
           </div>
 
           <p>

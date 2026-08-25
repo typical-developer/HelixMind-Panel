@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/resizable"
 import { ActivityBar } from "./activity-bar"
 import { BottomPanel } from "./panel"
+import { BreadcrumbBar } from "./breadcrumb-bar"
 import { CommandPalette } from "./command-palette"
 import { SideBar } from "./side-bar"
 import { StatusBar } from "./status-bar"
@@ -46,6 +47,7 @@ export function Workbench({ children }: { children: React.ReactNode }) {
     setPanelSize,
     statusBarVisible,
     tabBarVisible,
+    breadcrumbsVisible,
   } = useWorkbench()
 
   const sidebarRef = usePanelRef()
@@ -141,6 +143,7 @@ export function Workbench({ children }: { children: React.ReactNode }) {
               <ResizablePanel id="wb-content" minSize="8%">
                 <div className="flex h-full min-h-0 flex-col bg-surface">
                   {!focusMode && tabBarVisible && <TabBar />}
+                  {!focusMode && breadcrumbsVisible && <BreadcrumbBar />}
                   <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
                 </div>
               </ResizablePanel>

@@ -153,6 +153,12 @@ function CustomizeLayoutMenu() {
           Open tabs
         </DropdownMenuCheckboxItem>
         <DropdownMenuCheckboxItem
+          checked={wb.breadcrumbsVisible}
+          onCheckedChange={wb.toggleBreadcrumbs}
+        >
+          Breadcrumbs
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuCheckboxItem
           checked={wb.statusBarVisible}
           onCheckedChange={wb.toggleStatusBar}
         >
