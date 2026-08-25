@@ -692,7 +692,9 @@ export default function MutationSimulator() {
             />
             <div className="min-h-0 flex-1 p-3">
               {generationStats.length > 0 ? (
-                <RunChart data={generationStats} />
+                <div className="animate-fade-in">
+                  <RunChart data={generationStats} />
+                </div>
               ) : (
                 <div className="flex h-[300px] flex-col items-center justify-center gap-2 text-center">
                   <div

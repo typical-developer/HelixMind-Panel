@@ -138,7 +138,7 @@ export default function NotificationsPage() {
                     )
                   }
                   disabled={notifications.length === 0}
-                  className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive"
+                  className="h-6 px-2 text-xs text-muted-foreground transition-colors hover:text-destructive"
                 >
                   <Trash2 className="size-3.5" />
                   Clear
@@ -192,7 +192,10 @@ export default function NotificationsPage() {
               }
             />
           ) : (
-            <div>
+            // Keyed on the filter so switching All/Unread replays the entrance,
+            // and staggered so a burst of finished runs reads as a list being
+            // filled rather than one block appearing.
+            <div key={filter} className="animate-stagger">
               {visible.map((n) => (
                 <NotificationItem
                   key={n.id}

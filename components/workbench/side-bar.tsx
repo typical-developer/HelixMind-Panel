@@ -314,7 +314,7 @@ function RunsView() {
     <div className="space-y-1">
       <SideSection title="In progress">
         {runStatus && runStatus.state !== "idle" ? (
-          <div className="space-y-2 px-3 py-2">
+          <div className="animate-rise-in space-y-2 px-3 py-2">
             <div className="flex items-center gap-2">
               {runStatus.state === "running" ? (
                 <CircleDot className="size-3.5 animate-soft-pulse text-success" />
@@ -369,7 +369,7 @@ function RunsView() {
             No runs finished yet. Completed runs are kept here between visits.
           </p>
         ) : (
-          <>
+          <div className="animate-stagger">
             {runHistory.slice(0, SIDEBAR_RUNS).map((record) => (
               <TreeRow
                 key={record.id}
@@ -398,7 +398,7 @@ function RunsView() {
               level={1}
               onClick={() => setPanelTab("history")}
             />
-          </>
+          </div>
         )}
       </SideSection>
 

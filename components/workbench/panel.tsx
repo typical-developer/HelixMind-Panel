@@ -115,10 +115,15 @@ export function BottomPanel() {
                 )}
               >
                 {tab.label}
+                {/* Counts move as output streams in. Keyed so the badge is
+                    re-placed on each change rather than silently reading a
+                    different number. */}
                 {count > 0 && (
                   <span
+                    key={count}
                     className={cn(
-                      "flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-2xs font-semibold tabular",
+                      "animate-pop-in flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-2xs font-semibold tabular",
+                      "transition-colors duration-200 ease-[var(--ease-standard)]",
                       active
                         ? "bg-[var(--wb-selected)] text-foreground"
                         : "bg-[var(--wb-active)] text-muted-foreground",
@@ -281,7 +286,7 @@ function AlertsView() {
   }
 
   return (
-    <div className="seq-scroll h-full overflow-auto py-1">
+    <div className="animate-stagger seq-scroll h-full overflow-auto py-1">
       {grouped.map(([source, list]) => {
         // Alerts name a console channel; the registry knows which view owns
         // it. Before this the source was a bare string with nothing behind it,
@@ -496,6 +501,7 @@ function HistoryView() {
         Open Activity to search past runs and reopen their results
         <ArrowRight className="ml-auto size-3 shrink-0" />
       </button>
+      <div className="animate-stagger">
       {runHistory.map((record) => (
         <Row
           key={record.id}
@@ -525,6 +531,7 @@ function HistoryView() {
           }
         />
       ))}
+      </div>
     </div>
   )
 }

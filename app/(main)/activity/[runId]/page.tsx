@@ -17,6 +17,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 
+import { cn } from "@/lib/utils"
 import { downloadJSON, fileStamp, safeFilename } from "@/lib/download"
 import { formatBytes } from "@/lib/storage"
 import { formatRelative, useRelativeClock, type EngineId } from "@/lib/activity-store"
@@ -67,6 +68,7 @@ export default function RunDetailPage() {
   const { openTab } = useWorkbench()
   const now = useRelativeClock()
 
+  const [rawOpen, setRawOpen] = React.useState(false)
   const [run, setRun] = React.useState<ArchivedRun | null>(null)
   const [status, setStatus] = React.useState<"loading" | "ready" | "missing">(
     "loading",
@@ -159,7 +161,7 @@ export default function RunDetailPage() {
 
   return (
     <ViewScroll>
-      <div className="mx-auto flex max-w-3xl flex-col gap-3 p-3">
+      <div className="animate-stagger mx-auto flex max-w-3xl flex-col gap-3 p-3">
         <Pane>
           <PaneHeader
             icon={engine?.icon ?? Info}
@@ -274,20 +276,51 @@ export default function RunDetailPage() {
           <ResultView engine={run.engine} payload={run.payload} />
         </Pane>
 
-        <details className="group rounded-lg border border-border bg-surface">
-          <summary className="row-hover flex h-8 cursor-pointer items-center gap-2 rounded-lg px-3 text-sm text-muted-foreground select-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none">
-            <ChevronRight className="size-3.5 shrink-0 transition-transform duration-150 group-open:rotate-90" />
+        {/*
+          A controlled disclosure rather than <details>.
+
+          Native <details> takes its content out of flow when closed, so there
+          is nothing for a height transition to run against — it snaps open,
+          which on a block this tall is the most jarring movement on the page.
+          The collapse is a capped max-height written as conditional utility
+          classes — see the note in globals.css for why that rather than a grid
+          `0fr` → `1fr`. The cap is the code surface's own `max-h-96` plus its
+          padding, so the easing runs against very nearly the true height, and
+          the opacity fade covers the remainder.
+        */}
+        <section className="rounded-lg border border-border bg-surface">
+          <button
+            type="button"
+            aria-expanded={rawOpen}
+            onClick={() => setRawOpen((v) => !v)}
+            className="row-hover flex h-8 w-full cursor-pointer items-center gap-2 rounded-lg px-3 text-left text-sm text-muted-foreground transition-colors select-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
+          >
+            <ChevronRight
+              className={cn(
+                "size-3.5 shrink-0 transition-transform duration-200 ease-[var(--ease-out-quint)]",
+                rawOpen && "rotate-90",
+              )}
+            />
             Raw record
-          </summary>
+          </button>
           {/* Kept, and kept collapsed. The rendered view above is what someone
               reads; this is what they hand to a colleague or paste into a
               ticket, and it is the fallback if a renderer ever misses a field. */}
-          <div className="border-t border-border p-3">
-            <CodeSurface className="max-h-96">
-              {JSON.stringify(run.payload, null, 2)}
-            </CodeSurface>
+          <div
+            className={cn(
+              "overflow-hidden transition-[max-height,opacity] ease-[var(--ease-out-quint)]",
+              rawOpen
+                ? "max-h-[27rem] opacity-100 duration-240"
+                : "max-h-0 opacity-0 duration-180",
+            )}
+          >
+            <div className="border-t border-border p-3">
+              <CodeSurface className="max-h-96">
+                {JSON.stringify(run.payload, null, 2)}
+              </CodeSurface>
+            </div>
           </div>
-        </details>
+        </section>
       </div>
     </ViewScroll>
   )

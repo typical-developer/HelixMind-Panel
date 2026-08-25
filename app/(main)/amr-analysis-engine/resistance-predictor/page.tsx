@@ -387,7 +387,11 @@ export default function ResistancePredictorPage() {
     >
       {results ? (
         <ViewScroll>
-          <div className="flex flex-col gap-3 p-3">
+          {/* A resistance profile is the payoff of the whole view, and it used
+              to replace the empty state in a single frame. Staggered so the
+              panes land in reading order — the calls first, then the notes
+              beneath them. */}
+          <div className="animate-stagger flex flex-col gap-3 p-3">
             <Pane>
               <PaneHeader
                 icon={Sparkles}

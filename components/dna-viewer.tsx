@@ -158,7 +158,7 @@ export function DNAViewer() {
         </span>
 
         {rows.map((row) => (
-          <div key={row.start} className="flex hover:bg-[var(--wb-hover)]">
+          <div key={row.start} className="flex transition-colors duration-100 hover:bg-[var(--wb-hover)]">
             <span className="gutter-num sticky left-0 w-16 shrink-0 bg-[var(--wb-inset)] pr-3.5">
               {row.start + 1}
             </span>

@@ -50,10 +50,16 @@ export default function NotificationBell() {
           )}
         >
           <Bell className="size-3.5" />
+          {/* Keyed on the count, so the badge is placed when the first
+              notification arrives *and* re-placed each time the number moves.
+              A scale-from-0.85 rather than a rise: it is a 14px circle, and
+              3px of vertical travel on something that small reads as a
+              wobble. */}
           {unreadCount > 0 && (
             <span
+              key={unreadCount}
               className={cn(
-                "absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full",
+                "animate-pop-in absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full",
                 "bg-brand px-0.5 text-[9px] font-semibold text-brand-foreground ring-2 ring-chrome tabular",
               )}
             >
@@ -119,7 +125,7 @@ export default function NotificationBell() {
           <Link
             href="/notifications"
             onClick={() => setOpen(false)}
-            className="row-hover flex items-center gap-1.5 rounded-sm px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground"
+            className="row-hover flex items-center gap-1.5 rounded-sm px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
             {notifications.length > POPOVER_ROWS
               ? `View all ${notifications.length} notifications`
@@ -129,7 +135,7 @@ export default function NotificationBell() {
           <Link
             href="/activity"
             onClick={() => setOpen(false)}
-            className="row-hover flex items-center gap-1.5 rounded-sm px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground"
+            className="row-hover flex items-center gap-1.5 rounded-sm px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
             Activity and past runs
             <ArrowUpRight className="ml-auto size-3" />

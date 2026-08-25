@@ -152,7 +152,7 @@ export default function Dashboard() {
           {/* Keyed to the bench's width, not the window's: with the inspector
               open a "wide" viewport can still leave a narrow bench, and four
               metric tiles across it would be unreadable. */}
-          <div className="grid grid-cols-1 gap-3 @sm/bench:grid-cols-2 @4xl/bench:grid-cols-4">
+          <div className="animate-stagger grid grid-cols-1 gap-3 @sm/bench:grid-cols-2 @4xl/bench:grid-cols-4">
             <StatTile
               label="Sequences analysed"
               value={summary.sequencesAnalysed.toLocaleString()}
@@ -197,7 +197,11 @@ export default function Dashboard() {
           {/* Every panel below this point is empty until something has been
               run, which is honest but unhelpful on a first visit. This is the
               way in, and it disappears the moment the lab has been used. */}
-          {summary.runsCompleted === 0 && <GettingStarted />}
+          {summary.runsCompleted === 0 && (
+            <div className="animate-rise-in">
+              <GettingStarted />
+            </div>
+          )}
 
           {/* Sequence readout and mutation grid sit side by side once the bench
               is wide enough, so a sequence and the calls made against it read
@@ -261,7 +265,7 @@ function GettingStarted() {
         title="Get started"
         subtitle="nothing has been run in this workspace yet"
       />
-      <div className="grid gap-2 p-3 @3xl/bench:grid-cols-2">
+      <div className="animate-stagger grid gap-2 p-3 @3xl/bench:grid-cols-2">
         {steps.map((step) => (
           <button
             key={step.href}
@@ -334,7 +338,7 @@ function OverviewInspector() {
             you run them.
           </p>
         ) : (
-          <div>
+          <div className="animate-stagger">
             {events.slice(0, RECENT_EVENTS).map((event) => (
               <ActivityRow
                 key={event.id}
@@ -352,7 +356,7 @@ function OverviewInspector() {
           <button
             type="button"
             onClick={() => openTab("/activity")}
-            className="row-hover flex w-full cursor-pointer items-center gap-1.5 border-t border-border px-3 py-2 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none focus-visible:ring-inset"
+            className="row-hover animate-fade-in flex w-full cursor-pointer items-center gap-1.5 border-t border-border px-3 py-2 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none focus-visible:ring-inset"
           >
             View all {events.length} events
             <ArrowRight className="ml-auto size-3" />
@@ -407,7 +411,7 @@ function OverviewInspector() {
           </div>
 
           <Rule label="Engines" />
-          <div className="space-y-1.5 text-xs">
+          <div className="animate-stagger space-y-1.5 text-xs">
             {engines.map((engine) => (
               <button
                 key={engine.id}

@@ -322,7 +322,7 @@ export default function Settings() {
                 type="button"
                 onClick={() => setQuery("")}
                 aria-label="Clear search"
-                className="absolute top-1/2 right-1.5 flex size-5 -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm text-muted-foreground hover:bg-[var(--wb-active)] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
+                className="animate-pop-in absolute top-1/2 right-1.5 flex size-5 -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-[var(--wb-active)] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
               >
                 <X className="size-3" />
               </button>
@@ -676,7 +676,7 @@ export default function Settings() {
                   >
                     <a
                       href={`mailto:${SUPPORT_EMAIL}`}
-                      className="text-sm text-foreground underline underline-offset-2 hover:text-foreground/80"
+                      className="text-sm text-foreground underline underline-offset-2 transition-colors hover:text-foreground/80"
                     >
                       {SUPPORT_EMAIL}
                     </a>
@@ -787,7 +787,7 @@ export default function Settings() {
             <AlertDialogAction
               disabled={confirmText.trim().toLowerCase() !== "delete"}
               onClick={handleDeleteAll}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-destructive text-destructive-foreground transition-colors hover:bg-destructive/90"
             >
               Delete everything
             </AlertDialogAction>

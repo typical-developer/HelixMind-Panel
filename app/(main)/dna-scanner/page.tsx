@@ -596,7 +596,7 @@ export default function DNAScanner() {
               action={<LastRunLink engine="scanner" />}
             />
           ) : (
-            <div className="min-h-0 flex-1">
+            <div className="animate-fade-in min-h-0 flex-1">
               <TabsContent value="stats" className="h-full min-h-0">
                 <ViewScroll className="p-3">
                   <StatsView stats={stats} warnings={warnings} />
@@ -711,14 +711,14 @@ function StatsView({
       </Pane>
 
       {warnings.length > 0 && (
-        <Pane className="border-warning/30">
+        <Pane className="animate-rise-in border-warning/30">
           <PaneHeader
             icon={AlertTriangle}
             title="Quality warnings"
             subtitle={`${warnings.length} issue${warnings.length !== 1 ? "s" : ""}`}
             className="text-warning"
           />
-          <ul className="divide-y divide-border/60">
+          <ul className="animate-stagger divide-y divide-border/60">
             {warnings.map((warning, i) => (
               <li
                 key={i}
@@ -862,7 +862,7 @@ function SequenceView({ sequence }: { sequence: FastaSequence | undefined }) {
 
       <div className="seq-scroll min-h-0 flex-1 overflow-auto bg-[var(--wb-inset)] py-2 font-mono text-xs leading-5">
         {rows.map((row) => (
-          <div key={row.start} className="flex hover:bg-[var(--wb-hover)]">
+          <div key={row.start} className="flex transition-colors duration-100 hover:bg-[var(--wb-hover)]">
             <span className="gutter-num sticky left-0 w-20 shrink-0 bg-[var(--wb-inset)] pr-3">
               {row.start + 1}
             </span>

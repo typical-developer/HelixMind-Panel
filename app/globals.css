@@ -639,6 +639,130 @@
     }
   }
 
+  /* ---- Arriving content -------------------------------------------------
+
+     Three entrances, and the difference between them is what the thing *is*,
+     not how big it is.
+
+     `fade-in` above is for content that replaces other content in a box that
+     was already there — a console tab body, a filtered list. Nothing moves,
+     because the container did not move.
+
+     `rise-in` is for content that was not on screen at all a moment ago and
+     now occupies space: a results pane after a run, a warning that has just
+     been raised, an inline error. The 3px of travel is the whole point — it
+     says "this is new", where a pure fade says "this changed". Kept to 3px so
+     it reads as arrival rather than as the layout settling.
+
+     `pop-in` is for marks rather than content: an unread count, a chip, a
+     status dot. They are small and often circular, so a rise reads as a
+     wobble; a scale from 0.85 reads as the mark being placed. This is the one
+     place `--ease-swift` earns its overshoot. */
+
+  .animate-rise-in {
+    animation: rise-in 0.2s var(--ease-out-quint) both;
+    animation-delay: var(--enter-delay, 0ms);
+  }
+  @keyframes rise-in {
+    from {
+      opacity: 0;
+      transform: translateY(3px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .animate-pop-in {
+    animation: pop-in 0.18s var(--ease-swift) both;
+    animation-delay: var(--enter-delay, 0ms);
+  }
+  @keyframes pop-in {
+    from {
+      opacity: 0;
+      transform: scale(0.85);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* Stagger a list's own children as they arrive.
+
+     The delay is capped by the nth-child rules rather than being computed per
+     item in JSX: a list of two hundred activity rows must not end up with a
+     four-second cascade, and the first half-dozen rows are the only ones the
+     eye tracks anyway. Everything past the sixth arrives together. */
+  .animate-stagger > * {
+    animation: rise-in 0.2s var(--ease-out-quint) both;
+  }
+  .animate-stagger > *:nth-child(1) {
+    animation-delay: 0ms;
+  }
+  .animate-stagger > *:nth-child(2) {
+    animation-delay: 25ms;
+  }
+  .animate-stagger > *:nth-child(3) {
+    animation-delay: 50ms;
+  }
+  .animate-stagger > *:nth-child(4) {
+    animation-delay: 75ms;
+  }
+  .animate-stagger > *:nth-child(5) {
+    animation-delay: 100ms;
+  }
+  .animate-stagger > *:nth-child(n + 6) {
+    animation-delay: 120ms;
+  }
+
+  /* ---- Reveals ----------------------------------------------------------
+
+     There is deliberately no `.reveal` helper here; disclosures are written as
+     conditional utility classes at the call site instead. See the raw-record
+     panel in `app/(main)/activity/[runId]/page.tsx`.
+
+     Height is not animatable to `auto`, so a disclosure has two options. A
+     one-row grid going `0fr` → `1fr` needs no measured height and is the usual
+     advice, but an `fr` track sizes against free space, which makes it
+     sensitive to whatever flex or grid ancestors it happens to sit inside. A
+     capped `max-height` resolves identically everywhere at the cost of easing
+     slightly fast when the content is much shorter than the cap — which a
+     concurrent opacity fade covers.
+
+     This app uses the capped `max-height`, chosen for predictability over
+     elegance. Where the content has a known ceiling of its own (a code surface
+     with `max-h-96`, say) the cap can be set just above it and the difference
+     is imperceptible.
+     ---------------------------------------------------------------------- */
+
+  /* ---- A figure that has just changed ------------------------------------
+
+     Numbers cannot tween in CSS, and a counter that jumps from 0 to 24,521
+     with no acknowledgement is the single most common way a dashboard reads as
+     static. This does not fake a count-up — it marks the moment the figure
+     landed, by lifting it to full-strength foreground and letting it settle
+     back. Applied by re-keying the element on its own value, so it fires only
+     when the number genuinely changed. */
+  .animate-value-in {
+    animation: value-in 0.42s var(--ease-out-quint) both;
+  }
+  @keyframes value-in {
+    0% {
+      opacity: 0;
+      transform: translateY(-2px);
+    }
+    45% {
+      opacity: 1;
+      transform: none;
+    }
+    100% {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
   /* "Something is live" pulse. Shallow on purpose — a running job should read
      as a heartbeat in the corner of your eye, not a blinking warning light. */
   .animate-soft-pulse {

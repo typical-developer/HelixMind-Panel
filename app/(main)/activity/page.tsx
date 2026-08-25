@@ -296,7 +296,7 @@ export default function ActivityPage() {
               <button
                 type="button"
                 onClick={clearFilters}
-                className="flex h-6 cursor-pointer items-center gap-1 rounded-sm px-1.5 text-xs text-muted-foreground transition-colors hover:bg-[var(--wb-hover)] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
+                className="animate-pop-in flex h-6 cursor-pointer items-center gap-1 rounded-sm px-1.5 text-xs text-muted-foreground transition-colors hover:bg-[var(--wb-hover)] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
               >
                 <X className="size-3" />
                 Clear
@@ -319,7 +319,10 @@ export default function ActivityPage() {
             // the whole list at once and reads as a flicker without it, while
             // paging appends to the same key and stays still. Same treatment the
             // console's tab bodies use.
-            <div key={`${engine}|${kind}|${severity}`} className="animate-fade-in">
+            <div
+              key={`${engine}|${kind}|${severity}`}
+              className="animate-stagger"
+            >
               {visible.map((event) => (
                 <ActivityRow
                   key={event.id}
@@ -338,7 +341,7 @@ export default function ActivityPage() {
             <button
               type="button"
               onClick={() => setShown((n) => n + PAGE)}
-              className="row-hover w-full cursor-pointer border-t border-border px-3 py-2 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none focus-visible:ring-inset"
+              className="row-hover animate-fade-in w-full cursor-pointer border-t border-border px-3 py-2 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none focus-visible:ring-inset"
             >
               Show {Math.min(PAGE, filtered.length - visible.length)} more ·{" "}
               {filtered.length - visible.length} remaining

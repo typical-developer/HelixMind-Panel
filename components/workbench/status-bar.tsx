@@ -99,9 +99,14 @@ export function StatusBar() {
 
       <div className="flex-1" />
 
+      {/* Views publish these as they mount and as their figures change, so a
+          status item is almost always *arriving* rather than sitting still.
+          Keyed on the label as well as the id: re-keying replays the entrance
+          when the reading changes, which is the only cue the strip gives that
+          a number moved. */}
       {statusItems.map((item) => (
         <StatusItem
-          key={item.id}
+          key={`${item.id}:${String(item.label)}`}
           icon={item.icon}
           label={item.label}
           title={item.title}
@@ -158,7 +163,7 @@ function StatusItem({
   const className = cn(
     // Items shrink and truncate rather than pushing the strip wider than the
     // window. `min-w-0` is what makes the inner `truncate` actually engage.
-    "flex min-w-0 items-center gap-1.5 px-2 transition-colors duration-100",
+    "animate-fade-in flex min-w-0 items-center gap-1.5 px-2 transition-colors duration-100",
     toneClass,
     onClick &&
       "cursor-pointer hover:bg-[var(--wb-selected)] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none focus-visible:ring-inset",

@@ -518,6 +518,9 @@ export function StatTile({
   // own colour turns a metrics row into a set of warning boxes; the value and
   // its supporting line carry the state instead, which is where the eye
   // already is.
+  // Tone classes are swapped, not toggled, so they need a transition on the
+  // element that carries them — see the `transition-colors` on the value and
+  // hint below.
   const toneText = {
     default: "text-foreground",
     positive: "text-success",
@@ -551,17 +554,33 @@ export function StatTile({
         </p>
       </div>
       {/* The value steps down a size in a narrow tile rather than overflowing
-          or wrapping a long figure onto two lines. */}
+          or wrapping a long figure onto two lines.
+
+          Keyed on the value itself, so the entrance replays when — and only
+          when — the figure actually changes. A scan finishing takes "Sequences
+          analysed" from 0 to 24,521; without this the number is simply
+          different the next time you look at the tile, which is how a live
+          readout ends up reading as a static one. */}
       <p
+        key={String(value)}
         className={cn(
-          "truncate text-xl leading-none font-semibold tabular @2xs:text-2xl",
+          "animate-value-in truncate text-xl leading-none font-semibold tabular @2xs:text-2xl",
           toneText,
         )}
         title={typeof value === "string" || typeof value === "number" ? String(value) : undefined}
       >
         {value}
       </p>
-      {hint && <p className={cn("truncate text-xs", toneHint)}>{hint}</p>}
+      {hint && (
+        <p
+          className={cn(
+            "truncate text-xs transition-colors duration-200 ease-[var(--ease-standard)]",
+            toneHint,
+          )}
+        >
+          {hint}
+        </p>
+      )}
     </div>
   )
 }
@@ -586,7 +605,7 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        "relative flex flex-1 flex-col items-center justify-center gap-2 px-6 py-12 text-center",
+        "animate-rise-in relative flex flex-1 flex-col items-center justify-center gap-2 px-6 py-12 text-center",
         className,
       )}
     >
@@ -752,6 +771,11 @@ export function Chip({
     <span
       className={cn(
         "inline-flex h-[18px] items-center gap-1 rounded-full border px-1.5 text-2xs font-medium",
+        // A chip's tone *is* its meaning — "idle" becoming "used", a run going
+        // from neutral to success. Those are the moments worth seeing, and
+        // without a transition the pill simply is a different colour the next
+        // time you look at it.
+        "transition-colors duration-200 ease-[var(--ease-standard)]",
         tones,
         className,
       )}

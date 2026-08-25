@@ -725,7 +725,7 @@ export default function MicrobeGrowthLab() {
             <div className="p-3">
               {chartData.length > 0 ? (
                 // chartRef lets handleExportPNG find the SVG inside this div
-                <div className="h-72" ref={chartRef}>
+                <div className="animate-fade-in h-72" ref={chartRef}>
                   <PopulationChart data={chartData} />
                 </div>
               ) : (
