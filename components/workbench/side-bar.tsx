@@ -43,7 +43,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
-import { SideSection, ToolbarButton, TreeRow, WBInput, Chip } from "./primitives"
+import {
+  Chip,
+  RowIcon,
+  SideSection,
+  ToolbarButton,
+  TreeRow,
+  WBInput,
+} from "./primitives"
 import {
   tabSignalFor,
   useConsole,
@@ -356,24 +363,42 @@ function RunsView() {
 
       <SideSection title="Finished" defaultOpen={runHistory.length > 0}>
         {runHistory.length === 0 ? (
-          <p className="px-3 py-2 text-xs text-muted-foreground/70">
-            No runs finished this session.
+          <p className="px-3 py-2 text-xs leading-relaxed text-muted-foreground/70">
+            {/* This said "this session", which stopped being true once run
+                history started surviving a reload. */}
+            No runs finished yet. Completed runs are kept here between visits.
           </p>
         ) : (
-          runHistory.slice(0, 6).map((record) => (
+          <>
+            {runHistory.slice(0, SIDEBAR_RUNS).map((record) => (
+              <TreeRow
+                key={record.id}
+                icon={record.outcome === "completed" ? CheckCircle2 : CircleSlash}
+                iconClassName={
+                  record.outcome === "completed"
+                    ? "text-success"
+                    : "text-muted-foreground"
+                }
+                label={record.label}
+                detail={formatAgo(record.endedAt)}
+                level={1}
+                onClick={() => setPanelTab("history")}
+                title={record.detail}
+              />
+            ))}
+            {/* Six of fifty, with nothing saying so, is a list that looks
+                complete and is not. */}
             <TreeRow
-              key={record.id}
-              icon={record.outcome === "completed" ? CheckCircle2 : CircleSlash}
-              iconClassName={
-                record.outcome === "completed" ? "text-success" : "text-muted-foreground"
+              icon={History}
+              label={
+                runHistory.length > SIDEBAR_RUNS
+                  ? `All ${runHistory.length} finished runs`
+                  : "Open the run history"
               }
-              label={record.label}
-              detail={formatAgo(record.endedAt)}
               level={1}
               onClick={() => setPanelTab("history")}
-              title={record.detail}
             />
-          ))
+          </>
         )}
       </SideSection>
 
@@ -404,6 +429,9 @@ function RunsView() {
     </div>
   )
 }
+
+/** Finished runs listed in the sidebar before it defers to the console. */
+const SIDEBAR_RUNS = 6
 
 /** Coarse relative time — the sidebar only needs "how recently". */
 function formatAgo(ts: number) {
@@ -561,14 +589,14 @@ function PreferencesView() {
           {toggles.map((t) => (
             <label
               key={t.label}
-              className="row-hover flex cursor-pointer items-center gap-2 rounded-sm px-1.5 py-1.5"
+              className="row-hover flex cursor-pointer items-start gap-2 rounded-sm px-1.5 py-1.5"
             >
-              <t.icon className="size-3.5 shrink-0 text-muted-foreground" />
+              <RowIcon icon={t.icon} className="text-muted-foreground" />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm text-foreground">
                   {t.label}
                 </span>
-                <span className="block truncate text-xs text-muted-foreground/70">
+                <span className="mt-0.5 block truncate text-xs text-muted-foreground/70">
                   {t.hint}
                 </span>
               </span>
@@ -576,6 +604,7 @@ function PreferencesView() {
                 checked={t.checked}
                 onCheckedChange={t.onChange}
                 aria-label={t.label}
+                className="self-center"
               />
             </label>
           ))}

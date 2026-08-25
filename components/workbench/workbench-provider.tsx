@@ -356,6 +356,34 @@ function ConsoleProvider({ children }: { children: React.ReactNode }) {
 
   const alerts = React.useMemo(() => Object.values(alertMap).flat(), [alertMap])
 
+  /* ---- The status bar's notice line -------------------------------------
+     Declared before the run lifecycle because that is its loudest caller: a
+     run ending because you navigated away is a non-event, and belongs here
+     rather than in a toast. */
+
+  /**
+   * Held in a ref so `notify` keeps an empty dependency list — see the note on
+   * `actions` below. Re-notifying restarts the clock rather than stacking a
+   * second timer that would clear a message it did not set.
+   */
+  const noticeTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const notify = React.useCallback((message: string) => {
+    if (noticeTimer.current) clearTimeout(noticeTimer.current)
+    setNotice(message)
+    noticeTimer.current = setTimeout(() => {
+      noticeTimer.current = null
+      setNotice(null)
+    }, 4000)
+  }, [])
+
+  React.useEffect(
+    () => () => {
+      if (noticeTimer.current) clearTimeout(noticeTimer.current)
+    },
+    [],
+  )
+
   /* ---- Runs ------------------------------------------------------------ */
 
   // The run in flight, tracked outside state so recording its completion never
@@ -427,21 +455,32 @@ function ConsoleProvider({ children }: { children: React.ReactNode }) {
         description: record.detail,
       })
     } else {
-      // A run ends when its view unmounts, which is what happens the moment
-      // you open another analysis. Saying so out loud is better than the run
-      // silently vanishing from the status bar — see docs/BUG-REPORT.md, where
-      // running analyses in the background is recorded as a known limitation.
-      toast({
-        variant: "warning",
-        title: `${active.label} stopped`,
-        description: "Runs end when you leave the analysis that started them.",
-      })
+      // A run ends when its view unmounts, which is what happens the moment you
+      // open another analysis — see docs/BUG-REPORT.md O5. It still has to be
+      // said, because the run otherwise vanishes from the status bar with no
+      // explanation, but it is not worth a toast: switching analyses is the
+      // most repeated action in the app, and a modal-ish pop-up on every one of
+      // them trains the operator to dismiss toasts without reading them. The
+      // status strip is already where the bench narrates itself, and the run is
+      // filed in History either way.
+      notify(`${active.label} stopped — runs end when you leave the analysis`)
     }
-  }, [])
+  }, [notify])
 
   const clearRunHistory = React.useCallback(() => setRunHistory([]), [])
 
-  /** Same renumbering as the log, for the same reason. */
+  /**
+   * Put records back, newest first.
+   *
+   * Same renumbering as the log, for the same reason — restored ids would
+   * otherwise collide with ones already handed out this session.
+   *
+   * The sort is the fix. Restored records were concatenated onto the end
+   * regardless of when they ran, which is right for the mount-time restore
+   * (the list is empty) and wrong for the other caller: undoing a "clear run
+   * history" filed every restored run *below* anything that had finished since,
+   * in a list whose whole contract is newest-first.
+   */
   const restoreRunHistory = React.useCallback((records: RunRecord[]) => {
     if (records.length === 0) return
     setRunHistory((prev) => {
@@ -449,7 +488,9 @@ function ConsoleProvider({ children }: { children: React.ReactNode }) {
         ...record,
         id: -records.length + index,
       }))
-      return [...prev, ...renumbered].slice(0, 50)
+      return [...prev, ...renumbered]
+        .sort((a, b) => b.endedAt - a.endedAt)
+        .slice(0, 50)
     })
   }, [])
 
@@ -472,29 +513,6 @@ function ConsoleProvider({ children }: { children: React.ReactNode }) {
   const publishViewContext = React.useCallback(
     (detail: string | null) =>
       setViewContext((prev) => (prev === detail ? prev : detail)),
-    [],
-  )
-
-  /**
-   * Held in a ref so `notify` keeps an empty dependency list — see the note on
-   * `actions` below. Re-notifying restarts the clock rather than stacking a
-   * second timer that would clear a message it did not set.
-   */
-  const noticeTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const notify = React.useCallback((message: string) => {
-    if (noticeTimer.current) clearTimeout(noticeTimer.current)
-    setNotice(message)
-    noticeTimer.current = setTimeout(() => {
-      noticeTimer.current = null
-      setNotice(null)
-    }, 4000)
-  }, [])
-
-  React.useEffect(
-    () => () => {
-      if (noticeTimer.current) clearTimeout(noticeTimer.current)
-    },
     [],
   )
 

@@ -3,6 +3,7 @@
 import * as React from "react"
 import {
   AlertCircle,
+  ArrowRight,
   CheckCircle2,
   ChevronsDownUp,
   ChevronsUpDown,
@@ -22,7 +23,7 @@ import { toast } from "@/hooks/use-toast"
 import { ToastAction } from "@/components/ui/toast"
 import { copyToClipboard, downloadJSON, fileStamp } from "@/lib/download"
 
-import { Chip, ToolbarButton, WBInput, WBSelect } from "./primitives"
+import { Chip, Row, RowIcon, ToolbarButton, WBInput, WBSelect } from "./primitives"
 import {
   useConsole,
   useWorkbench,
@@ -316,12 +317,7 @@ function AlertsView() {
               const Icon = SEVERITY_ICON[alert.severity]
               const row = (
                 <>
-                  <Icon
-                    className={cn(
-                      "mt-0.5 size-3.5 shrink-0",
-                      SEVERITY_CLASS[alert.severity],
-                    )}
-                  />
+                  <RowIcon icon={Icon} className={SEVERITY_CLASS[alert.severity]} />
                   <span className="min-w-0 flex-1 text-foreground/85">
                     {alert.message}
                   </span>
@@ -442,7 +438,13 @@ function RunLogView() {
           ))}
         </WBSelect>
 
-        <span className="ml-auto shrink-0 font-mono text-xs text-muted-foreground tabular">
+        <span
+          className="ml-auto shrink-0 font-mono text-xs text-muted-foreground tabular"
+          // The buffer holds 500 lines and only the last 200 are written to
+          // storage, so a reload silently shortens the log. Saying so in the
+          // tooltip is cheaper than someone concluding output went missing.
+          title="The console buffers 500 lines; the most recent 200 survive a reload. Export a run from Activity to keep its full record."
+        >
           {narrowed ? `${filtered.length} / ${logs.length}` : `${logs.length}`} lines
         </span>
       </div>
@@ -472,7 +474,7 @@ function RunLogView() {
 
 function HistoryView() {
   const { runHistory } = useConsole()
-  const { setPanelTab } = useWorkbench()
+  const { openTab, setPanelTab } = useWorkbench()
 
   if (runHistory.length === 0) {
     return (
@@ -485,41 +487,43 @@ function HistoryView() {
 
   return (
     <div className="seq-scroll h-full overflow-auto py-1">
+      <button
+        type="button"
+        onClick={() => openTab("/activity")}
+        className="row-hover flex w-full cursor-pointer items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring/60 focus-visible:outline-none focus-visible:ring-inset"
+      >
+        {/* These rows say a run happened. Activity says what it found. */}
+        Open Activity to search past runs and reopen their results
+        <ArrowRight className="ml-auto size-3 shrink-0" />
+      </button>
       {runHistory.map((record) => (
-        <button
+        <Row
           key={record.id}
-          type="button"
+          icon={record.outcome === "completed" ? CheckCircle2 : CircleSlash}
+          iconClassName={
+            record.outcome === "completed" ? "text-success" : "text-muted-foreground"
+          }
+          label={record.label}
+          description={record.detail}
           onClick={() => setPanelTab("log")}
           title={`${record.label}${record.detail ? ` — ${record.detail}` : ""} · ${new Date(
             record.startedAt,
           ).toLocaleString()}`}
-          className="row-hover flex w-full cursor-pointer items-center gap-2.5 px-3 py-1.5 text-left focus-visible:ring-1 focus-visible:ring-ring/60 focus-visible:outline-none focus-visible:ring-inset"
-        >
-          {record.outcome === "completed" ? (
-            <CheckCircle2 className="size-3.5 shrink-0 text-success" />
-          ) : (
-            <CircleSlash className="size-3.5 shrink-0 text-muted-foreground" />
-          )}
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm text-foreground/90">
-              {record.label}
-            </span>
-            {record.detail && (
-              <span className="block truncate text-xs text-muted-foreground/70">
-                {record.detail}
+          className="py-1.5"
+          trailing={
+            <>
+              <Chip tone={record.outcome === "completed" ? "success" : "neutral"}>
+                {record.outcome}
+              </Chip>
+              <span className="w-14 text-right font-mono text-xs text-muted-foreground tabular">
+                {formatDuration(record.endedAt - record.startedAt)}
               </span>
-            )}
-          </span>
-          <Chip tone={record.outcome === "completed" ? "success" : "neutral"}>
-            {record.outcome}
-          </Chip>
-          <span className="w-14 shrink-0 text-right font-mono text-xs text-muted-foreground tabular">
-            {formatDuration(record.endedAt - record.startedAt)}
-          </span>
-          <span className="w-16 shrink-0 text-right font-mono text-xs text-muted-foreground/60 tabular">
-            {formatTime(record.endedAt)}
-          </span>
-        </button>
+              <span className="w-16 text-right font-mono text-xs text-muted-foreground/60 tabular">
+                {formatTime(record.endedAt)}
+              </span>
+            </>
+          }
+        />
       ))}
     </div>
   )
@@ -546,7 +550,7 @@ function ConsoleEmpty({
 }) {
   return (
     <div className="flex h-full items-start gap-2 px-3 py-3 text-sm text-muted-foreground">
-      <Icon className="mt-0.5 size-3.5 shrink-0 opacity-70" />
+      <RowIcon icon={Icon} line="relaxed" className="opacity-70" />
       <span className="max-w-lg leading-relaxed">{message}</span>
     </div>
   )
@@ -607,6 +611,22 @@ function LogStream({
   const scrollRef = React.useRef<HTMLDivElement>(null)
   const pinned = React.useRef(true)
 
+  /**
+   * The highest id seen on the previous render.
+   *
+   * `animate-line-in` was on every row unconditionally, so opening the console
+   * on a full buffer played five hundred entrance animations at once, and every
+   * change of filter replayed all of them. The animation is for *new output
+   * arriving* — a line that was already there has not arrived. Only rows above
+   * this mark animate.
+   */
+  const seen = React.useRef(-Infinity)
+  const highWater = seen.current
+  const newest = lines.length > 0 ? lines[lines.length - 1].id : seen.current
+  React.useEffect(() => {
+    seen.current = newest
+  }, [newest])
+
   // Follow the tail only while the reader is already at the bottom, so
   // scrolling back through history isn't yanked away by new output.
   const onScroll = React.useCallback(() => {
@@ -632,7 +652,10 @@ function LogStream({
       {lines.map((line) => (
         <div
           key={line.id}
-          className="animate-line-in flex items-start gap-2 rounded-xs px-1 hover:bg-[var(--wb-hover)]"
+          className={cn(
+            "flex items-start gap-2 rounded-xs px-1 hover:bg-[var(--wb-hover)]",
+            line.id > highWater && "animate-line-in",
+          )}
         >
           <span className="shrink-0 text-[var(--log-dim)] tabular">
             {formatTime(line.ts)}

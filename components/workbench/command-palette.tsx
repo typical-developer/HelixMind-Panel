@@ -16,6 +16,7 @@ import {
   LogOut,
   Maximize2,
   Microscope,
+  MoreHorizontal,
   PanelBottom,
   PanelLeft,
   PanelRight,
@@ -54,6 +55,15 @@ import { useConsoleActions, useWorkbench } from "./workbench-provider"
 import { VIEWS, groupLabel } from "./registry"
 
 const GENE_LIBRARY = "/amr-analysis-engine/gene-database"
+
+/**
+ * Gene records the palette lists before handing off to the library.
+ *
+ * The group heading has always carried the true match count, but the list
+ * simply stopped at eight with no way through to the rest — so a search that
+ * matched thirty genes looked like a search that matched eight.
+ */
+const GENE_MATCHES = 8
 
 /** The prefixes that switch what the palette is searching. */
 const MODES = [
@@ -429,7 +439,7 @@ export function CommandPalette() {
           <>
             {!mode && <CommandSeparator />}
             <CommandGroup heading={`Genes · ${geneMatches.length}`}>
-              {geneMatches.slice(0, 8).map((r) => (
+              {geneMatches.slice(0, GENE_MATCHES).map((r) => (
                 <CommandItem
                   key={r.id}
                   value={`${r.gene} ${r.organism} ${r.antibiotic} ${r.drugClass} ${r.mechanism}`}
@@ -447,6 +457,19 @@ export function CommandPalette() {
                   <CommandShortcut>Gene library</CommandShortcut>
                 </CommandItem>
               ))}
+              {geneMatches.length > GENE_MATCHES && (
+                <CommandItem
+                  value={`__more-genes__ ${trimmed}`}
+                  onSelect={() => goToGene(trimmed)}
+                >
+                  <MoreHorizontal />
+                  <span className="truncate text-muted-foreground">
+                    {geneMatches.length - GENE_MATCHES} more match
+                    {geneMatches.length - GENE_MATCHES === 1 ? "" : "es"}
+                  </span>
+                  <CommandShortcut>Open the library</CommandShortcut>
+                </CommandItem>
+              )}
             </CommandGroup>
           </>
         )}

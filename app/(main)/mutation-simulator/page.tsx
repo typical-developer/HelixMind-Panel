@@ -20,6 +20,8 @@ import { cn } from "@/lib/utils";
 import { ChartFallback } from "@/components/chart-fallback";
 import { toast } from "@/hooks/use-toast";
 import { recordActivity } from "@/lib/activity-store";
+import { archiveRun } from "@/lib/run-archive";
+import { LastRunLink } from "@/components/last-run";
 import { downloadJSON, fileStamp } from "@/lib/download";
 import {
   FASTA_EXTENSIONS,
@@ -51,6 +53,7 @@ import {
   Field,
   Pane,
   PaneHeader,
+  RowIcon,
   StatTile,
   ToolbarButton,
   WBInput,
@@ -115,6 +118,16 @@ export default function MutationSimulator() {
   const orfsRef = useRef<ORF[]>([]);
   /** Set once per run so completion is announced exactly once. */
   const announced = useRef(false);
+  /**
+   * The mutation list, mirrored outside React state.
+   *
+   * The generation loop needs the accumulated list to score fitness, and
+   * reaching for it through a state updater is what made each generation record
+   * itself twice — see the note in the loop below.
+   */
+  const mutationsRef = useRef<MutationRecord[]>([]);
+  /** When the current run began, for the archived record's duration. */
+  const startedAtRef = useRef<number>(0);
 
   const totalMutations = mutations.length;
 
@@ -159,6 +172,7 @@ export default function MutationSimulator() {
         setIsRunning(false);
         setCurrentGeneration(0);
         setMutations([]);
+        mutationsRef.current = [];
         setGenerationStats([]);
         setTotals({ substitutions: 0, insertions: 0, deletions: 0 });
         setSeed(null);
@@ -243,6 +257,7 @@ export default function MutationSimulator() {
     setIsRunning(false);
     setCurrentGeneration(0);
     setMutations([]);
+    mutationsRef.current = [];
     setGenerationStats([]);
     setTotals({ substitutions: 0, insertions: 0, deletions: 0 });
     setCurrentSequence(sequence);
@@ -304,6 +319,7 @@ export default function MutationSimulator() {
       setSeed(nextSeed);
       randomRef.current = createRandom(nextSeed);
       announced.current = false;
+      startedAtRef.current = Date.now();
     }
 
     setIsRunning(true);
@@ -347,20 +363,40 @@ export default function MutationSimulator() {
       );
 
       setCurrentSequence(result.sequence);
-      setMutations((prev) => {
-        const all = [...prev, ...result.mutations];
-        setGenerationStats((stats) => [
-          ...stats,
-          {
-            generation,
-            fitness: calculateFitness(all),
-            mutationCount: result.mutations.length,
-            progress: (generation / params.numGenerations) * 100,
-            cumulativeMutations: all.length,
-          },
-        ]);
-        return all;
-      });
+
+      /*
+       * One append per generation, guaranteed.
+       *
+       * This used to call `setGenerationStats` from *inside* the
+       * `setMutations` updater, so that it could read the accumulated mutation
+       * list for `calculateFitness`. A state updater has to be a pure function
+       * of its input: React is free to call it more than once for a single
+       * update, and in development it deliberately does. Every generation
+       * therefore appended its row twice — a 2-generation run recorded four
+       * stats, the chart plotted each generation twice, and the run log emitted
+       * each line twice.
+       *
+       * The fix is to stop needing the updater's argument. `mutationsRef`
+       * tracks the same list outside React state, so the row can be computed
+       * here, once, and appended with an updater that only concatenates.
+       */
+      const all = [...mutationsRef.current, ...result.mutations];
+      mutationsRef.current = all;
+      const stat = {
+        generation,
+        fitness: calculateFitness(all),
+        mutationCount: result.mutations.length,
+        progress: (generation / params.numGenerations) * 100,
+        cumulativeMutations: all.length,
+      };
+
+      setMutations(all);
+      setGenerationStats((stats) =>
+        // Idempotent: a replayed updater cannot append the same generation
+        // twice. Belt and braces alongside the ref above, because this is the
+        // series the chart and the archived record are both built from.
+        stats.some((s) => s.generation === generation) ? stats : [...stats, stat],
+      );
       setTotals((prev) => ({
         substitutions: prev.substitutions + result.substitutions,
         insertions: prev.insertions + result.insertions,
@@ -394,12 +430,60 @@ export default function MutationSimulator() {
       severity: "success",
       value: params.numGenerations,
     });
+
+    // Everything the export blob carries, filed where it can be found again.
+    // Leaving this view used to discard the generation series and the final
+    // strand outright — the run existed only as a one-line label.
+    void archiveRun({
+      engine: "simulator",
+      label: `Simulation · ${params.numGenerations} generations`,
+      detail: `${sequenceHeader || queryFastaFile?.name || "sequence"} · ${
+        mutations.length
+      } mutation${mutations.length === 1 ? "" : "s"}`,
+      startedAt: startedAtRef.current || Date.now(),
+      endedAt: Date.now(),
+      outcome: "completed",
+      href: "/mutation-simulator",
+      inputs: {
+        file: queryFastaFile?.name ?? null,
+        header: sequenceHeader,
+        startingLength: sequence.length,
+        finalLength: currentSequence.length,
+      },
+      params: {
+        ...params,
+        temperatureCelsius: toCelsius(params.temperature, params.tempUnit),
+      },
+      // The seed is what makes this repeatable rather than merely recorded.
+      seed,
+      summary: {
+        generations: params.numGenerations,
+        mutations: mutations.length,
+        substitutions: totals.substitutions,
+        insertions: totals.insertions,
+        deletions: totals.deletions,
+        finalFitness: Number(
+          (generationStats.at(-1)?.fitness ?? 100).toFixed(1),
+        ),
+      },
+      payload: {
+        generationStats,
+        mutations,
+        finalSequence: currentSequence,
+        note: "pH, nutrients and oxygen are recorded but do not currently affect the model.",
+      },
+    });
   }, [
     currentGeneration,
-    mutations.length,
-    params.numGenerations,
+    currentSequence,
+    generationStats,
+    mutations,
+    params,
     queryFastaFile,
+    seed,
+    sequence.length,
     sequenceHeader,
+    totals,
   ]);
 
   const currentFitness =
@@ -627,6 +711,7 @@ export default function MutationSimulator() {
                       ? `Loaded ${sequence.length.toLocaleString()} bp sequence`
                       : "Upload a sequence in the inspector, then press Start"}
                   </p>
+                  {!isRunning && <LastRunLink engine="simulator" className="mt-1" />}
                 </div>
               )}
             </div>
@@ -720,14 +805,17 @@ function SimulatorInspector({
           <div className="space-y-2 p-3">
             <label
               htmlFor="query_fasta"
-              className="group flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-border p-3 transition-colors duration-150 hover:border-[var(--wb-border-strong)] hover:bg-[var(--wb-hover)]"
+              className="group flex cursor-pointer items-start gap-2 rounded-md border border-dashed border-border p-3 transition-colors duration-150 hover:border-[var(--wb-border-strong)] hover:bg-[var(--wb-hover)]"
             >
-              <Upload className="size-3.5 shrink-0 text-muted-foreground transition-transform duration-150 group-hover:-translate-y-0.5" />
+              <RowIcon
+                icon={Upload}
+                className="text-muted-foreground transition-transform duration-150 group-hover:-translate-y-0.5"
+              />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium text-foreground">
                   Upload FASTA
                 </span>
-                <span className="block truncate text-xs text-muted-foreground/80">
+                <span className="mt-0.5 block truncate text-xs text-muted-foreground/80">
                   {FASTA_EXTENSIONS.join(" ")}
                 </span>
               </span>

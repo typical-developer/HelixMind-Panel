@@ -4,6 +4,7 @@ import { useMemo } from "react"
 import dynamic from "next/dynamic"
 import {
   Activity,
+  ArrowRight,
   Clock,
   Gauge,
   ScanLine,
@@ -18,6 +19,7 @@ import { DNAViewer } from "@/components/dna-viewer"
 import { MutationTable } from "@/components/mutation-table"
 import { Skeleton } from "@/components/ui/skeleton"
 import { formatBytes, measureUsage } from "@/lib/storage"
+import { archiveUsage, useArchiveState, useArchivedRuns } from "@/lib/run-archive"
 import {
   formatRelative,
   useActivity,
@@ -35,6 +37,8 @@ import {
   ViewScroll,
   Pane,
   PaneHeader,
+  Row,
+  RowIcon,
   Rule,
   StatTile,
   useConsole,
@@ -75,6 +79,9 @@ const EVENT_ICON: Record<EngineId, LucideIcon> = {
   growth: FlaskConical,
   amr: ShieldAlert,
 }
+
+/** Rows in the Overview's activity pane before it defers to the Activity view. */
+const RECENT_EVENTS = 12
 
 const SEVERITY_CLASS = {
   danger: "text-destructive",
@@ -262,7 +269,7 @@ function GettingStarted() {
             onClick={() => openTab(step.href)}
             className="card-hover flex cursor-pointer items-start gap-2.5 rounded-md border border-border bg-[var(--wb-raised)] p-3 text-left focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
           >
-            <step.icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+            <RowIcon icon={step.icon} size="4" className="text-muted-foreground" />
             <span className="min-w-0 flex-1">
               <span className="flex items-center gap-2">
                 <span className="truncate text-sm font-medium text-foreground">
@@ -300,7 +307,18 @@ function OverviewInspector() {
   // the same cadence they are reported at.
   const now = useRelativeClock()
 
-  const usage = useMemo(() => measureUsage(), [events])
+  // Measured once per mount, not once per event.
+  //
+  // This was keyed on `events`, which meant a synchronous sweep of every
+  // `localStorage` key the panel owns ran on the completion of every scan,
+  // simulation and export — with the dependency suppressed by a lint comment
+  // because `measureUsage` does not actually read `events`. The figure is a
+  // rough "how much is kept here", not a live meter, and a mount is often
+  // enough for it.
+  const usage = useMemo(() => measureUsage(), [])
+  const runs = useArchivedRuns()
+  const archiveState = useArchiveState()
+  const archive = useMemo(() => archiveUsage(runs), [runs])
 
   return (
     <InspectorScroll>
@@ -317,7 +335,7 @@ function OverviewInspector() {
           </p>
         ) : (
           <div>
-            {events.slice(0, 12).map((event) => (
+            {events.slice(0, RECENT_EVENTS).map((event) => (
               <ActivityRow
                 key={event.id}
                 event={event}
@@ -327,6 +345,19 @@ function OverviewInspector() {
             ))}
           </div>
         )}
+        {/* The log holds 200 events and this pane shows twelve. Until there
+            was somewhere to send you, the other 188 were recorded, persisted
+            and counted in the figures above — and unreachable. */}
+        {events.length > RECENT_EVENTS && (
+          <button
+            type="button"
+            onClick={() => openTab("/activity")}
+            className="row-hover flex w-full cursor-pointer items-center gap-1.5 border-t border-border px-3 py-2 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none focus-visible:ring-inset"
+          >
+            View all {events.length} events
+            <ArrowRight className="ml-auto size-3" />
+          </button>
+        )}
       </Pane>
 
       <Pane>
@@ -335,17 +366,43 @@ function OverviewInspector() {
           <Rule label="Storage" />
           <div className="space-y-1">
             <div className="flex items-baseline justify-between text-xs">
-              <span className="text-muted-foreground">Saved in this browser</span>
+              <span className="text-muted-foreground">Log, layout and feed</span>
               <span className="font-mono text-foreground/80 tabular">
                 {formatBytes(usage.bytes)}
               </span>
             </div>
+            {/* Archived results are the bulky half and live in a different
+                store, so reporting one total would understate what is actually
+                on this machine.
+
+                Held back until the archive has hydrated. IndexedDB is
+                asynchronous, so the honest reading for the first frame or two is
+                "not known yet" — printing "0 archived results" and then
+                correcting it to eleven is the same class of untruth the rest of
+                this pane exists to avoid, just briefer. */}
+            {archiveState !== "loading" && (
+              <button
+                type="button"
+                onClick={() => openTab("/activity")}
+                className="row-hover animate-fade-in flex w-full cursor-pointer items-baseline justify-between rounded-sm text-left text-xs focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
+                title="Open Activity to browse, reopen or export archived runs"
+              >
+                <span className="text-muted-foreground">
+                  {archive.runs} archived result{archive.runs === 1 ? "" : "s"}
+                </span>
+                <span className="font-mono text-foreground/80 tabular">
+                  {formatBytes(archive.bytes)}
+                </span>
+              </button>
+            )}
             <p className="text-xs leading-relaxed text-muted-foreground/70">
               {/* The pane used to draw a "4.2 / 10 GB" bar at a hardcoded 42%.
-                  There is no sequence store and no quota to report — the panel
-                  keeps its history in this browser, so that is what it says. */}
-              Runs, notifications and layout are kept locally. Nothing is
-              uploaded.
+                  There is no server-side store and no quota to report — the
+                  panel keeps everything in this browser, so that is what it
+                  says. */}
+              {archiveState === "unavailable"
+                ? "This browser will not let the panel store results, so runs cannot be reopened later. Export them instead."
+                : "Runs, their results, notifications and layout are kept on this device. Nothing is uploaded."}
             </p>
           </div>
 
@@ -389,33 +446,17 @@ function ActivityRow({
   now: number
   onOpen: () => void
 }) {
-  const Icon = EVENT_ICON[event.engine] ?? Activity
-  const tone = SEVERITY_CLASS[event.severity] ?? "text-muted-foreground"
-
-  const content = (
-    <>
-      <Icon className={`mt-0.5 size-3.5 shrink-0 ${tone}`} />
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm text-foreground/85">{event.label}</p>
-        <p className="truncate text-xs text-muted-foreground/70">
-          {event.detail ? `${event.detail} · ` : ""}
-          {formatRelative(event.ts, now)}
-        </p>
-      </div>
-    </>
-  )
-
-  if (!event.href) {
-    return <div className="row-hover flex items-start gap-2 px-3 py-2">{content}</div>
-  }
-
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="row-hover flex w-full cursor-pointer items-start gap-2 px-3 py-2 text-left focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none focus-visible:ring-inset"
-    >
-      {content}
-    </button>
+    <Row
+      icon={EVENT_ICON[event.engine] ?? Activity}
+      iconClassName={SEVERITY_CLASS[event.severity] ?? "text-muted-foreground"}
+      label={event.label}
+      description={`${event.detail ? `${event.detail} · ` : ""}${formatRelative(
+        event.ts,
+        now,
+      )}`}
+      onClick={event.href ? onOpen : undefined}
+      title={event.href ? "Open the analysis that raised this" : undefined}
+    />
   )
 }

@@ -7,6 +7,7 @@ import { Eye, EyeOff, AlertCircle, Check, Dna, Activity, ShieldCheck } from "luc
 import Logo from "@/components/ui/Logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { RowIcon } from "@/components/workbench";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { toast } from "@/hooks/use-toast";
@@ -155,9 +156,9 @@ export default function SignUpPage() {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {error && (
-              <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-                <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                <span>{error}</span>
+              <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                <RowIcon icon={AlertCircle} size="4" />
+                <span className="min-w-0">{error}</span>
               </div>
             )}
 
@@ -204,7 +205,7 @@ export default function SignUpPage() {
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
                 >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                 </button>
               </div>
               {password && (
@@ -212,13 +213,13 @@ export default function SignUpPage() {
                   {passwordRequirements.map((req, i) => (
                     <div key={i} className="flex items-center gap-1.5 text-xs">
                       <span
-                        className={`flex h-4 w-4 items-center justify-center rounded-full transition-colors ${
+                        className={`flex size-4 items-center justify-center rounded-full transition-colors ${
                           req.met
-                            ? "bg-emerald-500/20 text-emerald-400"
+                            ? "bg-success/20 text-success"
                             : "bg-muted text-muted-foreground"
                         }`}
                       >
-                        <Check className="h-2.5 w-2.5" />
+                        <Check className="size-2.5" />
                       </span>
                       <span className={req.met ? "text-foreground" : "text-muted-foreground"}>
                         {req.label}

@@ -3,10 +3,15 @@
 Everything found during the production-readiness pass, with file references,
 how it showed up, and what happened to it.
 
-**Summary:** 48 issues. 42 fixed, 6 open (5 by your decision, 1 third-party).
+**Summary:** 63 issues. 56 fixed, 7 open (5 by your decision, 1 third-party,
+1 needing a backend change).
 
 Nothing here was found by reading alone — the app was built, typechecked,
-covered with 142 unit tests, and driven in a browser end to end.
+covered with 160 unit tests, and driven in a browser end to end. The second-pass
+findings below were each measured in the running app rather than argued from the
+source: the toast bug via `elementFromPoint` hit-testing, the alignment bug via a
+script that ranges each first text line and compares centres, and the archive by
+reading records back out of IndexedDB.
 
 ---
 
@@ -535,6 +540,264 @@ still holds the key; it is ignored, so no migration was needed.
 
 ---
 
+## Second pass — reported by you
+
+Everything below was found or fixed after the first pass, working from your
+report: the toast fighting the bottom strip, icons not sitting on their labels,
+too much colour on the notification surfaces, lists that stop without saying so,
+and "when I run all the things, is the data just lost?".
+
+### C10 · A visible toast made the status bar unclickable — **FIXED** *(reported)*
+`components/ui/toast.tsx`
+
+Radix sets `pointerEvents: hasToasts ? undefined : "none"` as an **inline
+style** on its viewport (`@radix-ui/react-toast/dist/index.mjs:180`). So the
+property is only ever set when there are *no* toasts — the moment one appears,
+the `<ol>` falls back to `pointer-events: auto`. Ours is
+`fixed right-0 bottom-0 w-full … p-3 pb-9`, a full-width box whose padding
+sits directly over the 24px status strip.
+
+**Consequence:** for the five seconds a toast was on screen, the console toggle,
+every view-published status item and the palette button were dead. Since almost
+every action in the panel raises a toast, this happened constantly.
+
+**Fixed:** `pointer-events-none!` on the viewport. The `!` is the fix — a
+plain class loses to an inline style. Toasts opt back in via the
+`pointer-events-auto` already on `Toast`, which still wins because
+`!important` raises specificity on that element, not on its children. Width
+capped at `26rem` as well, so the box never spans the strip even while
+transparent.
+
+**Verified in the browser:** with a toast open, `getComputedStyle(viewport)`
+reports `pointer-events: none`, `elementFromPoint` over three points on the
+status bar returns the strip's own elements, and the toast's Undo and Close
+remain hit-testable and functional.
+
+### H14 · Results were discarded when you left the analysis — **FIXED** *(reported)*
+`lib/run-archive.ts` and all four engine pages
+
+State lived in the routed page component, so navigating away unmounted it and
+took the mutation table, the generation series, the growth curve and the final
+sequence with it. What survived was a one-line label in the activity log, a
+label/duration/outcome row in History, and — for the scanner and predictor only
+— a 900-base preview of the *latest* result. The simulator and growth lab
+persisted nothing at all. Export was the only way to keep a result, and it had
+to be clicked before leaving.
+
+**Fixed:** an IndexedDB run archive. Each finished run files its inputs,
+parameters, seed, build and result; `/activity/[runId]` reopens it. See
+`docs/ARCHITECTURE.md` §5.2 for the shape and `docs/DOMAIN-RESEARCH.md`
+§1–2 for why traceability is the requirement in this domain rather than a
+nicety.
+
+**Verified in the browser:** ran a resistance prediction, read the record back
+out of IndexedDB directly (metadata, payload and its 2 calls), then loaded
+`/activity/<id>` and confirmed the summary, provenance and stored result all
+render from the archive.
+
+### H15 · 188 of 200 activity events were unreachable — **FIXED** *(reported)*
+`app/(main)/activity/page.tsx`, `app/(main)/dashboard/page.tsx`
+
+The activity store has held 200 events since it was written. The only surface
+that read it back rendered `events.slice(0, 12)`, with no "view all"
+anywhere. The rest were recorded, persisted across reloads and counted in the
+headline figures — and could not be seen. The sidebar had the same shape: six of
+fifty finished runs, silently.
+
+**Fixed:** `/activity`, a registered view with filters (engine, kind,
+severity, free text), paging that names what it has not shown, and CSV/JSON
+export of the filtered set. The Overview, the bell popover, the sidebar and the
+console's History all link into it.
+
+**Verified in the browser:** with 45 events seeded, the footer reads "Show 5
+more · 5 remaining", the engine filter reports "11 of 45", search reports "1 of
+45", and Clear restores the full list.
+
+### H16 · The simulator recorded every generation twice — **FIXED**
+`app/(main)/mutation-simulator/page.tsx`
+
+Found by reading an archived run back and noticing that a 2-generation run had
+filed four generation stats.
+
+`setGenerationStats` was called from *inside* the `setMutations` updater, so
+that it could read the accumulated mutation list for `calculateFitness`. A
+state updater has to be a pure function of its argument — React is free to call
+it more than once for a single update, and in development it deliberately does.
+
+**Consequence:** every generation appended its row twice. The run chart plotted
+each generation as two points, the run log emitted each line twice, and the
+archived record's `generationStats` was double-length. `currentFitness`
+happened to survive because it reads the last entry, which is why this was
+invisible from the status bar.
+
+This is the same class as M27, which was fixed elsewhere in the first pass; this
+site was missed.
+
+**Fixed:** the accumulated list is mirrored in a ref, so the row is computed once
+outside any updater. The append is also made idempotent on `generation`, so a
+replayed updater cannot duplicate a row even if the pattern is reintroduced.
+A sweep for the same shape — a `set*` call inside another `set*` updater —
+across `app/`, `components/`, `lib/`, `contexts/` and `hooks/` now
+returns nothing.
+
+**Verified in the browser:** a 3-generation run files exactly 3 stats, for
+generations [1, 2, 3], with no duplicates, and the run log shows one line per
+generation. The 2-generation run recorded before the fix is still in the log
+with its doubled lines, which is what surfaced it.
+
+### M30 · Icons were centred against two-line labels — **FIXED** *(reported)*
+`components/workbench/primitives.tsx` and eleven call sites
+
+No shared row primitive existed, so every "glyph beside a label" was written by
+hand. Rows carrying a description used `items-center`, which centres the icon
+on the *whole* text block and parks it in the gap between the title and the line
+under it. Rows that did align to the first line each picked their own nudge —
+`mt-0.5` in one pane, `mt-px` in the next, nothing in a third.
+
+Affected: the console's History rows, Preferences → Layout toggles, the Growth
+Lab's antibiotic switch, the simulator's FASTA drop zone, the Overview's Get
+started cards, and the auth pages' error rows.
+
+**Fixed:** `Row` and `RowIcon` in `primitives.tsx` own the contract. The
+offset is arithmetic — half the difference between the line box and the icon —
+written down once as `ICON_OFFSET` and applied everywhere, with
+`items-start` always.
+
+**Verified in the browser:** a measuring script walks every leading icon in a
+flex row, ranges the first text line and compares centres. Across all nine
+routes with content seeded, zero rows are off by more than 1px; the History rows
+that were previously offset now measure exactly 0.
+
+### M31 · One bit of state, drawn four times — **FIXED** *(reported)*
+`components/notifications/NotificationItem.tsx`
+
+An unread notification carried an accent rail, a dot beside the title, a tint
+across the whole row, *and* a heavier title. Stacked up, a list of finished
+scans read as a wall of highlighted rows — which is exactly the noise the rail
+existed to cut through, and it left the severity icon (the only mark carrying
+real information) competing with three that carried none.
+
+**Fixed:** the rail and the title weight stay; the dot and the row tint go. One
+edit covers both surfaces, since the bell popover and `/notifications` render
+the same component.
+
+### M32 · Notification bookkeeping grew without bound — **FIXED**
+`components/notifications/notifications-provider.tsx`
+
+`markAllAsRead` and `clearAll` folded in the id of **every** activity
+event, exports included — ids that can never appear in this feed, so no user
+action could ever remove them. Nothing pruned ids whose events had aged out of
+the 200-event cap either. Both arrays were persisted on every change, so a
+workspace in daily use accumulated thousands of dead ids permanently.
+
+**Fixed:** scoped to notifiable events, and pruned against the live log on
+hydration and on every change.
+
+### M33 · Undo filed restored runs in the wrong place — **FIXED**
+`components/workbench/workbench-provider.tsx`
+
+`restoreRunHistory` concatenated records onto the end regardless of when they
+ran. Correct for the mount-time restore, where the list is empty; wrong for the
+other caller — undoing "clear run history" filed every restored run *below*
+anything finished since, in a list whose whole contract is newest-first.
+
+**Fixed:** sort by `endedAt` after renumbering.
+
+### M34 · Every navigation away from a run raised a warning toast — **FIXED**
+`components/workbench/workbench-provider.tsx`
+
+A run ends when its view unmounts (O5), which is what happens every time you
+open another analysis. Saying so is right; saying so in a pop-up is not —
+switching analyses is the most repeated action in the app, and a toast on every
+one of them trains the operator to dismiss toasts without reading them.
+
+**Fixed:** routed to the status bar's `notify()` channel, which exists for
+exactly this and is already announced via `aria-live`.
+
+### M35 · Five hundred entrance animations at once — **FIXED**
+`components/workbench/panel.tsx`
+
+`animate-line-in` was on every log row unconditionally, so opening the console
+on a full buffer played the entrance animation 500 times simultaneously, and
+every change of filter replayed all of them. The animation is for output
+*arriving*; a line already on screen has not arrived.
+
+**Fixed:** only rows above the previous high-water id animate.
+
+### M36 · A storage sweep on every recorded event — **FIXED**
+`app/(main)/dashboard/page.tsx`
+
+`useMemo(() => measureUsage(), [events])` ran a synchronous walk of every
+`localStorage` key the panel owns on the completion of every scan, simulation
+and export — with the dependency suppressed by a lint comment, because
+`measureUsage` does not read `events` at all.
+
+**Fixed:** measured once per mount, and the archive reports its own size.
+
+### L9 · A raw palette colour outside the token system — **FIXED**
+`app/(auth)/signup/page.tsx`
+
+The password-requirement ticks used `bg-emerald-500/20 text-emerald-400` —
+the only raw Tailwind palette colour left in the app, and a different green from
+the `--color-success` every other surface uses.
+
+**Fixed:** `bg-success/20 text-success`. Legacy `h-4 w-4` /
+`flex-shrink-0` spellings on the auth pages modernised at the same time.
+
+### L10 · Lists that stop without saying so — **FIXED** *(reported)*
+Several files
+
+Beyond the Overview and sidebar covered by H15: the bell popover rendered
+**every** notification into a 288px scroller (two hundred rows of DOM behind a
+box showing four), the palette's gene results stopped at eight with no way
+through to the rest, and the run log silently persists only its last 200 lines
+of 500 buffered.
+
+**Fixed:** the popover caps at 8 and names the total; the palette gains a
+"+N more" row that opens the library; the log's line counter carries a tooltip
+saying what survives a reload.
+
+### S1 · No Content-Security-Policy — **FIXED (report-only)**
+`next.config.mjs`
+
+The old note argued a CSP was deliberately absent because a wrong one fails
+closed. That holds for an *enforced* policy; it does not hold for a report-only
+one, which never blocks. Shipping nothing meant the work never started.
+
+**Fixed:** a full `Content-Security-Policy-Report-Only` covering
+`default-src`, `base-uri`, `object-src 'none'`,
+`frame-ancestors 'none'`, `form-action`, `img-src` (with `blob:` for
+exports), `script-src`, `connect-src` (including a directly-configured
+backend, if any) and `worker-src`. `'unsafe-eval'` is dev-only.
+`Cross-Origin-Opener-Policy` and `X-DNS-Prefetch-Control` added alongside.
+
+**Verified in the browser:** zero `securitypolicyviolation` events across all
+nine routes plus the sign-in page, and blob URL creation and blob-backed image
+loading both succeed. Promoting to enforcement is a one-word change once the
+same is confirmed against a production build; the outstanding blocker is
+`'unsafe-inline'` in `script-src`, which needs a nonce threaded through the
+Next runtime.
+
+### S2 · The auth token is readable by any script — **OPEN, documented**
+`api/main.ts`, `contexts/AuthContext.tsx`
+
+The bearer token is kept in `localStorage`, so any successful XSS can read
+it. The lifecycle around it is otherwise sound: set on sign-in, removed on 401
+and on sign-out.
+
+**Not fixed, deliberately.** The fix is an httpOnly cookie, and the backend
+returns the token in a JSON body rather than setting one — so this cannot be
+closed from the frontend alone. The `/api/backend` rewrite already puts a
+server hop in the path, which is where a cookie would be set once the backend
+cooperates. Recorded here rather than left silent.
+
+**Mitigation already in place:** no `dangerouslySetInnerHTML`, `innerHTML`,
+`eval` or `new Function` anywhere in `app/`, `components/`, `lib/` or
+`api/` — swept and confirmed — and the report-only CSP above is the
+groundwork for constraining what an injected script could do.
+
+---
+
 ## Open — kept deliberately, at your direction
 
 These are **not fixed**. You asked that the controls stay and be documented.
@@ -628,6 +891,8 @@ navigation and produces no warning). Cosmetic; React strips it in production.
 
 ## What was verified in the browser
 
+### First pass
+
 Signed in against a local mock API (the real backend was unreachable), then:
 
 - **306,000 bp scan** — completed, GC 49.0%, exactly the 5 planted variants
@@ -645,3 +910,51 @@ Signed in against a local mock API (the real backend was unreachable), then:
 - **Every route** — swept for console errors
 
 Automated each loop: `tsc --noEmit`, `vitest run` (131 tests), `next build`.
+
+### Second pass
+
+Instrumented rather than eyeballed. Each check below is a measurement taken in
+the running app, not an impression of a screenshot.
+
+- **Toast over the status bar** — with a toast open, the viewport computes
+  `pointer-events: none`, `elementFromPoint` at three points along the
+  status strip returns the strip's own elements, and the toast's Undo and Close
+  are still hit-testable and functional.
+- **Icon alignment** — a script walks every leading icon in a flex row, ranges
+  the first line of the text beside it, and compares centres. Zero rows off by
+  more than 1px across all ten routes, at every interface-scale step
+  (13/14/16/18/20px root), and at 375px viewport width. The console History rows
+  that were previously offset measure exactly 0.
+- **All four engines archive their results** — each run driven to completion,
+  then the record read back out of IndexedDB directly:
+  - *Scanner*: 528bp target vs reference, 1 variant called, stats + variant +
+    sequence preview stored, true counts reported alongside the bounded ones.
+  - *Simulator*: 3 generations, seed `919363860` kept, generation series and
+    final strand stored.
+  - *Growth Lab*: 9 steps, full growth curve, adaptation log, environment.
+  - *Predictor*: 2 markers, 2 drug classes, calls stored with the reference-data
+    version that scored them.
+- **Run detail renders per engine** — variant table for a scan, run chart plus
+  generation table for a simulation, population curve for an experiment, and
+  scored calls for a prediction, with the raw record collapsed beneath.
+- **The generation double-count** — a 3-generation run files exactly 3 stats for
+  generations [1, 2, 3], and the run log shows one line per generation. This is
+  how H16 was found: an archived 2-generation run had four.
+- **Activity is complete, Notifications is a subset** — with 48 events seeded
+  including 3 exports, Activity reports 48 and its Exports filter finds 3; the
+  notification feed reports 45 and contains no exports.
+- **Overflow is named** — "Show 5 more · 5 remaining", "11 of 45" after an
+  engine filter, "1 of 45" after a search, and Clear restores the full list.
+- **Unread is one mark** — every notification row has exactly one rail, zero
+  dots and no row tint.
+- **CSP** — zero `securitypolicyviolation` events across all ten routes plus
+  sign-in, with blob URL creation and blob-backed image loading both succeeding.
+  The production policy drops `'unsafe-eval'` and `ws:` and adds
+  `upgrade-insecure-requests`.
+- **Deep routes do not litter the tab strip** — visiting `/activity/<id>`
+  leaves a single `/activity` entry in the persisted `openTabs`.
+- **No console errors or hydration warnings** on any route.
+
+Automated each loop: `tsc --noEmit`, `vitest run` (160 tests),
+`next build`.
+

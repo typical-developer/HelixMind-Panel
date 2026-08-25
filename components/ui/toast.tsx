@@ -16,6 +16,17 @@ const ToastProvider = ToastPrimitives.Provider
  * covered the title bar and its search field. The workbench has a fixed 24px
  * status strip along the bottom, so the stack is inset above it and stays in
  * one corner at every width.
+ *
+ * `pointer-events-none!` is load-bearing, and the `!` is the whole point.
+ *
+ * Radix sets `pointerEvents: hasToasts ? undefined : 'none'` as an *inline
+ * style* on this element, so the moment one toast exists the viewport — a
+ * full-width box with 36px of bottom padding — starts accepting clicks. It
+ * sits directly over the status bar, so a visible toast made the console
+ * toggle and every status item unclickable. A plain class loses to an inline
+ * style; an important one does not. Individual toasts opt back in through
+ * `pointer-events-auto` on `Toast` below, which still wins: `!important`
+ * raises specificity on this element, not on its children.
  */
 const ToastViewport = React.forwardRef<
   React.ElementRef<typeof ToastPrimitives.Viewport>,
@@ -24,7 +35,7 @@ const ToastViewport = React.forwardRef<
   <ToastPrimitives.Viewport
     ref={ref}
     className={cn(
-      'fixed right-0 bottom-0 z-[100] flex max-h-screen w-full flex-col gap-2 p-3 pb-9 sm:max-w-[24rem]',
+      'pointer-events-none! fixed right-0 bottom-0 z-[100] flex max-h-screen w-full max-w-[26rem] flex-col gap-2 p-3 pb-9 sm:max-w-[24rem]',
       className,
     )}
     {...props}

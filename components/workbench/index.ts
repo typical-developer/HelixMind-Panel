@@ -28,6 +28,8 @@ export {
   Pane,
   PaneBody,
   PaneHeader,
+  Row,
+  RowIcon,
   Rule,
   InspectorScroll,
   SideSection,
@@ -38,6 +40,9 @@ export {
   WBInput,
   WBSelect,
   type IconComponent,
+  type RowIconSize,
+  type RowLine,
+  type RowProps,
 } from "./primitives"
 export {
   RUNNABLE_VIEWS,

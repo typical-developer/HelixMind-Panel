@@ -39,6 +39,7 @@ import { APP_VERSION, SUPPORT_EMAIL } from "@/lib/app-info"
 import { clearWorkspace, formatBytes, measureUsage } from "@/lib/storage"
 import { clearActivity } from "@/lib/activity-store"
 import { clearSnapshot } from "@/lib/lab-snapshot"
+import { archiveUsage, clearArchive, useArchivedRuns } from "@/lib/run-archive"
 import { setPreferences, usePreferences } from "@/lib/preferences"
 import { useSupport } from "@/components/support/support-provider"
 import {
@@ -246,17 +247,24 @@ export default function Settings() {
 
   const usage = useMemo(() => measureUsage(), [])
 
+  // Archived results live in IndexedDB, not `localStorage`, so `measureUsage`
+  // cannot see them and `clearWorkspace` cannot clear them. A "delete all"
+  // that leaves the sequence data behind is the worst kind of wrong.
+  const archivedRuns = useArchivedRuns()
+  const archive = useMemo(() => archiveUsage(archivedRuns), [archivedRuns])
+
   const handleDeleteAll = () => {
     clearWorkspace()
     clearActivity()
     clearSnapshot()
+    void clearArchive()
     setConfirmOpen(false)
     setConfirmText("")
     toast({
       variant: "success",
       title: "Workspace cleared",
       description:
-        "Activity, runs, notifications, preferences and layout have been removed from this browser.",
+        "Activity, archived results, notifications, preferences and layout have been removed from this browser.",
     })
     // The layout store has been wiped from under the running app; putting the
     // defaults back on screen keeps the two in step without a reload.
@@ -702,7 +710,13 @@ export default function Settings() {
                     label="Delete all data"
                     description={`Removes every run, notification, preference and saved layout from this browser — ${formatBytes(
                       usage.bytes,
-                    )} across ${usage.keys} key${usage.keys === 1 ? "" : "s"}. You stay signed in.`}
+                    )} across ${usage.keys} key${usage.keys === 1 ? "" : "s"}${
+                      archive.runs > 0
+                        ? `, plus ${archive.runs} archived result${
+                            archive.runs === 1 ? "" : "s"
+                          } (${formatBytes(archive.bytes)}) including any sequence data they hold`
+                        : ""
+                    }. You stay signed in.`}
                     matched={flashed === "Delete all data"}
                   >
                     {/* This button had no onClick at all: the most destructive
@@ -740,6 +754,14 @@ export default function Settings() {
                 notifications, saved layout and preferences from this browser.
                 It cannot be undone.
               </span>
+              {archive.runs > 0 && (
+                <span className="block">
+                  It also deletes {archive.runs} archived result
+                  {archive.runs === 1 ? "" : "s"} — the parameters, seeds and
+                  findings of past runs, along with any sequence previews they
+                  hold. Export anything you need from Activity first.
+                </span>
+              )}
               <span className="block">
                 Your account is not affected and you will stay signed in.
               </span>

@@ -1,6 +1,7 @@
 import {
   Bell,
   Database,
+  History,
   FlaskConical,
   Gauge,
   ScanLine,
@@ -104,12 +105,23 @@ export const VIEWS: WorkbenchView[] = [
     hint: "Browse curated antimicrobial resistance gene records",
   },
   {
+    href: "/activity",
+    source: "activity",
+    label: "Activity",
+    group: "workspace",
+    icon: History,
+    hint: "Every run and export this workspace has recorded, with its results",
+  },
+  {
     href: "/notifications",
     source: "notifications",
     label: "Notifications",
     group: "workspace",
+    // Deliberately a *subset* of Activity, not a duplicate of it: this feed
+    // carries read/dismissed state and only the kinds worth interrupting
+    // someone about. Activity is the log itself, exports included.
     icon: Bell,
-    hint: "Activity from scans, uploads and simulation runs",
+    hint: "Finished runs worth your attention, with read state",
   },
   {
     href: "/settings",
@@ -157,15 +169,21 @@ export function viewForSource(source: string): WorkbenchView | undefined {
 }
 
 /**
- * Strip any query string, giving the registry href a link points at.
+ * Reduce a link to the registry href it belongs to.
  *
- * The gene library is opened as `…/gene-database?q=mecA` from the sidebar and
- * the palette. That string is not a registry href, so storing it in the open
- * set produced a tab that matched no view and was silently dropped from the
- * strip — while still accumulating, one entry per gene clicked, in the
- * persisted layout.
+ * Two things get in the way of a link being a tab id. A query string: the gene
+ * library is opened as `…/gene-database?q=mecA` from the sidebar and the
+ * palette. And a deeper segment: an archived run lives at `/activity/<id>`.
+ * Neither is a registry href, and storing one in the open set produced a tab
+ * that matched no view and was silently dropped from the strip — while still
+ * accumulating, one entry per gene clicked, in the persisted layout.
+ *
+ * Resolving through {@link viewForPath} rather than only trimming the query
+ * means every deep route the app grows is covered by construction instead of
+ * needing its own special case here.
  */
 export function normalizeHref(href: string): string {
   const index = href.indexOf("?")
-  return index === -1 ? href : href.slice(0, index)
+  const path = index === -1 ? href : href.slice(0, index)
+  return viewForPath(path)?.href ?? path
 }

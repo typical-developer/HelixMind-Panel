@@ -293,6 +293,189 @@ export function TreeRow({
 }
 
 /* ============================================================================
+   Rows — a glyph beside a label
+
+   One alignment contract for every "icon and text" row in the bench.
+
+   Two faults were spread across the app before this. Rows carrying a
+   description centred their icon on the *whole* text block (`items-center`),
+   which parks the glyph in the gap between the title and the line beneath it
+   instead of on the title itself. And rows that did align to the first line
+   each picked their own nudge — `mt-0.5` in one pane, `mt-px` in the next,
+   nothing at all in a third — so rows that look identical sat a pixel or two
+   apart depending on which file they were written in.
+
+   The offset is arithmetic, not taste. An icon is optically centred on a line
+   of text when it is inset by half the difference between the line box and the
+   icon. `text-sm` is an 18px line box, so a 14px icon takes 2px and a 16px
+   icon takes 1px; `text-xs` is a 16px box, so a 14px icon takes 1px and a
+   16px icon takes none. `ICON_OFFSET` is that sum, written down once.
+   ========================================================================= */
+
+/**
+ * The type size of the row's *first* line — what the icon aligns to.
+ *
+ * `relaxed` is `text-sm` set at `leading-relaxed` (~21px), which the app uses
+ * for prose that wraps: explanatory empty states, help text. It needs its own
+ * entry because the line box, not the font size, is what the icon centres on.
+ */
+export type RowLine = "sm" | "xs" | "relaxed"
+
+/** Icon sizes the bench uses. Anything else wants a one-off, not this table. */
+export type RowIconSize = "3" | "3.5" | "4"
+
+const ICON_SIZE: Record<RowIconSize, string> = {
+  "3": "size-3",
+  "3.5": "size-3.5",
+  "4": "size-4",
+}
+
+/** (line box − icon) ÷ 2, per pairing. See the note above. */
+const ICON_OFFSET: Record<RowLine, Record<RowIconSize, string>> = {
+  sm: { "3": "mt-[3px]", "3.5": "mt-0.5", "4": "mt-px" },
+  xs: { "3": "mt-0.5", "3.5": "mt-px", "4": "" },
+  relaxed: { "3": "mt-[4px]", "3.5": "mt-[3px]", "4": "mt-0.5" },
+}
+
+/**
+ * A leading icon, aligned to the first line of the text beside it.
+ *
+ * Exported on its own for rows whose layout is too particular for {@link Row} —
+ * the notification row, which overlays its own action buttons, is the reason
+ * this is separate. Those rows still get the alignment contract.
+ */
+export function RowIcon({
+  icon: Icon,
+  line = "sm",
+  size = "3.5",
+  className,
+}: {
+  icon: IconComponent
+  line?: RowLine
+  size?: RowIconSize
+  className?: string
+}) {
+  return (
+    <Icon
+      aria-hidden
+      className={cn("shrink-0", ICON_SIZE[size], ICON_OFFSET[line][size], className)}
+    />
+  )
+}
+
+/**
+ * The bench's standard list row: icon, title, optional supporting line, and
+ * optional trailing content.
+ *
+ * Renders a `<button>` when given an `onClick` and a plain `<div>` otherwise,
+ * so a static row never lands in the tab order.
+ */
+type RowOwnProps = {
+  icon?: IconComponent
+  /** Tone for the icon — severity colour, usually. */
+  iconClassName?: string
+  iconSize?: RowIconSize
+  /** The row's first line. Named to leave `title` free for the tooltip. */
+  label: React.ReactNode
+  description?: React.ReactNode
+  /** Right-aligned content: a chip, a duration, a switch. Vertically centred. */
+  trailing?: React.ReactNode
+  trailingClassName?: string
+  /** Let the description wrap instead of truncating to one line. */
+  wrap?: boolean
+  className?: string
+}
+
+export type RowProps = RowOwnProps &
+  Omit<React.ComponentProps<"button">, "children">
+
+export function Row({
+  icon,
+  iconClassName,
+  iconSize = "3.5",
+  label,
+  description,
+  trailing,
+  trailingClassName,
+  wrap,
+  className,
+  onClick,
+  ...props
+}: RowProps) {
+  const body = (
+    <>
+      {icon && (
+        <RowIcon
+          icon={icon}
+          size={iconSize}
+          className={cn("text-muted-foreground", iconClassName)}
+        />
+      )}
+      <span className="min-w-0 flex-1">
+        <span
+          className={cn(
+            "block text-sm text-foreground/90",
+            wrap ? "leading-[1.125rem]" : "truncate",
+          )}
+        >
+          {label}
+        </span>
+        {description && (
+          <span
+            className={cn(
+              "mt-0.5 block text-xs text-muted-foreground/70",
+              wrap ? "leading-relaxed" : "truncate",
+            )}
+          >
+            {description}
+          </span>
+        )}
+      </span>
+      {trailing && (
+        <span
+          className={cn(
+            "flex shrink-0 items-center gap-2 self-center pl-2",
+            trailingClassName,
+          )}
+        >
+          {trailing}
+        </span>
+      )}
+    </>
+  )
+
+  // `items-start`, always. The icon's own offset does the aligning, so a
+  // description appearing on one row cannot drag its icon out of line.
+  const shared = "flex w-full items-start gap-2 px-3 py-2 text-left"
+
+  if (!onClick) {
+    // Spreading button props onto a div would be a lie, so a static row takes
+    // only the handful of attributes that mean the same thing on both.
+    return (
+      <div className={cn(shared, className)} title={props.title} id={props.id}>
+        {body}
+      </div>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        shared,
+        "row-hover cursor-pointer",
+        "focus-visible:ring-1 focus-visible:ring-ring/60 focus-visible:outline-none focus-visible:ring-inset",
+        className,
+      )}
+      {...props}
+    >
+      {body}
+    </button>
+  )
+}
+
+/* ============================================================================
    Metrics
    ========================================================================= */
 

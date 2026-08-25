@@ -33,6 +33,8 @@ const PopulationChart = dynamic(
 );
 import { toast } from "@/hooks/use-toast";
 import { recordActivity } from "@/lib/activity-store";
+import { archiveRun } from "@/lib/run-archive";
+import { LastRunLink } from "@/components/last-run";
 import { downloadBlob, downloadCSV, fileStamp, safeFilename } from "@/lib/download";
 import {
   FASTA_EXTENSIONS,
@@ -51,6 +53,7 @@ import {
   Field,
   Pane,
   PaneHeader,
+  RowIcon,
   StatTile,
   ToolbarButton,
   WBInput,
@@ -156,6 +159,15 @@ export default function MicrobeGrowthLab() {
   // Validation warnings
   const [tempWarning, setTempWarning] = useState("");
   const [phWarning, setPhWarning] = useState("");
+
+  /**
+   * When the culture was inoculated.
+   *
+   * An experiment here has no fixed number of steps — it ends when you pause it
+   * — so the archived record needs its own start time rather than deriving one
+   * from the step count and an assumed cadence.
+   */
+  const startedAtRef = useRef<number>(0);
 
   // Ref attached to chart wrapper so handleExportPNG can find the SVG inside
   const chartRef = useRef<HTMLDivElement>(null);
@@ -298,6 +310,7 @@ export default function MicrobeGrowthLab() {
 
   const handleStartPause = () => {
     if (!isRunning) {
+      if (state.timeStep === 0) startedAtRef.current = Date.now();
       setIsRunning(true);
       return;
     }
@@ -316,6 +329,44 @@ export default function MicrobeGrowthLab() {
         href: "/microbe-growth-lab",
         severity: state.population === 0 ? "warning" : "success",
         value: state.timeStep,
+      });
+
+      // The growth curve itself. Before this it lived only in the simulation
+      // object, which goes with the view: pausing, navigating away and coming
+      // back left an empty chart and no way to see what the culture had done.
+      void archiveRun({
+        engine: "growth",
+        label: `Growth experiment · ${currentStrain.name}`,
+        detail: `${state.timeStep} steps · ${state.population.toLocaleString()} cells · resistance ${state.resistanceLevel}%`,
+        startedAt: startedAtRef.current || Date.now(),
+        endedAt: Date.now(),
+        outcome: "completed",
+        href: "/microbe-growth-lab",
+        inputs: {
+          strain: currentStrain.name,
+          strainDescription: currentStrain.description,
+          genome: genomeInfo?.header ?? null,
+        },
+        params: {
+          temperatureCelsius: temperature,
+          pH,
+          nutrients,
+          oxygen,
+          antibiotic: antibioticOn ? "50 µg/mL" : "none",
+        },
+        summary: {
+          steps: state.timeStep,
+          finalPopulation: state.population,
+          resistancePercent: state.resistanceLevel,
+          collapsed: state.collapsed ? "yes" : "no",
+        },
+        payload: {
+          growthHistory: state.growthHistory,
+          adaptationLog: state.adaptationLog,
+          stressLevels: state.stressLevels,
+          environment: state.environment,
+          note: "The selected strain is displayed but does not yet drive the model — see the About dialog's known limitations.",
+        },
       });
     }
   };
@@ -683,6 +734,7 @@ export default function MicrobeGrowthLab() {
                   <p className="text-sm text-muted-foreground">
                     Start the simulation to plot population growth
                   </p>
+                  <LastRunLink engine="growth" className="mt-1" />
                 </div>
               )}
             </div>
@@ -1053,11 +1105,11 @@ function LabInspector({
               </div>
             </Field>
 
-            <label className="flex cursor-pointer items-center gap-2 border-t border-border pt-3">
-              <Pill className="size-3.5 shrink-0 text-muted-foreground" />
+            <label className="flex cursor-pointer items-start gap-2 border-t border-border pt-3">
+              <RowIcon icon={Pill} className="text-muted-foreground" />
               <span className="min-w-0 flex-1">
                 <span className="block text-sm text-foreground">Antibiotic</span>
-                <span className="block text-xs text-muted-foreground/70">
+                <span className="mt-0.5 block text-xs text-muted-foreground/70">
                   {antibioticOn ? "50 µg/mL — selection active" : "none"}
                 </span>
               </span>
@@ -1065,6 +1117,7 @@ function LabInspector({
                 checked={antibioticOn}
                 onCheckedChange={setAntibioticOn}
                 aria-label="Antibiotic"
+                className="self-center"
               />
             </label>
           </div>

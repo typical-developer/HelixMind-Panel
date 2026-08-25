@@ -34,6 +34,7 @@ npm run dev
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How it is built, and why |
 | [docs/BUG-REPORT.md](docs/BUG-REPORT.md) | What was found and fixed, and what is still open |
 | [docs/SUGGESTIONS.md](docs/SUGGESTIONS.md) | Prioritised roadmap |
+| [docs/DOMAIN-RESEARCH.md](docs/DOMAIN-RESEARCH.md) | What an AMR lab actually needs, sourced, and what this panel owes it |
 
 ## Known limitations
 

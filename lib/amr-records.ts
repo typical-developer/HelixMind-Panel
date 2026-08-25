@@ -13,6 +13,22 @@
  * other. They are named separately below.
  */
 
+/**
+ * Version of this table.
+ *
+ * A resistance call is only reproducible if you can say which reference data
+ * produced it — and the field's own literature makes that the practical
+ * problem, not the calling. The same isolates run against AMRFinderPlus, CARD
+ * and ResFinder yield materially different gene sets, and even `mecA`
+ * detection ranges from 82% to 100% between them (see docs/DOMAIN-RESEARCH.md
+ * §3). A stored result that does not name its reference data cannot be
+ * compared with anything, including a later run of itself.
+ *
+ * Bump this whenever a record is added, removed or has its `confidence` or
+ * `prevalence` changed. It is written into every archived run.
+ */
+export const AMR_DATA_VERSION = "helixmind-curated-2026.08.1"
+
 export interface AMRRecord {
   id: string
   /** Gene symbol, as it appears in ResFinder/CARD. */
@@ -167,6 +183,7 @@ export function drugClassCounts(): Array<[string, number]> {
 export function databaseStats(): Array<{ label: string; value: string }> {
   return [
     { label: "Genes", value: String(AMR_RECORDS.length) },
+    { label: "Version", value: AMR_DATA_VERSION },
     { label: "Organisms", value: String(AMR_ORGANISMS.length) },
     { label: "Drug classes", value: String(drugClassCounts().length) },
     {

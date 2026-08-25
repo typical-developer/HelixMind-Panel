@@ -112,10 +112,17 @@ Matching is currently substring. `cmdk`'s built-in scorer or a small
 subsequence matcher would let "mutsim" find "Mutation Simulator". Recents,
 highlighting and Tab-completion already landed this pass.
 
-### 3.4 A real activity timeline view · ~half a day
-The activity log holds 200 events and only the last 12 are shown. A filterable
-timeline — by engine, by kind, by date — would make it useful rather than
-decorative.
+### 3.4 A real activity timeline view · **DONE**
+`app/(main)/activity/page.tsx`, registered in the view registry so the sidebar,
+tab strip and palette pick it up. Filters by engine, kind and severity plus
+free-text search, paging that names what it has not shown, and CSV/JSON export
+of whatever the filters have narrowed to. Rows link through to the archived run
+that produced them (`app/(main)/activity/[runId]/page.tsx`).
+
+What is *not* done: filtering by date range. The free-text search and the
+newest-first ordering cover most of what a range would, and a date picker is a
+lot of surface for the remainder — worth adding when someone actually reaches
+for it.
 
 ### 3.5 Drag to reorder tabs · **DONE**
 Native HTML5 drag, plus `Alt Shift ←/→` and *Move left* / *Move right* on the
@@ -201,7 +208,14 @@ passing is the point.
 nothing aggregates them. Sentry (or equivalent) behind an env var would turn
 one-off reports into a signal.
 
-### 5.4 A Content-Security-Policy · ~half a day
+### 5.4 A Content-Security-Policy · **PARTLY DONE**
+Shipped as `Content-Security-Policy-Report-Only` in `next.config.mjs`, verified
+clean across every route in dev. Promoting it to enforcement needs two things:
+the same confirmed against a production build, and a nonce threaded through the
+Next runtime so `script-src` can drop `'unsafe-inline'`. The original note
+below still describes that remaining work.
+
+
 `next.config.mjs` explains, correctly, that a CSP was skipped because it needs a
 nonce wired through the runtime and a wrong one fails closed. Worth doing before
 this is public: it is the one significant header still missing.

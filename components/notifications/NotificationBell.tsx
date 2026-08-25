@@ -17,6 +17,15 @@ import NotificationItem from "./NotificationItem"
 import { useNotifications } from "./notifications-provider"
 
 /**
+ * Rows the popover draws before deferring to the full view.
+ *
+ * It used to render every notification into a 288px scroller — two hundred
+ * rows of DOM behind a box that shows four, rebuilt every time the bell was
+ * opened, and with no indication that the list continued past the fold.
+ */
+const POPOVER_ROWS = 8
+
+/**
  * Title-bar bell. Opens a compact notification centre — the same rows the
  * Notifications view uses, at popover density.
  */
@@ -84,7 +93,7 @@ export default function NotificationBell() {
               Finished scans and simulations appear here.
             </p>
           ) : (
-            notifications.map((n) => (
+            notifications.slice(0, POPOVER_ROWS).map((n) => (
               <NotificationItem
                 key={n.id}
                 data={n}
@@ -112,7 +121,17 @@ export default function NotificationBell() {
             onClick={() => setOpen(false)}
             className="row-hover flex items-center gap-1.5 rounded-sm px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground"
           >
-            View all notifications
+            {notifications.length > POPOVER_ROWS
+              ? `View all ${notifications.length} notifications`
+              : "View all notifications"}
+            <ArrowUpRight className="ml-auto size-3" />
+          </Link>
+          <Link
+            href="/activity"
+            onClick={() => setOpen(false)}
+            className="row-hover flex items-center gap-1.5 rounded-sm px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground"
+          >
+            Activity and past runs
             <ArrowUpRight className="ml-auto size-3" />
           </Link>
         </div>

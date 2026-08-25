@@ -135,6 +135,16 @@ function AboutDialog({
               history are stored locally and never uploaded. Only sign-in talks
               to a server.
             </p>
+            <p>
+              {/* The archive changed what "stored locally" means: it is no
+                  longer only labels and layout, it is results, including
+                  sequence previews. Someone sharing a machine deserves to know
+                  that from the app. */}
+              Finished runs also keep their results — parameters, findings and a
+              preview of the sequence — so you can reopen them from{" "}
+              <span className="text-foreground/85">Activity</span>. They stay on
+              this device. Clear them from Settings → Danger zone.
+            </p>
           </div>
 
           <div className="space-y-1.5 rounded-md border border-warning/30 p-3">
@@ -155,6 +165,12 @@ function AboutDialog({
               <li>
                 In the Resistance Predictor, the organism flags unexpected
                 markers but does not change the score.
+              </li>
+              <li>
+                Resistance calls score marker <em>presence</em> against a curated
+                table. Presence is not phenotype, and no breakpoint standard
+                (EUCAST or CLSI) is applied — this is not a susceptibility
+                report.
               </li>
               <li>Password reset is not available — contact support.</li>
             </ul>

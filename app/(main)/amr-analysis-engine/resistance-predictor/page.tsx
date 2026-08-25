@@ -30,9 +30,16 @@ import {
 } from "@/components/ui/select"
 import { toast } from "@/hooks/use-toast"
 import { recordActivity } from "@/lib/activity-store"
+import { archiveRun } from "@/lib/run-archive"
+import { LastRunLink } from "@/components/last-run"
 import { savePredictionSnapshot } from "@/lib/lab-snapshot"
 import { downloadJSON, fileStamp } from "@/lib/download"
-import { AMR_ORGANISMS, AMR_RECORDS, AMR_BY_GENE } from "@/lib/amr-records"
+import {
+  AMR_BY_GENE,
+  AMR_DATA_VERSION,
+  AMR_ORGANISMS,
+  AMR_RECORDS,
+} from "@/lib/amr-records"
 import {
   SYNERGY_RULES,
   predictResistance,
@@ -127,6 +134,7 @@ export default function ResistancePredictorPage() {
     }
 
     setError("")
+    const startedAt = Date.now()
 
     // Scoring lives in lib/amr-model.ts so it can be tested without rendering
     // anything. It was previously inline, untyped (`report: any`) and wrapped
@@ -168,6 +176,41 @@ export default function ResistancePredictorPage() {
       })
     }
 
+    // A resistance profile is the most consequential thing this panel
+    // produces, and it was the least durable: `savePredictionSnapshot` above
+    // keeps only the *latest* one, so running a second isolate overwrote the
+    // first with no record that it had ever been scored.
+    void archiveRun({
+      engine: "amr",
+      label: `Resistance profile · ${result.organism}`,
+      detail: `${result.selectedGenes.length} marker${result.selectedGenes.length === 1 ? "" : "s"} · ${result.calls.length} drug class${result.calls.length === 1 ? "" : "es"}`,
+      startedAt,
+      endedAt: Date.now(),
+      outcome: "completed",
+      href: "/amr-analysis-engine/resistance-predictor",
+      inputs: {
+        organism: result.organism,
+        markers: result.selectedGenes,
+      },
+      params: {
+        organism: selectedOrganism,
+        // Which reference table scored this. Without it the record says what
+        // was found but not what it was compared against.
+        referenceData: AMR_DATA_VERSION,
+      },
+      summary: {
+        markers: result.selectedGenes.length,
+        drugClasses: result.calls.length,
+        highConfidence: high.length,
+      },
+      payload: {
+        organism: result.organism,
+        selectedGenes: result.selectedGenes,
+        calls: result.calls,
+        note: "Rule-based marker scoring for research use. Not a susceptibility report — see the About dialog.",
+      },
+    })
+
     toast({
       variant: high.length > 0 ? "warning" : "success",
       title: "Analysis complete",
@@ -188,6 +231,9 @@ export default function ResistancePredictorPage() {
           timestamp: results.timestamp,
           disclaimer: "Research tool only. Not for clinical use.",
           modelType: "Rule-based (synergy-aware)",
+          // An exported report outlives the session that made it, and the one
+          // question its reader will have is what it was scored against.
+          referenceData: AMR_DATA_VERSION,
           note: "The selected organism is recorded and used only to flag unexpected markers; it does not affect scoring.",
         },
         detectedResistance: results.calls,
@@ -356,6 +402,32 @@ export default function ResistancePredictorPage() {
                 }
               />
 
+              {/*
+                The caveat, where the numbers are.
+
+                It was already in the inspector's "Tool limitations" pane — a
+                column the operator can collapse, and does. A percentage next to
+                a drug class reads as a susceptibility result unless something
+                on the same surface says otherwise, and the literature is
+                emphatic that marker presence is not phenotype: databases
+                disagree with each other on the same isolates, and concordance
+                shifts with the breakpoint standard used. See
+                docs/DOMAIN-RESEARCH.md §3.
+
+                Deliberately a hairline strip of muted text rather than a tinted
+                warning box. It has to be present on every reading, which means
+                it has to be quiet enough to live there.
+              */}
+              <p className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 border-b border-border px-3 py-1.5 text-xs text-muted-foreground/80">
+                <span>
+                  Marker presence, scored from published estimates — not a
+                  susceptibility report.
+                </span>
+                <span className="font-mono text-muted-foreground/60">
+                  {AMR_DATA_VERSION}
+                </span>
+              </p>
+
               <div className="grid grid-cols-3 divide-x divide-border border-b border-border">
                 {[
                   ["Organism", results.organism],
@@ -443,6 +515,7 @@ export default function ResistancePredictorPage() {
           icon={FlaskConical}
           title="No analysis yet"
           description="Pick an organism and one or more detected genes in the inspector, then run the analysis to see the predicted resistance profile."
+          action={<LastRunLink engine="amr" />}
         />
       )}
     </ViewLayout>

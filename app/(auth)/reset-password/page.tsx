@@ -5,6 +5,7 @@ import { AlertCircle, LifeBuoy, Mail } from "lucide-react";
 
 import Logo from "@/components/ui/Logo";
 import { Button } from "@/components/ui/button";
+import { RowIcon } from "@/components/workbench";
 import { SUPPORT_EMAIL } from "@/lib/app-info";
 import {
   Card,
@@ -78,7 +79,7 @@ export default function ResetPasswordPage() {
 
           <CardContent className="space-y-5 px-0">
             <div className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
-              <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+              <RowIcon icon={AlertCircle} size="4" line="relaxed" />
               <span className="leading-relaxed">
                 Password reset isn&apos;t available in this build — the API
                 exposes no endpoint for it, so nothing here could change your

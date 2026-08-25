@@ -154,7 +154,16 @@ but only the bare route is a tab.
 
 ## 5. Persistence
 
-All storage goes through `lib/storage.ts`. Nothing calls `localStorage`
+There are **two** stores, and the split matters.
+
+`localStorage` holds everything small and read-during-render: layout, the
+activity log, the notification feed's bookkeeping, preferences. IndexedDB holds
+the one thing that is neither — the results of finished runs, which are bulky
+and only ever read on demand. See §5.2.
+
+### 5.1 `localStorage`
+
+All access goes through `lib/storage.ts`. Nothing calls `localStorage`
 directly, for three reasons: it is read during render (including the server
 render, where it does not exist), Safari private mode throws on quota, and keys
 are versioned so a shape change ships a new suffix rather than a migration.
@@ -172,7 +181,76 @@ are versioned so a shape change ships a new suffix rather than a migration.
 | `Helix_user_token` | Auth token | `contexts/AuthContext.tsx` |
 
 `CLEARABLE_KEYS` is everything except the token — "Delete all data" wipes the
-workspace but does not sign you out.
+workspace but does not sign you out. It does **not** cover the run archive,
+which lives in a different store; Settings clears that separately, and a
+"delete all" that missed it would leave sequence previews behind.
+
+### 5.2 The run archive — `lib/run-archive.ts`
+
+IndexedDB, database `helixmind.archive`, two object stores.
+
+| Store | Holds |
+|---|---|
+| `runs` | Metadata: label, engine, times, outcome, inputs, params, seed, build, summary, payload size |
+| `payloads` | The result itself, keyed by the same run id |
+
+The split is what keeps listings cheap: the Activity view and the console's
+History only ever read `runs`, so drawing twenty rows never deserialises
+twenty results.
+
+**Why it exists.** Before it, results lived in the routed page's component
+state. Opening another analysis unmounted the view and the mutation table, the
+growth curve and the final sequence went with it — what survived was a one-line
+label. Export was the only way to keep a result, and it had to be clicked before
+navigating away. For the people this is built for that is the wrong shape:
+see `docs/DOMAIN-RESEARCH.md` §1–2 on why traceable, reproducible records are
+the requirement rather than a nicety.
+
+**What a record carries**, and why each field is there:
+
+- `inputs` — which sample this was.
+- `params` — what the engine was told to do. The Resistance Predictor also
+  stamps `referenceData` (`AMR_DATA_VERSION`), because a call you cannot trace
+  to a reference table cannot be compared with anything.
+- `seed` — the field that makes a run *repeatable* rather than merely recorded.
+  The simulator already computed one; it was simply never kept.
+- `appVersion` — the build that produced it.
+- `payload` — the result. Engines bound what they contribute: the scanner keeps
+  20,000 bases and 5,000 variants and reports the true counts alongside, so one
+  large scan cannot evict every other run.
+
+**Limits.** `MAX_RUNS` (100) and `MAX_BYTES` (64MB), both enforced, oldest
+first. The newest run is never evicted even if it alone exceeds the budget.
+`planEviction` is a pure function and is unit-tested directly.
+
+**Failure is a state, not an exception.** Private browsing and blocked site data
+both make IndexedDB unopenable. `useArchiveState()` reports `unavailable`, the
+Overview and the run detail view say so in words, and `archiveRun` resolves
+`null` rather than rejecting — a result that could not be filed is a degraded
+experience, not a failed analysis.
+
+### 5.3 Reading it back
+
+`/activity` lists the log with filters and export; `/activity/[runId]` reopens
+one archived run with its provenance. Both are registered views, so the sidebar,
+tab strip and palette pick them up from `registry.tsx` alone.
+
+`normalizeHref` resolves a link through `viewForPath` rather than only trimming
+its query, so a deep route like `/activity/<id>` folds into the `/activity` tab
+instead of accumulating one dead tab entry per run opened.
+
+`app/(main)/activity/[runId]/result-view.tsx` draws an archived result the way
+its engine drew it — a variant table for a scan, the run chart and generation
+series for a simulation, the population curve for an experiment, scored calls
+for a prediction — with the raw record collapsed beneath it.
+
+These renderers are deliberately **not** the live views. The live ones read from
+stores (`lib/lab-snapshot.ts`, component state), so reusing them would mean
+rewiring the analysis path to render archived data, and a bug there would break
+the analysis rather than the archive. The *charts* are reused, because they
+already take their data as props. Anything the renderers do not recognise —
+a record written by an older build — falls through to the JSON rather than
+rendering blank.
 
 > **Restored ids are renumbered.** The workbench writes two boot log lines from
 > a child effect, which runs *before* the parent effect that restores the saved
@@ -211,7 +289,18 @@ because there is only one list.
 
 `lib/lab-snapshot.ts` is the companion: the *content* of the last scan (900-base
 preview, 25 variants) and the last prediction, so the Overview's viewer, mutation
-log and chart show real results.
+log and chart show real results. It is deliberately only ever the **latest** of
+each — for the history, see the run archive in §5.2.
+
+**Where each surface reads from.** Three lists show overlapping things, and the
+difference is worth stating because it is easy to collapse them by accident:
+
+| Surface | Source | Shows |
+|---|---|---|
+| Overview → Recent activity | activity log | 12 newest, then defers to `/activity` |
+| `/activity` | activity log + archive | Everything, filterable, links to results |
+| Bell / `/notifications` | activity log | Notifiable kinds only, with read state |
+| Console → History | console provider | Runs this workspace has finished |
 
 ---
 

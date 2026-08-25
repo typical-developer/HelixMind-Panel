@@ -9,6 +9,18 @@ run history, notifications and your layout are stored in this browser and this
 browser only — clearing site data clears them, and another machine will not see
 them. Only signing in talks to a server.
 
+**Finished runs keep their results.** When a scan, simulation, experiment or
+prediction completes, the panel files the whole thing — what went in, the
+parameters, the seed, the build, and what came out. Open **Activity** to find it
+again, reopen it, or export it. That means results survive you navigating away,
+and it also means this device holds sequence data: if you share the machine,
+clear it from **Settings → Danger zone** when you are done.
+
+The archive keeps the 100 most recent runs, up to 64MB. Beyond that the oldest
+are dropped to make room. Some browsers — private windows especially — will not
+let the panel store anything; when that happens the Overview says so plainly and
+you should export what you need instead.
+
 ---
 
 ## The workbench
@@ -117,8 +129,10 @@ with a line in the status bar rather than appearing to do nothing. *Close all*
 is the way to clear the deck: it closes everything and lands you on a single
 Overview tab, with `Alt Shift T` still holding the rest.
 
-> A run **ends when you leave the analysis that started it.** You will get a
-> toast saying so. This is a known limitation, not a crash.
+> A run **ends when you leave the analysis that started it.** The status bar
+> says so for a few seconds. This is a known limitation, not a crash — and the
+> run is still filed in **History** and, if it completed, in **Activity** with
+> its result.
 
 ---
 
@@ -134,7 +148,12 @@ Matches are highlighted. Copy the whole log from the toolbar. It follows the tai
 only while you are already at the bottom, so scrolling back is never yanked away.
 
 **History** — finished runs, with duration and outcome, **kept between visits**.
-Export as JSON. Clearing offers an undo.
+Export as JSON. Clearing offers an undo. The top row opens **Activity**, which
+is where a run's actual results live.
+
+> The log buffers 500 lines and keeps the most recent 200 across a reload. If
+> you need the full record of a run, export it from Activity rather than
+> relying on the log.
 
 ---
 
@@ -219,9 +238,24 @@ Nine curated resistance markers. Filter by gene, antibiotic, organism, drug clas
 or mechanism. Hover a row to **analyse that marker in the Resistance Predictor**
 (it arrives preselected) or copy its symbol.
 
+### Activity
+Everything this workspace has recorded — every run, every export — with filters
+for engine, kind and severity, and free-text search. Runs that produced a result
+carry a **result** chip; open one to see:
+
+- **Result** — the headline numbers.
+- **Provenance** — the inputs, the parameters, the seed and the build that
+  produced it. This is what lets you repeat a run and get the same answer, or
+  say exactly what an old result was based on.
+- **Stored result** — the record as archived, and an Export button.
+
+Export what a filter has narrowed to as CSV or JSON from the pane header.
+
 ### Notifications
-Finished scans, simulations, predictions and detected threats. Click one to open
-the analysis that produced it. Marking read, dismissing and clearing all offer an
+A subset of Activity: finished scans, simulations, predictions and detected
+threats — the things worth interrupting you about — with read and dismissed
+state. Exports are not included; those are in Activity. Click one to open the
+analysis that produced it. Marking read, dismissing and clearing all offer an
 undo.
 
 ### Settings
@@ -229,6 +263,10 @@ Search jumps to individual settings, not just sections — matching rows appear 
 a dropdown and flash when you land on them.
 
 **Profile** is read-only; the API has no endpoint for changing it.
+**Danger zone → Delete all data** removes the activity log, archived results
+(including any sequence previews they hold), notifications, preferences and
+layout from this device. It tells you how many runs it is about to delete. You
+stay signed in.
 **Notifications** — in-app toasts (off suppresses confirmations but never
 errors), email (stored, not connected), and whether destructive actions ask
 first. **Layout**, **Appearance**, **Keyboard shortcuts**, **Support**, and a

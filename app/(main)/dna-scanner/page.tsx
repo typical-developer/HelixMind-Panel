@@ -19,6 +19,8 @@ import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "@/hooks/use-toast"
 import { recordActivity } from "@/lib/activity-store"
+import { archiveRun } from "@/lib/run-archive"
+import { LastRunLink } from "@/components/last-run"
 import { saveScanSnapshot } from "@/lib/lab-snapshot"
 import { copyToClipboard, downloadCSV, downloadJSON, fileStamp } from "@/lib/download"
 import { formatBytes } from "@/lib/storage"
@@ -42,6 +44,7 @@ import {
   InspectorScroll,
   Pane,
   PaneHeader,
+  RowIcon,
   Rule,
   StatTile,
   ToolbarButton,
@@ -59,6 +62,17 @@ interface Analysis {
   mutations: CalledMutation[]
   warnings: QualityWarning[]
 }
+
+/**
+ * Ceilings on what a scan contributes to the run archive.
+ *
+ * Generous enough that a routine bacterial isolate is archived whole, small
+ * enough that one large scan cannot evict every other run. The counts the
+ * archive reports are the *real* ones — only the stored detail is bounded, and
+ * the run detail view says so rather than quietly showing a subset.
+ */
+const ARCHIVE_BASES = 20_000
+const ARCHIVE_MUTATIONS = 5_000
 
 /**
  * Yield so the spinner paints before a long synchronous pass.
@@ -191,6 +205,7 @@ export default function DNAScanner() {
     if (!fastaFile || phase !== "idle") return
 
     const token = ++analysisToken.current
+    const startedAt = Date.now()
     setPhase("reading")
 
     try {
@@ -247,6 +262,54 @@ export default function DNAScanner() {
         href: "/dna-scanner",
         severity: result.mutations.length > 0 ? "warning" : "success",
         value: parsedTargets.length,
+      })
+
+      // The result itself, kept so it can be reopened after you have moved on.
+      // Deliberately fire-and-forget: filing the record is not on the critical
+      // path of showing it, and `archiveRun` never rejects.
+      void archiveRun({
+        engine: "scanner",
+        label: `${fastaFile.name} scanned`,
+        detail: `${parsedTargets.length} sequence${
+          parsedTargets.length === 1 ? "" : "s"
+        }${parsedReference ? ` · ${result.mutations.length} variant${result.mutations.length === 1 ? "" : "s"}` : ""}`,
+        startedAt,
+        endedAt: Date.now(),
+        outcome: "completed",
+        href: "/dna-scanner",
+        inputs: {
+          file: fastaFile.name,
+          header: parsedTargets[0].header,
+          length: parsedTargets[0].sequence.length,
+          sequenceCount: parsedTargets.length,
+          referenceFile: referenceFile?.name ?? null,
+          referenceHeader: parsedReference?.header ?? null,
+        },
+        params: { calledAgainstReference: Boolean(parsedReference) },
+        summary: {
+          sequences: parsedTargets.length,
+          length: parsedTargets[0].sequence.length,
+          gcContent: Number(result.stats.gcContent.toFixed(2)),
+          variants: result.mutations.length,
+          warnings: result.warnings.length,
+        },
+        payload: {
+          stats: result.stats,
+          // Both lists are bounded. A whole genome is the operator's own file
+          // and can be re-read; what the panel owes them is what it *derived*,
+          // and a 32MB strand in the archive would evict every other run to
+          // store something they already have on disk.
+          mutations: result.mutations.slice(0, ARCHIVE_MUTATIONS),
+          mutationCount: result.mutations.length,
+          warnings: result.warnings,
+          preview: parsedTargets[0].sequence.slice(0, ARCHIVE_BASES),
+          previewOf: parsedTargets[0].sequence.length,
+          referenceHeader: parsedReference?.header ?? null,
+          sequences: parsedTargets.map((s) => ({
+            header: s.header,
+            length: s.sequence.length,
+          })),
+        },
       })
     } catch (error) {
       // `File.text()` rejects on a file that has been moved or revoked since
@@ -530,6 +593,7 @@ export default function DNAScanner() {
               icon={ScanLine}
               title="No scan results yet"
               description="Upload a target sequence in the inspector and run a scan to see statistics, called mutations and the sequence buffer."
+              action={<LastRunLink engine="scanner" />}
             />
           ) : (
             <div className="min-h-0 flex-1">
@@ -665,7 +729,7 @@ function StatsView({
                     : "text-warning/90",
                 )}
               >
-                <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                <RowIcon icon={AlertTriangle} />
                 <span>{warning.message}</span>
               </li>
             ))}
