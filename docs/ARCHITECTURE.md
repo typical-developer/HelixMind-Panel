@@ -321,10 +321,22 @@ claims to file a ticket.
 
 ## 10. Auth and the API
 
-`api/main.ts` wraps `fetch` with: a configurable base URL
-(`NEXT_PUBLIC_API_URL`, see `.env.example`), a 20 s timeout, tolerant body
-parsing (an HTML error page from a proxy no longer surfaces as
+`api/main.ts` wraps `fetch` with: a configurable base URL, a 20 s timeout,
+tolerant body parsing (an HTML error page from a proxy no longer surfaces as
 `Unexpected token '<'`), and errors that are always `Error` instances.
+
+**The browser never calls the backend's host directly.** It calls
+`/api/backend/*` on the panel's own origin, and a rewrite in `next.config.mjs`
+forwards that to `API_UPSTREAM` from the server. The backend's CORS allowlist
+holds `http://localhost:3000` and nothing else — every other origin gets a 500
+with no `Access-Control-Allow-Origin` on the preflight — so a direct call works
+in local development and nowhere else. Routing through our own origin removes
+CORS from the picture entirely, and keeps working across Vercel's
+per-deployment preview URLs, which no fixed allowlist could cover.
+
+`NEXT_PUBLIC_API_URL` still overrides the base for the browser, for pointing at
+a local or staging backend. It should be left unset in any deployment; see
+`.env.example` for why.
 
 `contexts/AuthContext.tsx`:
 

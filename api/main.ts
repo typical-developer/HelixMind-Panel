@@ -1,15 +1,28 @@
 /**
- * Where the auth API lives.
+ * Where the panel sends auth requests.
  *
- * This was a hard-coded production URL, which meant pointing the panel at a
- * local or staging backend required editing source. `NEXT_PUBLIC_` is required
- * for the value to reach the browser, and the previous URL stays as the
- * default so an unconfigured deployment behaves exactly as it did.
+ * Same-origin by default, and deliberately so. Calling the backend's host
+ * directly only ever worked from `http://localhost:3000` — the one origin on
+ * its CORS allowlist — so the deployed panel could not sign in at all: the
+ * preflight came back 500 with no `Access-Control-Allow-Origin`, the browser
+ * blocked the request, and `fetch` rejected with the bare `TypeError` this
+ * file reports as "Could not reach the server".
  *
- * See `.env.example`.
+ * `/api/backend` is rewritten to the real host by `next.config.mjs`, server
+ * side, where CORS does not apply. Point `NEXT_PUBLIC_API_URL` at an absolute
+ * URL to bypass the proxy and talk to a backend directly — useful against a
+ * local API, and fine anywhere the origin is on the allowlist.
+ *
+ * The emptiness check matters: an env var that is *set but blank* is not
+ * nullish, so `??` would hand `fetch` an empty base and every call would go to
+ * the wrong place. See `.env.example`.
  */
+const configuredBase = process.env.NEXT_PUBLIC_API_URL?.trim();
+
 const BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "https://helix-core-backend.onrender.com/api/v1";
+  configuredBase && configuredBase.length > 0
+    ? configuredBase.replace(/\/+$/, "")
+    : "/api/backend";
 
 /** Milliseconds before a request is abandoned. */
 const REQUEST_TIMEOUT = 20_000;

@@ -24,6 +24,15 @@ const securityHeaders = [
   },
 ]
 
+/**
+ * Where the auth API actually lives.
+ *
+ * Server-side only — deliberately *not* `NEXT_PUBLIC_`. The browser never needs
+ * this host, and that is the whole point of the rewrite below.
+ */
+const API_UPSTREAM =
+  process.env.API_UPSTREAM ?? "https://helix-core-backend.onrender.com/api/v1"
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Pin the workspace root to this directory. Without it, Turbopack walks up
@@ -46,6 +55,27 @@ const nextConfig = {
   },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }]
+  },
+  /**
+   * Reach the auth API through our own origin instead of calling it directly.
+   *
+   * The backend's CORS allowlist contains `http://localhost:3000` and nothing
+   * else: every other origin — the deployed panel included — gets a 500 with no
+   * `Access-Control-Allow-Origin` on the preflight, so the browser blocks the
+   * request before it is sent and `fetch` rejects with a bare `TypeError`. That
+   * is the "Could not reach the server" the deployed panel reports, and no
+   * amount of frontend work makes a blocked preflight succeed.
+   *
+   * A rewrite sidesteps it entirely: the browser makes a same-origin request,
+   * Next forwards it from the server, and CORS never enters into a
+   * server-to-server call. It also survives Vercel's per-deployment preview
+   * URLs, which no static allowlist ever could.
+   *
+   * The real fix belongs in the backend's CORS config. This keeps the panel
+   * working without it.
+   */
+  async rewrites() {
+    return [{ source: "/api/backend/:path*", destination: `${API_UPSTREAM}/:path*` }]
   },
 }
 

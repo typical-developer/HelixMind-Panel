@@ -475,6 +475,48 @@ it selects the icon. Verified: a "stopped" toast renders with
 `::before` content `none`, a neutral `rgb(26,26,26)` panel, and its amber
 warning icon intact.
 
+### C9 · Sign-in was impossible on any deployment — **FIXED** *(reported)*
+`api/main.ts`, `next.config.mjs`
+
+Reported as *"Could not reach the server. Check your connection and try again"*
+when signing in to the hosted panel. The connection was fine; the browser never
+sent the request.
+
+Measured against the live backend — a preflight `OPTIONS /api/v1/auth/login`
+carrying each `Origin`:
+
+| Origin | Response |
+|---|---|
+| `http://localhost:3000` | **204**, `access-control-allow-origin: http://localhost:3000` |
+| a `*.vercel.app` origin | **500**, no CORS headers |
+| `https://example.com` | **500**, no CORS headers |
+| `http://localhost:5173` | **500**, no CORS headers |
+| the backend's own origin | **500**, no CORS headers |
+
+The allowlist holds exactly one origin, and an unlisted one makes the CORS
+middleware throw rather than deny — which Express turns into a 500 carrying no
+`Access-Control-Allow-Origin`. The browser then blocks the request before it is
+sent, `fetch` rejects with a bare `TypeError`, and the `TypeError` branch in
+`request()` prints the "could not reach" line. Reproduced exactly by running the
+login `fetch` from `https://example.com`: `TypeError: Failed to fetch`.
+
+So the panel worked locally and could not sign in from anywhere else. Nothing in
+`.env.example` helped — it *recommended* setting `NEXT_PUBLIC_API_URL` to the
+backend's host, which is the setting that guarantees the failure.
+
+**Fixed:** the browser now calls `/api/backend/*` on the panel's own origin and
+`next.config.mjs` rewrites that to the backend server-side, where CORS does not
+apply. `NEXT_PUBLIC_API_URL` stays as an override for pointing at a local
+backend and is documented as "leave unset when deployed"; the blank-but-set case
+is handled too, since `??` treats an empty string as configured. Verified: the
+proxy returns the backend's own `401 {"status":"error","error":"Unauthorized
+request"}` for `GET /me/auth` and its own `"Invalid email or password"` for a
+`POST /auth/login` with a junk payload, proving method, headers and body all
+survive the hop.
+
+The real fix belongs in the backend's CORS configuration, which is outside this
+repo. This makes the frontend work without it.
+
 ### L8 · Four horizontal bars, one of them redundant — **FIXED**
 `components/workbench/tab-bar.tsx`, `components/workbench/workbench.tsx`
 
